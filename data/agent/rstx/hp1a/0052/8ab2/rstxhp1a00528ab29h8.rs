@@ -70,6 +70,18 @@ let mut g = DataStore::globals();
 let mut ex = ensure_exec_state(&mut g);
 let mut q = ex.get_array("queue");
 q.push_object(perception.deep_copy());
+// bounded: sensors keep running against a stopped executive, and one
+// rebuild journals thousands of entries - past 1000 the oldest drop,
+// and the loss is counted rather than silent
+let mut dropped = 0i64;
+while q.len() > 1000 {
+    q.remove_property(0);
+    dropped += 1;
+}
+if dropped > 0 {
+    let prev = if ex.has("perceive_dropped") { ex.get_int("perceive_dropped") } else { 0 };
+    ex.put_int("perceive_dropped", prev + dropped);
+}
 let mut o = DataObject::new();
 o.put_string("status", "ok");
 o.put_int("queue_depth", q.len() as i64);

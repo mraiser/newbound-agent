@@ -81,14 +81,19 @@ if r.has("out") {
     for ln in r.get_string("out").lines() {
         let parts: Vec<String> = ln.split(',').map(|p| p.trim().to_string()).collect();
         if parts.len() >= 4 {
-            if let (Ok(i), Ok(t), Ok(fr)) = (parts[0].parse::<i64>(),
-                                             parts[2].parse::<i64>(),
-                                             parts[3].parse::<i64>()) {
+            if let Ok(i) = parts[0].parse::<i64>() {
                 let mut g = DataObject::new();
                 g.put_int("index", i);
                 g.put_string("name", &parts[1]);
-                g.put_int("total_mb", t);
-                g.put_int("free_mb", fr);
+                // unified-memory parts (GB10) answer [N/A] for memory:
+                // the GPU is present but unmeasurable, never absent
+                match (parts[2].parse::<i64>(), parts[3].parse::<i64>()) {
+                    (Ok(t), Ok(fr)) => {
+                        g.put_int("total_mb", t);
+                        g.put_int("free_mb", fr);
+                    }
+                    _ => { g.put_boolean("unmeasurable", true); }
+                }
                 gpus.push_object(g);
             }
         }
@@ -101,12 +106,20 @@ res.put_array("gpus", gpus);
 let root = DataStore::new().root.canonicalize().ok()
     .and_then(|r| r.parent().map(|p| p.to_path_buf()));
 if let Some(root) = root {
-    let modeldir = root.join("runtime").join("agent").join("model");
+    // disk headroom is a host fact, but the model dir exists only after
+    // bootstrap - probe the first existing ancestor when it is absent
+    let mut probe = root.join("runtime").join("agent").join("model");
+    while !probe.exists() {
+        match probe.parent() {
+            Some(p) => probe = p.to_path_buf(),
+            None => break,
+        }
+    }
     let mut x2 = DataArray::new();
     x2.push_string("bash");
     x2.push_string("-c");
     x2.push_string(&format!("df -k --output=avail '{}' 2>/dev/null | tail -1",
-                            modeldir.display()));
+                            probe.display()));
     let r2 = system_call(x2);
     if r2.has("out") {
         if let Ok(kb) = r2.get_string("out").trim().parse::<i64>() {
