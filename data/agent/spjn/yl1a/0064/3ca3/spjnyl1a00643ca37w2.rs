@@ -8,9 +8,11 @@
 // go through platform commands, the executive's own writes return here:
 // the self-model, for free.
 // Sensor runtime state under one globals key (the executive's pattern).
-// The cursor is runtime state for now - it resets to `now` on start, so a
-// restart never replays history; a persisted cursor record arrives with
-// the sensor-state work the contract reserves for it.
+// The cursor persists at runtime/agent/store_sense.json (the git
+// sensor's persisted-state pattern): a restart resumes from it, so
+// entries journaled while the sensor was down are perceived instead of
+// dropped. A box with no persisted state starts at `now` - a fresh
+// start never replays history.
 fn ensure_sensor_state(g: &mut DataObject) -> DataObject {
     if !g.has("AGENT_SENSOR_STORE") {
         let mut st = DataObject::new();
@@ -150,7 +152,19 @@ if st.get_boolean("running") {
     return o;
 }
 st.put_boolean("running", true);
-st.put_int("cursor", time());
+let mut cursor = time();
+if let Ok(s) = std::fs::read_to_string("runtime/agent/store_sense.json") {
+    // guard the shape: try_from_string panics on well-formed non-object JSON
+    if s.trim_start().starts_with('{') {
+        if let Ok(o) = DataObject::try_from_string(&s) {
+            if o.has("cursor") {
+                let c = o.get_int("cursor");
+                if c > 0 { cursor = c; }
+            }
+        }
+    }
+}
+st.put_int("cursor", cursor);
 st.put_int("started", time());
 
 std::thread::spawn(move || {
@@ -239,6 +253,9 @@ std::thread::spawn(move || {
             }
         }
         st.put_int("cursor", t0);
+        let _ = std::fs::create_dir_all("runtime/agent");
+        let _ = std::fs::write("runtime/agent/store_sense.json",
+                               format!("{{\"cursor\":{}}}", t0));
         // the system sensor rides the same loop (H4): one sweep every
         // 15 ticks (~30s) - one sensor family, one loop, no second
         // scheduler. The sweep itself coalesces (band crossings only),
