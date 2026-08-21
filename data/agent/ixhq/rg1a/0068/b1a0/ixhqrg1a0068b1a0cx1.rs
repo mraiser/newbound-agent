@@ -274,7 +274,7 @@ for lib in libs {
                 items.push((2, t0, it));
                 pushed = true;
             }
-            if !pushed && e.has("subject") {
+            if !pushed && e.has("subject") && !e.has("promoted") {
                 let mut it = DataObject::new();
                 it.put_string("kind", "unpromoted");
                 it.put_int("priority", 1);

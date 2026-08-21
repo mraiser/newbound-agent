@@ -378,13 +378,24 @@ if store.exists("kb", "controls") {
 for t in &loaded {
     let (ctl, id, _old, eff, write_needed, folded) = (&t.0, &t.1, &t.2, &t.3, t.4, t.5);
     if write_needed {
-        let mut new_source = String::new();
+        // Line-oriented VALID JSON, not raw JSONL: the store's loader
+        // parses a JSON-looking attachment as ONE document, so bare
+        // JSONL is fatal to get_data and to exec boot (found the hard
+        // way, 2026-08-21). Format: a JSON array with one canonical
+        // object per line, EVERY entry line comma-terminated, closed by
+        // a CONSTANT terminator line ({"end": true}] - no claim, so
+        // every reader skips it). Appends from parallel branches insert
+        // before the terminator and never touch a shared line, so
+        // merge=union stays conflict-free AND the document stays valid.
+        let mut new_source = String::from("[\n");
         for j in 0..eff.len() {
             if let Ok(o) = eff.try_get_object(j) {
+                if !o.has("claim") { continue; }
                 new_source.push_str(&jobj(o));
-                new_source.push('\n');
+                new_source.push_str(",\n");
             }
         }
+        new_source.push_str("{\"end\": true}]\n");
         let mut record = store.get_data(&lib, id);
         let mut dd = record.get_object("data");
         let old_facet = if dd.has("memory") { dd.get_string("memory") } else { String::new() };
