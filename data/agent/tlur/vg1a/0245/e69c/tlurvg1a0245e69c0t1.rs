@@ -48,12 +48,47 @@ fn bind_repo_claims(repo_name: &str, base: &str) -> DataArray {
             let id = item.get_string("id");
             if !store.exists(&lib, &id) { continue; }
             let dd = store.get_data(&lib, &id).get_object("data");
-            if !dd.has("memory") { continue; }
-            let w = match DataObject::try_from_string(&format!("{{\"a\":{}}}", dd.get_string("memory"))) {
-                Ok(w) => w,
-                Err(_) => continue,
-            };
-            let a = match w.try_get_array("a") { Ok(a) => a, Err(_) => continue };
+            // one-memory-cycle: a domain's effective claims are the union
+            // of its facet (legacy array or JSONL) and the instance-local
+            // overlay - a later overlay line with the same claim supersedes.
+            fn mem_union(src: &str, lib: &str, ctl: &str) -> DataArray {
+                let t = src.trim();
+                let mut v: Vec<DataObject> = Vec::new();
+                if t.starts_with('[') {
+                    if let Ok(w) = DataObject::try_from_string(&format!("{{\"a\":{}}}", t)) {
+                        if let Ok(a) = w.try_get_array("a") {
+                            for i in 0..a.len() { if let Ok(o) = a.try_get_object(i) { v.push(o); } }
+                        }
+                    }
+                } else {
+                    for ln in t.lines() {
+                        let ln = ln.trim();
+                        if ln.starts_with('{') {
+                            if let Ok(o) = DataObject::try_from_string(ln) { v.push(o); }
+                        }
+                    }
+                }
+                let of = format!("runtime/agent/memory-overlay/{}.{}.jsonl", lib, ctl);
+                for ln in std::fs::read_to_string(&of).unwrap_or_default().lines() {
+                    let ln = ln.trim();
+                    if !ln.starts_with('{') { continue; }
+                    if let Ok(o) = DataObject::try_from_string(ln) {
+                        if !o.has("claim") { continue; }
+                        let c = o.get_string("claim");
+                        let mut hit = false;
+                        for e in v.iter_mut() {
+                            if e.has("claim") && e.get_string("claim").trim() == c.trim() { *e = o.clone(); hit = true; break; }
+                        }
+                        if !hit { v.push(o); }
+                    }
+                }
+                let mut out = DataArray::new();
+                for o in v { out.push_object(o); }
+                out
+            }
+            let msrc = if dd.has("memory") { dd.get_string("memory") } else { String::new() };
+            let a = mem_union(&msrc, &lib, &item.get_string("name"));
+            if a.len() == 0 { continue; }
             for j in 0..a.len() {
                 let e = match a.try_get_object(j) { Ok(e) => e, Err(_) => continue };
                 if !e.has("claim") || !e.has("source") || e.has("superseded") { continue; }

@@ -5,6 +5,11 @@
 // tags, confidence, home, time, age_days, stale, stale_checked, promoted});
 // the internals are free to change behind it. Read-only: recall never
 // writes, so it is safe from any thread at any tick rate.
+// One-memory-cycle (A1/A2/B2): each domain answers with the UNION of its
+// facet (legacy array or JSONL) and the instance-local overlay
+// (runtime/agent/memory-overlay/<lib>.<ctl>.jsonl) - a later line with
+// the same claim supersedes the shipped entry, so curation is visible
+// here the moment it happens, before any promote ships it.
 fn content_hash(s: &str) -> String {
     // FNV-1a over the \r-normalized source - MUST stay in sync with
     // remember/read_control_facet/patch_control_facet.
@@ -37,6 +42,61 @@ fn ctl_id(store: &DataStore, lib: &str, name: &str) -> String {
     }
     String::new()
 }
+fn overlay_file(lib: &str, ctl: &str) -> String {
+    format!("runtime/agent/memory-overlay/{}.{}.jsonl", lib, ctl)
+}
+fn parse_entries(src: &str) -> DataArray {
+    // both facet formats: legacy pretty JSON array, or JSONL (B2 - one
+    // object per line, what promote writes; line-oriented so merge=union
+    // stays conflict-free across parallel branches)
+    let t = src.trim();
+    let mut out = DataArray::new();
+    if t.is_empty() { return out; }
+    if t.starts_with('[') {
+        if let Ok(w) = DataObject::try_from_string(&format!("{{\"a\":{}}}", t)) {
+            if let Ok(a) = w.try_get_array("a") {
+                for i in 0..a.len() {
+                    if let Ok(o) = a.try_get_object(i) { out.push_object(o); }
+                }
+            }
+        }
+        return out;
+    }
+    for ln in t.lines() {
+        let ln = ln.trim();
+        if ln.is_empty() || !ln.starts_with('{') { continue; }
+        if let Ok(o) = DataObject::try_from_string(ln) { out.push_object(o); }
+    }
+    out
+}
+fn apply_overlay(base: DataArray, lib: &str, ctl: &str) -> DataArray {
+    let txt = std::fs::read_to_string(overlay_file(lib, ctl)).unwrap_or_default();
+    if txt.trim().is_empty() { return base; }
+    let mut v: Vec<DataObject> = Vec::new();
+    for i in 0..base.len() {
+        if let Ok(o) = base.try_get_object(i) { v.push(o); }
+    }
+    for ln in txt.lines() {
+        let ln = ln.trim();
+        if ln.is_empty() || !ln.starts_with('{') { continue; }
+        if let Ok(o) = DataObject::try_from_string(ln) {
+            if !o.has("claim") { continue; }
+            let c = o.get_string("claim");
+            let mut hit = false;
+            for e in v.iter_mut() {
+                if e.has("claim") && e.get_string("claim").trim() == c.trim() {
+                    *e = o.clone();
+                    hit = true;
+                    break;
+                }
+            }
+            if !hit { v.push(o); }
+        }
+    }
+    let mut out = DataArray::new();
+    for o in v { out.push_object(o); }
+    out
+}
 
 let store = DataStore::new();
 let q = query.to_lowercase();
@@ -64,8 +124,8 @@ let domain_filter: Vec<String> = domains.split(',')
 let cap = (if limit < 1 { 1 } else if limit > 50 { 50 } else { limit }) as usize;
 
 // The federation walk (consolidate's, read-only): every control of every
-// library that carries a memory facet is a recall source - the brain and
-// the shipped manuals answer through one door.
+// library that carries memory - a facet, an overlay, or both - is a
+// recall source; the brain and the shipped manuals answer through one door.
 let mut libs: Vec<String> = Vec::new();
 if let Ok(rd) = std::fs::read_dir(&store.root) {
     for e in rd.flatten() {
@@ -90,12 +150,9 @@ for lib in libs {
         if !domain_filter.is_empty() && !domain_filter.contains(&home) { continue; }
         if !store.exists(&lib, &id) { continue; }
         let dd = store.get_data(&lib, &id).get_object("data");
-        if !dd.has("memory") { continue; }
-        let w = match DataObject::try_from_string(&format!("{{\"a\":{}}}", dd.get_string("memory"))) {
-            Ok(w) => w,
-            Err(_) => continue,
-        };
-        let a = match w.try_get_array("a") { Ok(a) => a, Err(_) => continue };
+        let msrc = if dd.has("memory") { dd.get_string("memory") } else { String::new() };
+        let a = apply_overlay(parse_entries(&msrc), &lib, &name);
+        if a.len() == 0 { continue; }
         for j in 0..a.len() {
             let e = match a.try_get_object(j) { Ok(e) => e, Err(_) => continue };
             if !e.has("claim") { continue; }

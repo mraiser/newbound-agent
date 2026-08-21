@@ -49,22 +49,57 @@ for lib in &libs {
         if !store.exists(lib, &id) { continue; }
         let dd = store.get_data(lib, &id).get_object("data");
         let home = format!("{}.{}", lib, name);
-        if dd.has("memory") {
-            if let Ok(w) = DataObject::try_from_string(&format!("{{\"a\":{}}}", dd.get_string("memory").replace('\r', ""))) {
-                if let Ok(a) = w.try_get_array("a") {
-                    for j in 0..a.len() {
-                        if let Ok(e) = a.try_get_object(j) {
-                            let superseded = e.has("superseded");
-                            if lib == "kb" && name == "notions" && !superseded {
-                                notions_pending += 1;
-                            }
-                            let t = if e.has("time") { e.get_int("time") } else { 0 };
-                            if t >= cutoff && !superseded {
-                                claims_in_window += 1;
-                                let c = if by_domain.has(&home) { by_domain.get_int(&home) } else { 0 };
-                                by_domain.put_int(&home, c + 1);
-                            }
+        {
+            // one-memory-cycle: effective claims = facet (legacy array or
+            // JSONL) + instance-local overlay, latest line per claim wins.
+            fn mem_union(src: &str, lib: &str, ctl: &str) -> DataArray {
+                let t = src.trim();
+                let mut v: Vec<DataObject> = Vec::new();
+                if t.starts_with('[') {
+                    if let Ok(w) = DataObject::try_from_string(&format!("{{\"a\":{}}}", t)) {
+                        if let Ok(a) = w.try_get_array("a") {
+                            for i in 0..a.len() { if let Ok(o) = a.try_get_object(i) { v.push(o); } }
                         }
+                    }
+                } else {
+                    for ln in t.lines() {
+                        let ln = ln.trim();
+                        if ln.starts_with('{') {
+                            if let Ok(o) = DataObject::try_from_string(ln) { v.push(o); }
+                        }
+                    }
+                }
+                let of = format!("runtime/agent/memory-overlay/{}.{}.jsonl", lib, ctl);
+                for ln in std::fs::read_to_string(&of).unwrap_or_default().lines() {
+                    let ln = ln.trim();
+                    if !ln.starts_with('{') { continue; }
+                    if let Ok(o) = DataObject::try_from_string(ln) {
+                        if !o.has("claim") { continue; }
+                        let c = o.get_string("claim");
+                        let mut hit = false;
+                        for e in v.iter_mut() {
+                            if e.has("claim") && e.get_string("claim").trim() == c.trim() { *e = o.clone(); hit = true; break; }
+                        }
+                        if !hit { v.push(o); }
+                    }
+                }
+                let mut out = DataArray::new();
+                for o in v { out.push_object(o); }
+                out
+            }
+            let msrc = if dd.has("memory") { dd.get_string("memory").replace('\r', "") } else { String::new() };
+            let a = mem_union(&msrc, lib, &name);
+            for j in 0..a.len() {
+                if let Ok(e) = a.try_get_object(j) {
+                    let superseded = e.has("superseded");
+                    if lib == "kb" && name == "notions" && !superseded {
+                        notions_pending += 1;
+                    }
+                    let t = if e.has("time") { e.get_int("time") } else { 0 };
+                    if t >= cutoff && !superseded {
+                        claims_in_window += 1;
+                        let c = if by_domain.has(&home) { by_domain.get_int(&home) } else { 0 };
+                        by_domain.put_int(&home, c + 1);
                     }
                 }
             }
@@ -103,6 +138,22 @@ for lib in &libs {
                             }
                         }
                     }
+                }
+            }
+        }
+        // one-memory-cycle (A2): new curation traces live in the
+        // instance-local log; the facet block above keeps counting
+        // pre-cycle history.
+        let tf = format!("runtime/agent/memory-overlay/{}.{}.traces.jsonl", lib, name);
+        for ln in std::fs::read_to_string(&tf).unwrap_or_default().lines() {
+            let ln = ln.trim();
+            if !ln.starts_with('{') { continue; }
+            if let Ok(t) = DataObject::try_from_string(ln) {
+                let tt = if t.has("time") { t.get_int("time") } else { 0 };
+                if tt >= cutoff {
+                    let author = if t.has("author") { t.get_string("author") } else { "unknown".to_string() };
+                    let c = if acts.has(&author) { acts.get_int(&author) } else { 0 };
+                    acts.put_int(&author, c + 1);
                 }
             }
         }

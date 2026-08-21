@@ -13,6 +13,11 @@
 //                   that channel stays curated (owner's ritual).
 // "Gapped" (knowledge gaps) needs semantic judgment and waits for the
 // salience tier (Phase 5). Read-only; safe at any tick rate.
+// One-memory-cycle (A1/A2/B2): each domain is read as the UNION of its
+// facet (legacy array or JSONL) and the instance-local overlay
+// (runtime/agent/memory-overlay/<lib>.<ctl>.jsonl) - a later overlay
+// line with the same claim supersedes, so the queue sees curation the
+// moment it happens, before any promote ships it.
 fn esc(s: &str) -> String {
     let mut out = String::new();
     for c in s.chars() {
@@ -26,49 +31,6 @@ fn esc(s: &str) -> String {
             c => out.push(c),
         }
     }
-    out
-}
-fn val(d: Data, ind: usize) -> String {
-    match d {
-        Data::DString(s) => format!("\"{}\"", esc(&s)),
-        Data::DInt(i) => format!("{}", i),
-        Data::DFloat(f) => format!("{}", f),
-        Data::DBoolean(b) => format!("{}", b),
-        Data::DNull => "null".to_string(),
-        Data::DObject(r) => obj(DataObject::get(r), ind),
-        Data::DArray(r) => {
-            let a = DataArray::get(r);
-            if a.len() == 0 { return "[]".to_string(); }
-            let pad = "  ".repeat(ind + 1);
-            let mut out = String::from("[");
-            for i in 0..a.len() {
-                if i > 0 { out.push(','); }
-                out.push_str(&format!("\n{}{}", pad, val(a.get_property(i), ind + 1)));
-            }
-            out.push_str(&format!("\n{}]", "  ".repeat(ind)));
-            out
-        }
-        _ => "null".to_string(),
-    }
-}
-fn obj(o: DataObject, ind: usize) -> String {
-    let canon = ["claim", "detail", "tags", "source", "confidence", "time",
-                 "lib", "ctl", "facet", "hash", "doc", "repo", "path", "commit"];
-    let mut keys: Vec<String> = canon.iter().filter(|k| o.has(k)).map(|s| s.to_string()).collect();
-    let mut extra: Vec<String> = o.get_keys().into_iter()
-        .filter(|k| !canon.contains(&k.as_str())).collect();
-    extra.sort();
-    keys.extend(extra);
-    if keys.is_empty() { return "{}".to_string(); }
-    let pad = "  ".repeat(ind + 1);
-    let mut out = String::from("{");
-    let mut first = true;
-    for k in &keys {
-        if !first { out.push(','); }
-        first = false;
-        out.push_str(&format!("\n{}\"{}\": {}", pad, esc(k), val(o.get_property(k), ind + 1)));
-    }
-    out.push_str(&format!("\n{}}}", "  ".repeat(ind)));
     out
 }
 fn content_hash(s: &str) -> String {
@@ -106,8 +68,61 @@ fn repo_base(repo: &str) -> String {
     }
     String::new()
 }
+fn overlay_file(lib: &str, ctl: &str) -> String {
+    format!("runtime/agent/memory-overlay/{}.{}.jsonl", lib, ctl)
+}
+fn parse_entries(src: &str) -> DataArray {
+    // both facet formats: legacy pretty JSON array, or JSONL (B2)
+    let t = src.trim();
+    let mut out = DataArray::new();
+    if t.is_empty() { return out; }
+    if t.starts_with('[') {
+        if let Ok(w) = DataObject::try_from_string(&format!("{{\"a\":{}}}", t)) {
+            if let Ok(a) = w.try_get_array("a") {
+                for i in 0..a.len() {
+                    if let Ok(o) = a.try_get_object(i) { out.push_object(o); }
+                }
+            }
+        }
+        return out;
+    }
+    for ln in t.lines() {
+        let ln = ln.trim();
+        if ln.is_empty() || !ln.starts_with('{') { continue; }
+        if let Ok(o) = DataObject::try_from_string(ln) { out.push_object(o); }
+    }
+    out
+}
+fn apply_overlay(base: DataArray, lib: &str, ctl: &str) -> DataArray {
+    let txt = std::fs::read_to_string(overlay_file(lib, ctl)).unwrap_or_default();
+    if txt.trim().is_empty() { return base; }
+    let mut v: Vec<DataObject> = Vec::new();
+    for i in 0..base.len() {
+        if let Ok(o) = base.try_get_object(i) { v.push(o); }
+    }
+    for ln in txt.lines() {
+        let ln = ln.trim();
+        if ln.is_empty() || !ln.starts_with('{') { continue; }
+        if let Ok(o) = DataObject::try_from_string(ln) {
+            if !o.has("claim") { continue; }
+            let c = o.get_string("claim");
+            let mut hit = false;
+            for e in v.iter_mut() {
+                if e.has("claim") && e.get_string("claim").trim() == c.trim() {
+                    *e = o.clone();
+                    hit = true;
+                    break;
+                }
+            }
+            if !hit { v.push(o); }
+        }
+    }
+    let mut out = DataArray::new();
+    for o in v { out.push_object(o); }
+    out
+}
 
-let _ = val; let _ = obj; // serializer unused here; shared helper block
+let _ = esc; // shared helper block; serializer unused here
 let store = DataStore::new();
 let mut libs: Vec<String> = Vec::new();
 if let Ok(rd) = std::fs::read_dir(&store.root) {
@@ -133,12 +148,9 @@ for lib in libs {
         let id = item.get_string("id");
         if !store.exists(&lib, &id) { continue; }
         let dd = store.get_data(&lib, &id).get_object("data");
-        if !dd.has("memory") { continue; }
-        let w = match DataObject::try_from_string(&format!("{{\"a\":{}}}", dd.get_string("memory"))) {
-            Ok(w) => w,
-            Err(_) => continue,
-        };
-        let a = match w.try_get_array("a") { Ok(a) => a, Err(_) => continue };
+        let msrc = if dd.has("memory") { dd.get_string("memory") } else { String::new() };
+        let a = apply_overlay(parse_entries(&msrc), &lib, &name);
+        if a.len() == 0 { continue; }
         for j in 0..a.len() {
             let e = match a.try_get_object(j) { Ok(e) => e, Err(_) => continue };
             if !e.has("claim") || e.has("superseded") { continue; }

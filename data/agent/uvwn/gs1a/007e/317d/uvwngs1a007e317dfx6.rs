@@ -107,18 +107,67 @@ for lib in libs {
                 }
             }
         }
-        if dd.has("memory") {
-            if let Ok(w) = DataObject::try_from_string(&format!("{{\"a\":{}}}", dd.get_string("memory"))) {
-                if let Ok(a) = w.try_get_array("a") {
-                    for j in 0..a.len() {
-                        if let Ok(e) = a.try_get_object(j) {
-                            if !e.has("claim") || e.has("superseded") { continue; }
-                            lines.push(format!(
-                                "{{\"kind\": \"claim\", \"home\": \"{}\", \"entry\": {}}}",
-                                esc_json(&home), e.to_string()));
-                            n_claims += 1;
+        // one-memory-cycle (A2): new curation traces live in the
+        // instance-local log; the facet block above keeps exporting
+        // pre-cycle history.
+        let tf = format!("runtime/agent/memory-overlay/{}.{}.traces.jsonl", lib, name);
+        for ln in std::fs::read_to_string(&tf).unwrap_or_default().lines() {
+            let ln = ln.trim();
+            if !ln.starts_with('{') { continue; }
+            if let Ok(t) = DataObject::try_from_string(ln) {
+                lines.push(format!(
+                    "{{\"kind\": \"curation_trace\", \"home\": \"{}\", \"trace\": {}}}",
+                    esc_json(&home), t.to_string()));
+                n_traces += 1;
+            }
+        }
+        {
+            // one-memory-cycle: effective claims = facet (legacy array or
+            // JSONL) + instance-local overlay, latest line per claim wins.
+            fn mem_union(src: &str, lib: &str, ctl: &str) -> DataArray {
+                let t = src.trim();
+                let mut v: Vec<DataObject> = Vec::new();
+                if t.starts_with('[') {
+                    if let Ok(w) = DataObject::try_from_string(&format!("{{\"a\":{}}}", t)) {
+                        if let Ok(a) = w.try_get_array("a") {
+                            for i in 0..a.len() { if let Ok(o) = a.try_get_object(i) { v.push(o); } }
                         }
                     }
+                } else {
+                    for ln in t.lines() {
+                        let ln = ln.trim();
+                        if ln.starts_with('{') {
+                            if let Ok(o) = DataObject::try_from_string(ln) { v.push(o); }
+                        }
+                    }
+                }
+                let of = format!("runtime/agent/memory-overlay/{}.{}.jsonl", lib, ctl);
+                for ln in std::fs::read_to_string(&of).unwrap_or_default().lines() {
+                    let ln = ln.trim();
+                    if !ln.starts_with('{') { continue; }
+                    if let Ok(o) = DataObject::try_from_string(ln) {
+                        if !o.has("claim") { continue; }
+                        let c = o.get_string("claim");
+                        let mut hit = false;
+                        for e in v.iter_mut() {
+                            if e.has("claim") && e.get_string("claim").trim() == c.trim() { *e = o.clone(); hit = true; break; }
+                        }
+                        if !hit { v.push(o); }
+                    }
+                }
+                let mut out = DataArray::new();
+                for o in v { out.push_object(o); }
+                out
+            }
+            let msrc = if dd.has("memory") { dd.get_string("memory") } else { String::new() };
+            let a = mem_union(&msrc, &lib, &name);
+            for j in 0..a.len() {
+                if let Ok(e) = a.try_get_object(j) {
+                    if !e.has("claim") || e.has("superseded") { continue; }
+                    lines.push(format!(
+                        "{{\"kind\": \"claim\", \"home\": \"{}\", \"entry\": {}}}",
+                        esc_json(&home), e.to_string()));
+                    n_claims += 1;
                 }
             }
         }
