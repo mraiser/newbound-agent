@@ -122,6 +122,7 @@ let mut items: Vec<(i64, i64, DataObject)> = Vec::new();
 let mut n_stale = 0i64;
 let mut n_review = 0i64;
 let mut n_unpromoted = 0i64;
+let mut n_plan = 0i64;
 for lib in libs {
     if !store.exists(&lib, "controls") { continue; }
     let list = store.get_data(&lib, "controls").get_object("data").get_array("list");
@@ -202,6 +203,53 @@ for lib in libs {
                     }
                 }
             }
+            // plan (brick 5): kb.plan entries are INTENT, not belief -
+            // the lifecycle rides the tags (proposed | accepted |
+            // in-progress | done | abandoned). Active intent surfaces
+            // as derived work; finished or dropped intent surfaces as
+            // nothing. A plan entry whose source drifts still takes
+            // the stale path above - evidence decay re-opens planning
+            // by mechanism. Plan entries never fall through to the
+            // belief kinds: low confidence on intent is not review
+            // pressure, and intent is never promotion material.
+            if lib == "kb" && name == "plan" {
+                if !pushed {
+                    let mut tags = String::new();
+                    if e.has("tags") {
+                        match e.get_property("tags") {
+                            Data::DString(s) => tags = s,
+                            Data::DArray(r) => {
+                                let ta = DataArray::get(r);
+                                for k in 0..ta.len() {
+                                    if let Data::DString(s) = ta.get_property(k) {
+                                        tags.push_str(&s);
+                                        tags.push(',');
+                                    }
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                    let tags = tags.to_lowercase();
+                    let toks: Vec<&str> = tags.split(',').map(|t| t.trim()).collect();
+                    let has_tag = |s: &str| toks.iter().any(|t| *t == s);
+                    if !has_tag("done") && !has_tag("abandoned") {
+                        let (pr, stage) = if has_tag("in-progress") { (2i64, "in-progress") }
+                            else if has_tag("accepted") { (2i64, "accepted") }
+                            else { (1i64, "proposed") };
+                        let mut it = DataObject::new();
+                        it.put_string("kind", "plan");
+                        it.put_int("priority", pr);
+                        it.put_string("lib", &lib);
+                        it.put_string("domain", &name);
+                        it.put_string("claim", &claim);
+                        it.put_string("why", &format!("plan item ({}) - active intent in kb.plan, surfaced never auto-executed", stage));
+                        n_plan += 1;
+                        items.push((pr, t0, it));
+                    }
+                }
+                continue;
+            }
             if !pushed && conf == "low" {
                 let mut it = DataObject::new();
                 it.put_string("kind", "review");
@@ -238,5 +286,6 @@ o.put_array("items", out);
 o.put_int("stale", n_stale);
 o.put_int("review", n_review);
 o.put_int("unpromoted", n_unpromoted);
+o.put_int("plan", n_plan);
 o.put_int("total", total);
 o

@@ -214,6 +214,12 @@ std::thread::spawn(move || {
             let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                 crate::agent::sensor::system_sense::system_sense()
             }));
+            // the git sensor rides the same cadence (brick 4): one
+            // porcelain status per registered repo, emission edge-
+            // triggered, so ~30s sets latency, not volume.
+            let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                crate::agent::sensor::git_sense::git_sense()
+            }));
         }
         std::thread::sleep(std::time::Duration::from_millis(2000));
     }
