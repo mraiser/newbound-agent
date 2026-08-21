@@ -17,9 +17,9 @@
 # carry the app shell), followed by the git hygiene that keeps regenerated
 # local state out of accidental commits:
 #
-#   - newbound repo: Cargo.toml (workspace exclude), the generated
-#     initializer, and newbound_core/src/api.rs are rewritten by
-#     `newbound rebuild` and must never be committed there -> marked
+#   - newbound repo: Cargo.toml (workspace exclude), Cargo.lock, the
+#     generated initializer, and newbound_core/src/api.rs are rewritten
+#     by `newbound rebuild` and must never be committed there -> marked
 #     skip-worktree (undo: git update-index --no-skip-worktree <file>).
 #   - agent repo: the rebuild regenerates each FFI crate's src/api.rs
 #     against the libraries present in THIS checkout, deleting stubs for
@@ -77,44 +77,6 @@ fi
 HOST_PREBUILT=no
 [ -x target/release/newbound ] && HOST_PREBUILT=yes
 
-# 2b. TRANSITIONAL - delete once flowlang 0.3.34 is on crates.io and the
-#     pins are bumped (docs/ffi-dynamic-loading.md, Phase 5). The committed
-#     platform code references flowlang::hotswap, which crates.io 0.3.33
-#     lacks; a sibling mraiser/flow checkout provides it via a local-only
-#     [patch] in .cargo/config.toml. Two copies because cargo resolves a
-#     build cwd physically: the checkout's covers the host build, the agent
-#     repo's covers the dylib builds reached through the overlay symlinks.
-#     Both are untracked and per-clone excluded - never committed.
-if grep -q 'flowlang = { version="0.3.33" }' Cargo.toml; then
-  FLOW_DIR=""
-  for cand in "$AGENT_DIR/../flow" "$NB/../flow"; do
-    if [ -f "$cand/Cargo.toml" ] && grep -q '^name = "flowlang"' "$cand/Cargo.toml"; then
-      FLOW_DIR=$(cd "$cand" && pwd); break
-    fi
-  done
-  if [ -n "$FLOW_DIR" ]; then
-    for root in "$NB" "$AGENT_DIR"; do
-      if [ ! -f "$root/.cargo/config.toml" ]; then
-        mkdir -p "$root/.cargo"
-        printf '# LOCAL ONLY (setup.sh transitional): flowlang with hotswap until 0.3.34 ships\n[patch.crates-io]\nflowlang = { path = "%s" }\n' "$FLOW_DIR" > "$root/.cargo/config.toml"
-      fi
-      GD=$(cd "$root" && git rev-parse --absolute-git-dir 2>/dev/null || true)
-      if [ -n "$GD" ]; then
-        mkdir -p "$GD/info"
-        grep -qx '/.cargo' "$GD/info/exclude" 2>/dev/null || echo '/.cargo' >> "$GD/info/exclude"
-      fi
-    done
-    # Building under the patch rewrites Cargo.lock (the flowlang entry
-    # becomes a path source); that churn is transitional local state too.
-    git update-index --skip-worktree Cargo.lock 2>/dev/null || true
-    echo "== transitional: flowlang patched to $FLOW_DIR via .cargo/config.toml (both roots)"
-    echo "==   (undo when 0.3.34 ships: rm .cargo/config.toml; git update-index --no-skip-worktree Cargo.lock)"
-  else
-    echo "== WARNING: this tree references flowlang::hotswap, which crates.io flowlang 0.3.33 lacks;"
-    echo "==   clone mraiser/flow beside the repos and rerun, or wait for the flowlang 0.3.34 release."
-  fi
-fi
-
 # 3. Host build (first pass). No-op when already built.
 cargo build --release --features=serde_support
 
@@ -138,17 +100,20 @@ fi
 
 # 6. Stage the agent app — what the platform's install_lib does on a real
 #    install, which the overlay never runs. All of it is per-clone local
-#    state: runtime/agent is excluded via .git/info/exclude (the tracked
+#    state: runtime/agent and the generated runtime crate scaffold are
+#    excluded via .git/info/exclude (the tracked
 #    .gitignore belongs to the platform and doesn't know the agent), and
 #    config.properties is already gitignored.
 if [ ! -d runtime/agent ]; then
   cp -r data/agent/_APPS/agent runtime/agent
   echo "== staged data/agent/_APPS/agent -> runtime/agent"
 fi
-if ! grep -qx '/runtime/agent' .git/info/exclude 2>/dev/null; then
-  echo '/runtime/agent' >> .git/info/exclude
-  echo "== added /runtime/agent to .git/info/exclude"
-fi
+for p in /runtime/agent /runtime/Cargo.toml /runtime/src /runtime/dev/plugins.json; do
+  if ! grep -qx "$p" .git/info/exclude 2>/dev/null; then
+    echo "$p" >> .git/info/exclude
+    echo "== added $p to .git/info/exclude"
+  fi
+done
 if [ ! -f config.properties ]; then
   sed 's/^apps=.*/&,agent/' config.properties_example > config.properties
   echo "== created config.properties from the example, agent app enabled"
@@ -170,7 +135,7 @@ if grep -q '^http_port=0$' config.properties; then
 fi
 
 # 7. Git hygiene, newbound side: builder-written local state stays invisible.
-for f in Cargo.toml src/generated_initializer.rs newbound_core/src/api.rs newbound_core/Cargo.toml; do
+for f in Cargo.toml Cargo.lock src/generated_initializer.rs newbound_core/src/api.rs newbound_core/Cargo.toml; do
   git update-index --skip-worktree "$f" 2>/dev/null || true
 done
 echo "== skip-worktree set on the builder-written newbound files (undo: git update-index --no-skip-worktree <file>)"
