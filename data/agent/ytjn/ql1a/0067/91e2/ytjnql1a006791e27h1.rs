@@ -58,7 +58,7 @@ fn val(d: Data, ind: usize) -> String {
 }
 fn obj(o: DataObject, ind: usize) -> String {
     let canon = ["claim", "detail", "tags", "source", "confidence", "time",
-                 "lib", "ctl", "facet", "hash", "doc"];
+                 "lib", "ctl", "facet", "hash", "doc", "repo", "path", "commit"];
     let mut keys: Vec<String> = canon.iter().filter(|k| o.has(k)).map(|s| s.to_string()).collect();
     let mut extra: Vec<String> = o.get_keys().into_iter()
         .filter(|k| !canon.contains(&k.as_str())).collect();

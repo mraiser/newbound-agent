@@ -47,7 +47,7 @@ fn val(d: Data, ind: usize) -> String {
 }
 fn obj(o: DataObject, ind: usize) -> String {
     let canon = ["claim", "detail", "tags", "source", "confidence", "time",
-                 "lib", "ctl", "facet", "hash", "doc"];
+                 "lib", "ctl", "facet", "hash", "doc", "repo", "path", "commit"];
     let mut keys: Vec<String> = canon.iter().filter(|k| o.has(k)).map(|s| s.to_string()).collect();
     let mut extra: Vec<String> = o.get_keys().into_iter()
         .filter(|k| !canon.contains(&k.as_str())).collect();
@@ -181,19 +181,43 @@ if found < 0 {
     return err(format!("no live entry with that exact claim in {}.{}", lib, domain));
 }
 let mut e = arr.get_object(found as usize);
+// Two checkable shapes, one drift test: a store facet pointer or a
+// registered-repo file pointer (brick 3). The repo path resolves through
+// runtime/dev/repos.json - an unregistered repo reads as "missing", drift.
 let src = match e.try_get_object("source") {
-    Ok(s) if s.has("lib") && s.has("ctl") && s.has("facet") && s.has("hash") => s,
+    Ok(s) if (s.has("lib") && s.has("ctl") && s.has("facet") && s.has("hash"))
+          || (s.has("repo") && s.has("path") && s.has("hash")) => s,
     _ => return err("claim has no checkable source pointer - decay needs drift evidence".to_string()),
 };
-let slib = src.get_string("lib");
-let sctl = src.get_string("ctl");
-let sfacet = src.get_string("facet");
-let sid = lookup_ctl_id(&slib, &sctl);
+let is_ptr = src.has("lib") && src.has("ctl") && src.has("facet");
 let mut current = "missing".to_string();
-if !sid.is_empty() && store.exists(&slib, &sid) {
-    let sdata = store.get_data(&slib, &sid).get_object("data");
-    if sdata.has(&sfacet) {
-        current = content_hash(&sdata.get_string(&sfacet).replace("\r", ""));
+let srcdesc;
+if is_ptr {
+    let slib = src.get_string("lib");
+    let sctl = src.get_string("ctl");
+    let sfacet = src.get_string("facet");
+    srcdesc = format!("{}.{}:{}", slib, sctl, sfacet);
+    let sid = lookup_ctl_id(&slib, &sctl);
+    if !sid.is_empty() && store.exists(&slib, &sid) {
+        let sdata = store.get_data(&slib, &sid).get_object("data");
+        if sdata.has(&sfacet) {
+            current = content_hash(&sdata.get_string(&sfacet).replace("\r", ""));
+        }
+    }
+} else {
+    let repo = src.get_string("repo");
+    let path = src.get_string("path");
+    srcdesc = format!("{}:{}", repo, path);
+    if let Ok(txt) = std::fs::read_to_string("runtime/dev/repos.json") {
+        if let Ok(rj) = DataObject::try_from_string(&txt) {
+            if let Ok(r) = rj.try_get_object(&repo) {
+                if r.has("path") {
+                    if let Ok(c) = std::fs::read_to_string(format!("{}/{}", r.get_string("path"), path)) {
+                        current = content_hash(&c.replace("\r", ""));
+                    }
+                }
+            }
+        }
     }
 }
 if current == src.get_string("hash") {
@@ -230,7 +254,7 @@ trace.put_string("relation", "drift");
 trace.put_string("action", &action);
 trace.put_string("before", &c);
 if !after.is_empty() { trace.put_string("after", &after); }
-trace.put_string("reasoning", &format!("source {}.{}:{} drifted; hysteresis step", slib, sctl, sfacet));
+trace.put_string("reasoning", &format!("source {} drifted; hysteresis step", srcdesc));
 trace.put_int("time", now);
 trace.put_string("author", &author);
 let old_traces = if data_obj.has("traces") { data_obj.get_string("traces").replace("\r", "") } else { String::new() };

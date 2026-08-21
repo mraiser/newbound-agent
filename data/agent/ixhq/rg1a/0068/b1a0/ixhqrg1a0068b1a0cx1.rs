@@ -53,7 +53,7 @@ fn val(d: Data, ind: usize) -> String {
 }
 fn obj(o: DataObject, ind: usize) -> String {
     let canon = ["claim", "detail", "tags", "source", "confidence", "time",
-                 "lib", "ctl", "facet", "hash", "doc"];
+                 "lib", "ctl", "facet", "hash", "doc", "repo", "path", "commit"];
     let mut keys: Vec<String> = canon.iter().filter(|k| o.has(k)).map(|s| s.to_string()).collect();
     let mut extra: Vec<String> = o.get_keys().into_iter()
         .filter(|k| !canon.contains(&k.as_str())).collect();
@@ -90,6 +90,18 @@ fn lookup_ctl_id(lib: &str, name: &str) -> String {
         let c = c.object();
         if c.has("name") && c.get_string("name") == name {
             return c.get_string("id");
+        }
+    }
+    String::new()
+}
+fn repo_base(repo: &str) -> String {
+    // registered repo -> its path (runtime/dev/repos.json) - matches
+    // remember's stamping side; empty = unknown repo, which is drift.
+    if let Ok(txt) = std::fs::read_to_string("runtime/dev/repos.json") {
+        if let Ok(rj) = DataObject::try_from_string(&txt) {
+            if let Ok(r) = rj.try_get_object(repo) {
+                if r.has("path") { return r.get_string("path"); }
+            }
         }
     }
     String::new()
@@ -135,16 +147,34 @@ for lib in libs {
             let mut pushed = false;
             if e.has("source") {
                 if let Ok(src) = e.try_get_object("source") {
-                    if src.has("lib") && src.has("ctl") && src.has("facet") && src.has("hash") {
-                        let slib = src.get_string("lib");
-                        let sctl = src.get_string("ctl");
-                        let sfacet = src.get_string("facet");
-                        let sid = lookup_ctl_id(&slib, &sctl);
+                    // Two checkable shapes, one drift test: a store facet
+                    // pointer or a registered-repo file pointer (brick 3).
+                    let is_ptr = src.has("lib") && src.has("ctl") && src.has("facet") && src.has("hash");
+                    let is_repo = !is_ptr && src.has("repo") && src.has("path") && src.has("hash");
+                    if is_ptr || is_repo {
                         let mut current = "missing".to_string();
-                        if !sid.is_empty() && store.exists(&slib, &sid) {
-                            let sdata = store.get_data(&slib, &sid).get_object("data");
-                            if sdata.has(&sfacet) {
-                                current = content_hash(&sdata.get_string(&sfacet).replace("\r", ""));
+                        let srcdesc;
+                        if is_ptr {
+                            let slib = src.get_string("lib");
+                            let sctl = src.get_string("ctl");
+                            let sfacet = src.get_string("facet");
+                            srcdesc = format!("{}.{}:{}", slib, sctl, sfacet);
+                            let sid = lookup_ctl_id(&slib, &sctl);
+                            if !sid.is_empty() && store.exists(&slib, &sid) {
+                                let sdata = store.get_data(&slib, &sid).get_object("data");
+                                if sdata.has(&sfacet) {
+                                    current = content_hash(&sdata.get_string(&sfacet).replace("\r", ""));
+                                }
+                            }
+                        } else {
+                            let repo = src.get_string("repo");
+                            let path = src.get_string("path");
+                            srcdesc = format!("{}:{}", repo, path);
+                            let base = repo_base(&repo);
+                            if !base.is_empty() {
+                                if let Ok(c) = std::fs::read_to_string(format!("{}/{}", base, path)) {
+                                    current = content_hash(&c.replace("\r", ""));
+                                }
                             }
                         }
                         if current != src.get_string("hash") {
@@ -157,13 +187,13 @@ for lib in libs {
                             if acknowledged {
                                 it.put_string("kind", "review");
                                 it.put_int("priority", 2);
-                                it.put_string("why", &format!("source {}.{}:{} drift acknowledged; awaiting review", slib, sctl, sfacet));
+                                it.put_string("why", &format!("source {} drift acknowledged; awaiting review", srcdesc));
                                 n_review += 1;
                                 items.push((2, t0, it));
                             } else {
                                 it.put_string("kind", "stale");
                                 it.put_int("priority", 3);
-                                it.put_string("why", &format!("source {}.{}:{} drifted since this claim was stamped", slib, sctl, sfacet));
+                                it.put_string("why", &format!("source {} drifted since this claim was stamped", srcdesc));
                                 n_stale += 1;
                                 items.push((3, t0, it));
                             }

@@ -60,7 +60,7 @@ fn val(d: Data, ind: usize) -> String {
 }
 fn obj(o: DataObject, ind: usize) -> String {
     let canon = ["claim", "detail", "tags", "source", "confidence", "time",
-                 "lib", "ctl", "facet", "hash", "doc"];
+                 "lib", "ctl", "facet", "hash", "doc", "repo", "path", "commit"];
     let mut keys: Vec<String> = canon.iter().filter(|k| o.has(k)).map(|s| s.to_string()).collect();
     let mut extra: Vec<String> = o.get_keys().into_iter()
         .filter(|k| !canon.contains(&k.as_str())).collect();
@@ -94,6 +94,40 @@ fn ctl_id(store: &DataStore, lib: &str, name: &str) -> String {
         let c = c.object();
         if c.has("name") && c.get_string("name") == name { return c.get_string("id"); }
     }
+    String::new()
+}
+fn repo_base(repo: &str) -> String {
+    // registered repo -> its path (runtime/dev/repos.json) - matches
+    // remember's stamping side; empty = unknown repo.
+    if let Ok(txt) = std::fs::read_to_string("runtime/dev/repos.json") {
+        if let Ok(rj) = DataObject::try_from_string(&txt) {
+            if let Ok(r) = rj.try_get_object(repo) {
+                if r.has("path") { return r.get_string("path"); }
+            }
+        }
+    }
+    String::new()
+}
+fn repo_head(base: &str) -> String {
+    // HEAD sha via .git files (remember's resolver): ref file, then
+    // packed-refs; empty when unresolvable - commit is provenance only.
+    let head = std::fs::read_to_string(format!("{}/.git/HEAD", base)).unwrap_or_default();
+    let head = head.trim().to_string();
+    if let Some(r) = head.strip_prefix("ref: ") {
+        if let Ok(s) = std::fs::read_to_string(format!("{}/.git/{}", base, r)) {
+            return s.trim().to_string();
+        }
+        if let Ok(pk) = std::fs::read_to_string(format!("{}/.git/packed-refs", base)) {
+            for line in pk.lines() {
+                if line.starts_with('#') || line.starts_with('^') { continue; }
+                if let Some((sha, name)) = line.split_once(' ') {
+                    if name.trim() == r { return sha.to_string(); }
+                }
+            }
+        }
+        return String::new();
+    }
+    if head.len() == 40 && head.chars().all(|c| c.is_ascii_hexdigit()) { return head; }
     String::new()
 }
 fn ensure_key(data_obj: &mut DataObject, name: &str) {
@@ -191,19 +225,41 @@ for i in 0..items.len() {
     if idx < 0 { continue; }
     let mut entry = arr.get_object(idx as usize);
     let src = match entry.try_get_object("source") { Ok(s) => s, Err(_) => continue };
-    if !(src.has("lib") && src.has("ctl") && src.has("facet")) { continue; }
-    let (slib, sctl, sfacet) = (src.get_string("lib"), src.get_string("ctl"), src.get_string("facet"));
-    let scid = ctl_id(&store, &slib, &sctl);
-    if scid.is_empty() || !store.exists(&slib, &scid) { continue; }
-    let sdata = store.get_data(&slib, &scid).get_object("data");
-    if !sdata.has(&sfacet) { continue; }
-    let content = sdata.get_string(&sfacet).replace("\r", "");
+    // Two checkable shapes (brick 3): a store facet pointer or a
+    // registered-repo file pointer. Either way the curator re-reads the
+    // referent's CURRENT bytes; a vanished referent is left for decay.
+    let is_ptr = src.has("lib") && src.has("ctl") && src.has("facet");
+    let is_repo = !is_ptr && src.has("repo") && src.has("path");
+    if !is_ptr && !is_repo { continue; }
+    let content;
+    let srcdesc;
+    let mut rcommit = String::new();
+    if is_ptr {
+        let (slib, sctl, sfacet) = (src.get_string("lib"), src.get_string("ctl"), src.get_string("facet"));
+        let scid = ctl_id(&store, &slib, &sctl);
+        if scid.is_empty() || !store.exists(&slib, &scid) { continue; }
+        let sdata = store.get_data(&slib, &scid).get_object("data");
+        if !sdata.has(&sfacet) { continue; }
+        content = sdata.get_string(&sfacet).replace("\r", "");
+        srcdesc = format!("{}.{} facet {}", slib, sctl, sfacet);
+    } else {
+        let repo = src.get_string("repo");
+        let path = src.get_string("path");
+        srcdesc = format!("{}:{}", repo, path);
+        let base = repo_base(&repo);
+        if base.is_empty() { continue; }
+        match std::fs::read_to_string(format!("{}/{}", base, path)) {
+            Ok(c) => { content = c.replace("\r", ""); }
+            Err(_) => { continue; }
+        }
+        rcommit = repo_head(&base);
+    }
     let cur_hash = content_hash(&content);
     let excerpt: String = content.chars().take(3000).collect();
     let detail = if entry.has("detail") { entry.get_string("detail") } else { String::new() };
     let prompt = format!(
-        "You are the agent re-verifying one of its own memories against reality. The claim below was stamped against an older version of the referent; the referent has since changed. Decide whether the claim still holds of the CURRENT content.\nCLAIM: {}\nDETAIL: {}\nREFERENT ({}.{} facet {}, current):\n{}\nReply with ONLY one JSON object, no fences:\n{{\"verdict\": \"confirm\" | \"amend\" | \"retire\", \"claim\": \"<the corrected claim if amend, else empty>\", \"why\": \"<one sentence>\"}}",
-        wclaim, detail, slib, sctl, sfacet, excerpt);
+        "You are the agent re-verifying one of its own memories against reality. The claim below was stamped against an older version of the referent; the referent has since changed. Decide whether the claim still holds of the CURRENT content.\nCLAIM: {}\nDETAIL: {}\nREFERENT ({}, current):\n{}\nReply with ONLY one JSON object, no fences:\n{{\"verdict\": \"confirm\" | \"amend\" | \"retire\", \"claim\": \"<the corrected claim if amend, else empty>\", \"why\": \"<one sentence>\"}}",
+        wclaim, detail, srcdesc, excerpt);
     let reply = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         ask_llm(prompt, Data::DNull)
     })).unwrap_or_else(|_| "ERROR: ask_llm panicked".to_string());
@@ -224,6 +280,9 @@ for i in 0..items.len() {
         // step confidence up - drift checked and survived is evidence
         let mut nsrc = src.deep_copy();
         nsrc.put_string("hash", &cur_hash);
+        // the hash is the load-bearing re-stamp; on a repo source the
+        // commit provenance moves with it
+        if is_repo && !rcommit.is_empty() { nsrc.put_string("commit", &rcommit); }
         entry.put_object("source", nsrc);
         entry.put_int("reverified", now);
         let c = if entry.has("confidence") { entry.get_string("confidence") } else { "medium".to_string() };
@@ -272,10 +331,17 @@ for i in 0..items.len() {
         ne.put_string("detail", &format!("amended by reverify: {}", why));
         ne.put_string("tags", "reverified,amended");
         ne.put_string("confidence", "medium");
+        // fresh pointer of the SAME shape as the old source; remember
+        // stamps hash (and commit, for repo sources) at write time
         let mut nsrc = DataObject::new();
-        nsrc.put_string("lib", &slib);
-        nsrc.put_string("ctl", &sctl);
-        nsrc.put_string("facet", &sfacet);
+        if is_ptr {
+            nsrc.put_string("lib", &src.get_string("lib"));
+            nsrc.put_string("ctl", &src.get_string("ctl"));
+            nsrc.put_string("facet", &src.get_string("facet"));
+        } else {
+            nsrc.put_string("repo", &src.get_string("repo"));
+            nsrc.put_string("path", &src.get_string("path"));
+        }
         ne.put_object("source", nsrc);
         let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             remember(wlib.clone(), wdom.clone(), ne.deep_copy(), "reverify".to_string())

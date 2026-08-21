@@ -69,7 +69,7 @@ fn obj(o: DataObject, ind: usize) -> String {
     // then anything else sorted - hash-backed ndata loses file order, so
     // a fixed order is what makes rewrites diff cleanly.
     let canon = ["claim", "detail", "tags", "source", "confidence", "time",
-                 "lib", "ctl", "facet", "hash", "doc"];
+                 "lib", "ctl", "facet", "hash", "doc", "repo", "path", "commit"];
     let mut keys: Vec<String> = canon.iter().filter(|k| o.has(k)).map(|s| s.to_string()).collect();
     let mut extra: Vec<String> = o.get_keys().into_iter()
         .filter(|k| !canon.contains(&k.as_str())).collect();
@@ -96,6 +96,41 @@ fn content_hash(s: &str) -> String {
         h = h.wrapping_mul(0x100000001b3);
     }
     format!("{:016x}", h)
+}
+fn repo_base(repo: &str) -> String {
+    // registered repo -> its path, from the dev.git registry
+    // (runtime/dev/repos.json); empty = unknown repo.
+    if let Ok(txt) = std::fs::read_to_string("runtime/dev/repos.json") {
+        if let Ok(rj) = DataObject::try_from_string(&txt) {
+            if let Ok(r) = rj.try_get_object(repo) {
+                if r.has("path") { return r.get_string("path"); }
+            }
+        }
+    }
+    String::new()
+}
+fn repo_head(base: &str) -> String {
+    // HEAD sha without spawning git: resolve .git/HEAD through the ref
+    // file or packed-refs; empty when unresolvable (commit is provenance,
+    // hash is the load-bearing field).
+    let head = std::fs::read_to_string(format!("{}/.git/HEAD", base)).unwrap_or_default();
+    let head = head.trim().to_string();
+    if let Some(r) = head.strip_prefix("ref: ") {
+        if let Ok(s) = std::fs::read_to_string(format!("{}/.git/{}", base, r)) {
+            return s.trim().to_string();
+        }
+        if let Ok(pk) = std::fs::read_to_string(format!("{}/.git/packed-refs", base)) {
+            for line in pk.lines() {
+                if line.starts_with('#') || line.starts_with('^') { continue; }
+                if let Some((sha, name)) = line.split_once(' ') {
+                    if name.trim() == r { return sha.to_string(); }
+                }
+            }
+        }
+        return String::new();
+    }
+    if head.len() == 40 && head.chars().all(|c| c.is_ascii_hexdigit()) { return head; }
+    String::new()
 }
 fn err(msg: String) -> DataObject {
     let mut o = DataObject::new();
@@ -145,8 +180,9 @@ if entry.has("source") {
         Err(_) => return err("entry.source must be an object ({lib, ctl, facet} or {doc})".to_string()),
     };
     let is_ptr = src.has("lib") && src.has("ctl") && src.has("facet");
-    if !is_ptr && !src.has("doc") {
-        return err("entry.source must carry lib+ctl+facet (a store pointer) or doc".to_string());
+    let is_repo = src.has("repo") && src.has("path");
+    if !is_ptr && !is_repo && !src.has("doc") {
+        return err("entry.source must carry lib+ctl+facet (a store pointer), repo+path (a registered-repo file), or doc".to_string());
     }
     if is_ptr {
         let slib = src.get_string("lib");
@@ -166,7 +202,76 @@ if entry.has("source") {
             src.put_string("hash", &content_hash(&content));
             stamped = true;
         }
-        entry.put_object("source", src);
+        entry.put_object("source", src.clone());
+    }
+    if is_repo {
+        // A registered-repo file pointer: hash the working-tree bytes (the
+        // load-bearing staleness field, same FNV as facets) and record HEAD
+        // as provenance. Relative paths only - the repo name, not the
+        // caller, decides where reads happen.
+        let repo = src.get_string("repo");
+        let path = src.get_string("path");
+        if path.starts_with('/') || path.split('/').any(|s| s == "..") {
+            return err("entry.source.path must be relative to the repo root, without '..'".to_string());
+        }
+        let base = repo_base(&repo);
+        if base.is_empty() {
+            return err(format!("source repo '{}' is not in the dev.git registry (runtime/dev/repos.json)", repo));
+        }
+        match std::fs::read_to_string(format!("{}/{}", base, path)) {
+            Ok(content) => {
+                if !src.has("hash") || src.get_string("hash").trim().is_empty() {
+                    src.put_string("hash", &content_hash(&content.replace("\r", "")));
+                    stamped = true;
+                }
+            }
+            Err(_) => return err(format!("source points at {}:{}, which does not exist or is not readable", repo, path)),
+        }
+        if !src.has("commit") || src.get_string("commit").trim().is_empty() {
+            let head = repo_head(&base);
+            if !head.is_empty() { src.put_string("commit", &head); }
+        }
+        entry.put_object("source", src.clone());
+    }
+    if !is_ptr && !is_repo && src.has("doc") {
+        // Bind a bare doc pointer when exactly ONE registered repo contains
+        // the file: the claim becomes checkable for free. Ambiguity or no
+        // match leaves the doc as-is - an unchecked pointer, never a guess.
+        let doc = src.get_string("doc");
+        if !doc.starts_with('/') && !doc.split('/').any(|s| s == "..") {
+            if let Ok(txt) = std::fs::read_to_string("runtime/dev/repos.json") {
+                if let Ok(rj) = DataObject::try_from_string(&txt) {
+                    let mut found: Vec<(String, String)> = Vec::new();
+                    for (name, v) in rj.objects() {
+                        if let Data::DObject(r) = v {
+                            let ro = DataObject::get(r);
+                            if ro.has("path") {
+                                let b = ro.get_string("path");
+                                if std::path::Path::new(&format!("{}/{}", b, doc)).is_file() {
+                                    found.push((name, b));
+                                }
+                            }
+                        }
+                    }
+                    if found.len() == 1 {
+                        let (name, b) = &found[0];
+                        src.put_string("repo", name);
+                        src.put_string("path", &doc);
+                        if let Ok(content) = std::fs::read_to_string(format!("{}/{}", b, doc)) {
+                            if !src.has("hash") || src.get_string("hash").trim().is_empty() {
+                                src.put_string("hash", &content_hash(&content.replace("\r", "")));
+                                stamped = true;
+                            }
+                        }
+                        let head = repo_head(b);
+                        if !head.is_empty() && (!src.has("commit") || src.get_string("commit").trim().is_empty()) {
+                            src.put_string("commit", &head);
+                        }
+                        entry.put_object("source", src);
+                    }
+                }
+            }
+        }
     }
 }
 

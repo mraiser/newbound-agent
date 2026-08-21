@@ -15,6 +15,18 @@ fn content_hash(s: &str) -> String {
     }
     format!("{:016x}", h)
 }
+fn repo_base(repo: &str) -> String {
+    // registered repo -> its path (runtime/dev/repos.json) - the read-side
+    // twin of remember's stamping; empty = unknown repo, which is drift.
+    if let Ok(txt) = std::fs::read_to_string("runtime/dev/repos.json") {
+        if let Ok(rj) = DataObject::try_from_string(&txt) {
+            if let Ok(r) = rj.try_get_object(repo) {
+                if r.has("path") { return r.get_string("path"); }
+            }
+        }
+    }
+    String::new()
+}
 fn ctl_id(store: &DataStore, lib: &str, name: &str) -> String {
     if !store.exists(lib, "controls") { return String::new(); }
     let rec = store.get_data(lib, "controls").get_object("data");
@@ -141,6 +153,21 @@ for lib in libs {
                             }
                         } else {
                             stale = true;
+                        }
+                    } else if src.has("repo") && src.has("path") && src.has("hash") {
+                        // Repo-file pointer (brick 3): staleness is a byte
+                        // compare against the working tree, exactly like a
+                        // facet pointer. Unknown repo or vanished file = stale.
+                        checked = true;
+                        out.put_object("source", src.deep_copy());
+                        let base = repo_base(&src.get_string("repo"));
+                        if base.is_empty() {
+                            stale = true;
+                        } else {
+                            match std::fs::read_to_string(format!("{}/{}", base, src.get_string("path"))) {
+                                Ok(c) => { stale = content_hash(&c.replace("\r", "")) != src.get_string("hash"); }
+                                Err(_) => { stale = true; }
+                            }
                         }
                     }
                 }
