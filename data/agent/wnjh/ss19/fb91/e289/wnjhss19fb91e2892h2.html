@@ -7,7 +7,7 @@
       <button class="ag-tab" data-tab="prompts" role="tab">prompts</button>
       <button class="ag-tab" data-tab="mind" role="tab">mind</button>
     </nav>
-    <button class="ag-newsession" title="clear this chat's history and start fresh (local to this browser; memory and journals are untouched)">new session</button>
+    <button class="ag-newsession" title="start a fresh session — the current one stays in the sessions sidebar (local to this browser; memory and journals are untouched)">new session</button>
     <span class="ag-arch">
       <span class="ag-arch-q lbl"></span>
       <button class="ag-sweep" title="run the archivist's consolidate sweep now — reviews queued turns and files what is durable">sweep now</button>
@@ -17,22 +17,33 @@
 
   <main class="ag-main">
     <section class="ag-pane" data-pane="chat">
-      <div class="ag-thread" aria-live="polite"></div>
-      <div class="ag-confirm" hidden>
-        <span class="ag-confirm-msg"></span>
-        <input class="ag-confirm-input" aria-label="Type the command name to allow it">
-        <button class="ag-confirm-ok" hidden>run it</button>
-        <button class="ag-confirm-cancel">cancel</button>
+      <aside class="ag-sessions">
+        <button class="ag-sess-new" title="start a fresh session — this one stays in the list">+ new session</button>
+        <p class="lbl">previous sessions — this browser only</p>
+        <div class="ag-sess-list"></div>
+      </aside>
+      <div class="ag-chat-main">
+        <div class="ag-thread" aria-live="polite"></div>
+        <div class="ag-confirm" hidden>
+          <span class="ag-confirm-msg"></span>
+          <input class="ag-confirm-input" aria-label="Type the command name to allow it">
+          <button class="ag-confirm-ok" hidden>run it</button>
+          <button class="ag-confirm-cancel">cancel</button>
+        </div>
+        <form class="ag-ask">
+          <span class="ag-attach" hidden></span>
+          <button type="button" class="ag-attachbtn"
+            title="attach files — or drag &amp; drop onto the chat, or paste an image">📎</button>
+          <input type="file" class="ag-file" multiple hidden aria-label="Attach files">
+          <textarea class="ag-input" rows="2"
+            placeholder="ask the agent — tools run as visible cells; mutating commands stop for your confirmation"
+            aria-label="Ask the agent"></textarea>
+          <span class="ag-ask-btns">
+            <button type="submit" class="ag-send">ask ▸</button>
+            <button type="button" class="ag-clear" title="start a fresh session — this one stays in the list">new</button>
+          </span>
+        </form>
       </div>
-      <form class="ag-ask">
-        <textarea class="ag-input" rows="2"
-          placeholder="ask the agent — tools run as visible cells; mutating commands stop for your confirmation"
-          aria-label="Ask the agent"></textarea>
-        <span class="ag-ask-btns">
-          <button type="submit" class="ag-send">ask ▸</button>
-          <button type="button" class="ag-clear" title="start a fresh conversation">new</button>
-        </span>
-      </form>
     </section>
 
     <section class="ag-pane" data-pane="memory" hidden>

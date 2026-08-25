@@ -97,19 +97,97 @@ async function init(host) {
   const thread = host.querySelector(".ag-thread");
   let messages = [];       // the raw conversation (openai shapes), persisted
   let transcript = [];     // rendered cells {kind, title?, text, error?}
-  try {
-    const saved = JSON.parse(localStorage.getItem(STORE_KEY) ?? "null");
-    if (saved && Array.isArray(saved.messages)) {
-      messages = saved.messages;
-      transcript = saved.transcript ?? [];
-    }
-  } catch { /* fresh */ }
-  const persist = () => {
+
+  // ── sessions: many conversations, each its own localStorage record ───
+  const SESS_INDEX = "agent.chat.sessions.v1";  // [{id, title, time}], newest first
+  const sessKey = (id) => "agent.chat.s." + id;
+  const loadIndex = () => {
     try {
-      localStorage.setItem(STORE_KEY, JSON.stringify({
+      const ix = JSON.parse(localStorage.getItem(SESS_INDEX) ?? "[]");
+      return Array.isArray(ix) ? ix : [];
+    } catch { return []; }
+  };
+  const saveIndex = (ix) => {
+    try { localStorage.setItem(SESS_INDEX, JSON.stringify(ix)); } catch { /* fine */ }
+  };
+  function sessTitle(msgs) {
+    const first = (msgs ?? []).find((m) => m.role === "user");
+    const t = String(first?.content ?? "").replace(/\s+/g, " ").trim();
+    return t ? t.slice(0, 48) : "untitled session";
+  }
+  // one-time migration: the single-session store becomes the first entry
+  try {
+    const legacy = JSON.parse(localStorage.getItem(STORE_KEY) ?? "null");
+    if (legacy && Array.isArray(legacy.messages) && legacy.messages.length) {
+      const id = Date.now().toString(36);
+      localStorage.setItem(sessKey(id), JSON.stringify(legacy));
+      saveIndex([{ id, title: sessTitle(legacy.messages), time: Date.now() },
+        ...loadIndex()]);
+    }
+    localStorage.removeItem(STORE_KEY);
+  } catch { /* fresh */ }
+  let sessId = null;        // minted at the first persisted message
+  const persist = () => {
+    if (!messages.length) return;   // empty sessions are never saved
+    if (!sessId) sessId = Date.now().toString(36);
+    try {
+      localStorage.setItem(sessKey(sessId), JSON.stringify({
         messages: messages.slice(-60), transcript: transcript.slice(-120) }));
     } catch { /* storage full — the chat still works */ }
+    const ix = loadIndex().filter((s) => s.id !== sessId);
+    ix.unshift({ id: sessId, title: sessTitle(messages), time: Date.now() });
+    saveIndex(ix);
+    renderSessions();
   };
+  function openSession(id) {
+    let rec = null;
+    try { rec = JSON.parse(localStorage.getItem(sessKey(id)) ?? "null"); }
+    catch { /* unreadable — opens empty */ }
+    sessId = id;
+    messages = (rec && Array.isArray(rec.messages)) ? rec.messages : [];
+    transcript = (rec && Array.isArray(rec.transcript)) ? rec.transcript : [];
+    thread.replaceChildren();
+    for (const entry of transcript) thread.appendChild(cellEl(entry));
+    thread.scrollTop = thread.scrollHeight;
+    renderSessions();
+  }
+  function newSession() {
+    sessId = null;
+    messages = [];
+    transcript = [];
+    thread.replaceChildren();
+    renderSessions();
+  }
+  const sessListEl = host.querySelector(".ag-sess-list");
+  function renderSessions() {
+    const ix = loadIndex();
+    sessListEl.replaceChildren();
+    for (const s of ix) {
+      const row = document.createElement("div");
+      row.className = "ag-sess" + (s.id === sessId ? " on" : "");
+      const open = document.createElement("button");
+      open.className = "ag-sess-open";
+      open.textContent = s.title;
+      open.title = new Date(s.time).toLocaleString();
+      open.addEventListener("click", () => { if (s.id !== sessId) openSession(s.id); });
+      const del = document.createElement("button");
+      del.className = "ag-sess-del";
+      del.textContent = "✕";
+      del.title = "forget this session (this browser only)";
+      del.addEventListener("click", () => {
+        if (del.textContent !== "sure?") {
+          del.textContent = "sure?";
+          setTimeout(() => { del.textContent = "✕"; }, 2500);
+          return;
+        }
+        try { localStorage.removeItem(sessKey(s.id)); } catch { /* fine */ }
+        saveIndex(loadIndex().filter((x) => x.id !== s.id));
+        if (s.id === sessId) newSession(); else renderSessions();
+      });
+      row.append(open, del);
+      sessListEl.appendChild(row);
+    }
+  }
 
   function cellEl(entry) {
     const div = document.createElement("div");
@@ -162,25 +240,11 @@ async function init(host) {
     persist();
     return entry;
   }
-  for (const entry of transcript) thread.appendChild(cellEl(entry));
-  thread.scrollTop = thread.scrollHeight;
+  { const ix = loadIndex(); ix.length ? openSession(ix[0].id) : renderSessions(); }
 
-  // new session — clears THIS BROWSER's transcript (the model context and
-  // the rendered cells). Two-click like every destructive act here; memory,
-  // journals, and the archivist queue are untouched.
-  host.querySelector(".ag-newsession").addEventListener("click", (ev) => {
-    const btn = ev.currentTarget;
-    if (btn.textContent !== "really clear?") {
-      btn.textContent = "really clear?";
-      setTimeout(() => { btn.textContent = "new session"; }, 2500);
-      return;
-    }
-    btn.textContent = "new session";
-    messages = [];
-    transcript = [];
-    try { localStorage.removeItem(STORE_KEY); } catch { /* fine */ }
-    thread.innerHTML = "";
-  });
+  // new session — the current one stays in the sidebar; nothing is lost.
+  host.querySelector(".ag-newsession").addEventListener("click", newSession);
+  host.querySelector(".ag-sess-new").addEventListener("click", newSession);
 
   // ── the tool model (the notebook's ceremony, this venue's chrome) ────
   const confirmEl = host.querySelector(".ag-confirm");
@@ -290,10 +354,25 @@ async function init(host) {
   const sendBtn = host.querySelector(".ag-send");
   form.addEventListener("submit", async (ev) => {
     ev.preventDefault();
-    const message = input.value.trim();
-    if (!message || sendBtn.disabled) return;
+    let message = input.value.trim();
+    if ((!message && !attachments.length) || sendBtn.disabled) return;
     input.value = "";
     sendBtn.disabled = true;
+    if (attachments.length) {
+      const batch = attachments.splice(0);
+      renderAttachments();
+      try {
+        const block = await uploadBatch(batch);
+        message = message ? message + "\n\n" + block : block;
+      } catch (e) {
+        attachments.unshift(...batch);
+        renderAttachments();
+        pushCell({ kind: "agent", error: true,
+          text: `attachment upload failed: ${e.message || e}` });
+        sendBtn.disabled = false;
+        return;
+      }
+    }
     pushCell({ kind: "user", text: message });
     const busy = pushCell({ kind: "busy", text: "thinking…" });
     const busyEl = thread.lastElementChild;
@@ -348,11 +427,117 @@ async function init(host) {
       form.requestSubmit();
     }
   });
-  host.querySelector(".ag-clear").addEventListener("click", () => {
-    messages = [];
-    transcript = [];
-    thread.replaceChildren();
-    persist();
+  host.querySelector(".ag-clear").addEventListener("click", newSession);
+
+  // ── attachments: 📎 button, drag & drop, pasted screenshots ──────────
+  // Files upload through agent.chat.upload via a direct JSON POST to
+  // ../app/exec — the websocket/JSONP invoke path can't carry megabytes.
+  // The model is text-only across every chat_llm arm, so the message gets
+  // an [ATTACHED FILES] block of saved paths (small text files inlined);
+  // the agent opens the rest with its tools.
+  const attachStrip = host.querySelector(".ag-attach");
+  const fileInput = host.querySelector(".ag-file");
+  const attachments = [];
+  const fmtSize = (n) => n < 1024 ? `${n} B`
+    : n < 1048576 ? `${(n / 1024).toFixed(1)} KB` : `${(n / 1048576).toFixed(1)} MB`;
+  function renderAttachments() {
+    attachStrip.innerHTML = "";
+    attachStrip.hidden = attachments.length === 0;
+    attachments.forEach((a, i) => {
+      const chip = document.createElement("span");
+      chip.className = "ag-chip";
+      chip.textContent = `${a.name} (${fmtSize(a.size)}) `;
+      const x = document.createElement("button");
+      x.type = "button";
+      x.className = "ag-chip-x";
+      x.textContent = "✕";
+      x.title = "remove this attachment";
+      x.addEventListener("click", () => { attachments.splice(i, 1); renderAttachments(); });
+      chip.appendChild(x);
+      attachStrip.appendChild(chip);
+    });
+  }
+  function addFiles(list) {
+    for (const f of Array.from(list || [])) {
+      if (!f || !f.size) continue;
+      if (f.size > 20 * 1048576) {
+        pushCell({ kind: "agent", error: true,
+          text: `${f.name} is ${fmtSize(f.size)} — attachments are capped at 20 MB` });
+        continue;
+      }
+      attachments.push(f);
+    }
+    renderAttachments();
+  }
+  let uploadCmdId = null;
+  async function uploadOne(file) {
+    const b64 = await new Promise((res, rej) => {
+      const r = new FileReader();
+      r.onload = () => res(String(r.result).split(",")[1] || "");
+      r.onerror = () => rej(new Error(`cannot read ${file.name}`));
+      r.readAsDataURL(file);
+    });
+    if (!uploadCmdId) {
+      const ctlId = await new Promise((res) => lookupID("agent", "chat", res));
+      const rec = await jsonP("../app/read", "lib=agent&id=" + encodeURIComponent(ctlId));
+      const entry = (((rec || {}).data || {}).cmd || []).find((c) => c.name === "upload");
+      if (!entry) throw new Error("the upload command is missing on agent.chat");
+      uploadCmdId = entry.id;
+    }
+    const res = await fetch("../app/exec?sessionid=" + encodeURIComponent(sessionid), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ lib: "agent", id: uploadCmdId,
+        args: { filename: file.name, data_b64: b64 } }),
+    });
+    if (!res.ok) throw new Error(`upload of ${file.name}: HTTP ${res.status}`);
+    const env = await res.json();
+    const flat = env && env.data && typeof env.data === "object" ? env.data : env;
+    if (!flat || flat.status !== "ok") {
+      throw new Error((flat && flat.msg) || `upload of ${file.name} failed`);
+    }
+    return flat;
+  }
+  const texty = (f) => (f.type || "").startsWith("text/") || f.type === "application/json" ||
+    /\.(txt|md|json|js|ts|css|html?|rs|py|toml|ya?ml|csv|log|sh|xml|svg|properties)$/i.test(f.name);
+  async function uploadBatch(files) {
+    const lines = ["[ATTACHED FILES — saved on this instance; open them with your tools]"];
+    const inlined = [];
+    for (const f of files) {
+      const r = await uploadOne(f);
+      lines.push(`- ${r.path} (${f.type || "unknown type"}, ${fmtSize(f.size)})`);
+      if (f.size <= 32768 && texty(f)) {
+        try { inlined.push(`--- ${f.name} (inlined) ---\n` + await f.text()); } catch (e) {}
+      }
+    }
+    return lines.join("\n") + (inlined.length ? "\n\n" + inlined.join("\n\n") : "");
+  }
+  host.querySelector(".ag-attachbtn").addEventListener("click", () => fileInput.click());
+  fileInput.addEventListener("change", () => { addFiles(fileInput.files); fileInput.value = ""; });
+  const chatMain = host.querySelector(".ag-chat-main");
+  chatMain.addEventListener("dragover", (ev) => {
+    ev.preventDefault();
+    chatMain.classList.add("ag-drop-hot");
+  });
+  chatMain.addEventListener("dragleave", (ev) => {
+    if (!chatMain.contains(ev.relatedTarget)) chatMain.classList.remove("ag-drop-hot");
+  });
+  chatMain.addEventListener("drop", (ev) => {
+    ev.preventDefault();
+    chatMain.classList.remove("ag-drop-hot");
+    if (ev.dataTransfer) addFiles(ev.dataTransfer.files);
+  });
+  input.addEventListener("paste", (ev) => {
+    const items = (ev.clipboardData && ev.clipboardData.items) || [];
+    const files = [];
+    for (const it of items) {
+      if (it.kind !== "file") continue;
+      const f = it.getAsFile();
+      if (!f) continue;
+      files.push(!f.name || f.name === "image.png"
+        ? new File([f], `screenshot-${Date.now()}.png`, { type: f.type || "image/png" }) : f);
+    }
+    if (files.length) { ev.preventDefault(); addFiles(files); }
   });
 
   // ── memory: inspector + the owner's audit ────────────────────────────
