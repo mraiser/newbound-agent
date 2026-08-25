@@ -170,6 +170,48 @@ fn args_to_string(d: &Data) -> String {
     else if d.is_object() { d.object().to_string() }
     else { "{}".to_string() }
 }
+// ── vision: a message may carry an `images` array of image FILE PATHS (the
+// chat's runtime/agent/uploads). content stays a plain string - each dialect
+// builder below renders the same base64 into its provider's own envelope, so
+// callers stay dialect-agnostic. Arms with no image form (LOCAL, custom
+// LLM_CTL, CLAUDECODE) simply never read the key: the delegate gets the path.
+fn b64_encode(bytes: &[u8]) -> String {
+    const CHARS: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut out = String::with_capacity((bytes.len() + 2) / 3 * 4);
+    for chunk in bytes.chunks(3) {
+        let b0 = chunk[0] as usize;
+        let b1 = chunk.get(1).copied().unwrap_or(0) as usize;
+        let b2 = chunk.get(2).copied().unwrap_or(0) as usize;
+        out.push(CHARS[(b0 >> 2) & 0x3f] as char);
+        out.push(CHARS[((b0 << 4) | (b1 >> 4)) & 0x3f] as char);
+        if chunk.len() > 1 { out.push(CHARS[((b1 << 2) | (b2 >> 6)) & 0x3f] as char); } else { out.push('='); }
+        if chunk.len() > 2 { out.push(CHARS[b2 & 0x3f] as char); } else { out.push('='); }
+    }
+    out
+}
+// path -> (media_type, base64). None = unreadable, not a known image type,
+// or over 20MB (the chat upload's own cap): skipped rather than sent broken.
+fn image_b64(path: &str) -> Option<(String, String)> {
+    let mime = match path.rsplit('.').next().map(|e| e.to_ascii_lowercase()).unwrap_or_default().as_str() {
+        "png" => "image/png", "jpg" | "jpeg" => "image/jpeg",
+        "gif" => "image/gif", "webp" => "image/webp",
+        _ => return None,
+    };
+    let bytes = std::fs::read(path).ok()?;
+    if bytes.is_empty() || bytes.len() > 20 * 1024 * 1024 { return None; }
+    Some((mime.to_string(), b64_encode(&bytes)))
+}
+fn message_images(m: &DataObject) -> Vec<(String, String)> {
+    let mut out = Vec::new();
+    if let Ok(imgs) = m.try_get_array("images") {
+        for d in imgs.objects() {
+            if d.is_string() {
+                if let Some(pair) = image_b64(&d.string()) { out.push(pair); }
+            }
+        }
+    }
+    out
+}
 // ndata's try_from_string is NOT panic-safe. It returns Err only for
 // MALFORMED json; for well-formed json that is not an OBJECT — an array, a
 // string, a number, a bool, null — it reaches DataObject::from_json, whose
@@ -293,6 +335,14 @@ fn build_gemini_payload(messages: &DataArray, tools: &DataArray,
             }
             parts.push_object(p);
         }
+        for (mime, b64) in message_images(&m) {
+            let mut blob = DataObject::new();
+            blob.put_string("mime_type", &mime);
+            blob.put_string("data", &b64);
+            let mut part = DataObject::new();
+            part.put_object("inline_data", blob);
+            parts.push_object(part);
+        }
         if role == "assistant" {
             if let Ok(calls) = m.try_get_array("tool_calls") {
                 for c in calls.objects() {
@@ -383,6 +433,13 @@ fn build_ollama_payload(messages: &DataArray, tools: &DataArray, model: &str,
         let mut n = DataObject::new();
         n.put_string("role", &role);
         n.put_string("content", &m.try_get_string("content").unwrap_or_default());
+        let imgs = message_images(&m);
+        if !imgs.is_empty() {
+            // Ollama's native form: bare base64 strings, no data-URL wrapper.
+            let mut ia = DataArray::new();
+            for (_mime, b64) in imgs { ia.push_string(&b64); }
+            n.put_array("images", ia);
+        }
         if role == "assistant" {
             if let Ok(calls) = m.try_get_array("tool_calls") {
                 let mut oc = DataArray::new();
@@ -662,6 +719,16 @@ fn build_anthropic_payload(messages: &DataArray, tools: &DataArray, model: &str,
             t.put_string("type", "text");
             t.put_string("text", &content);
             blocks.push_object(t);
+        }
+        for (mime, b64) in message_images(&m) {
+            let mut src = DataObject::new();
+            src.put_string("type", "base64");
+            src.put_string("media_type", &mime);
+            src.put_string("data", &b64);
+            let mut ib = DataObject::new();
+            ib.put_string("type", "image");
+            ib.put_object("source", src);
+            blocks.push_object(ib);
         }
         if role == "assistant" {
             if let Ok(calls) = m.try_get_array("tool_calls") {
@@ -1030,7 +1097,38 @@ let payload = match dialect.as_str() {
     _ => {
         let mut p = DataObject::new();
         p.put_string("model", &model);
-        p.put_array("messages", messages.clone());
+        // Copied, not verbatim: a message carrying `images` becomes an OpenAI
+        // content-parts array (text + data-URL image_url entries). The
+        // caller's array is shared, and a builder has no business mutating it.
+        let mut oai_msgs = DataArray::new();
+        for i in 0..messages.len() {
+            let m = messages.get_object(i);
+            let imgs = message_images(&m);
+            if imgs.is_empty() { oai_msgs.push_object(m); continue; }
+            let mut n = DataObject::new();
+            for (k, v) in m.objects() {
+                if k != "images" && k != "content" { n.set_property(&k, v.clone()); }
+            }
+            let mut parts = DataArray::new();
+            let text = m.try_get_string("content").unwrap_or_default();
+            if !text.is_empty() {
+                let mut t = DataObject::new();
+                t.put_string("type", "text");
+                t.put_string("text", &text);
+                parts.push_object(t);
+            }
+            for (mime, b64) in imgs {
+                let mut u = DataObject::new();
+                u.put_string("url", &format!("data:{};base64,{}", mime, b64));
+                let mut ip = DataObject::new();
+                ip.put_string("type", "image_url");
+                ip.put_object("image_url", u);
+                parts.push_object(ip);
+            }
+            n.put_array("content", parts);
+            oai_msgs.push_object(n);
+        }
+        p.put_array("messages", oai_msgs);
         if tools.len() > 0 {
             p.put_array("tools", tools.clone());
             p.put_string("tool_choice", "auto");

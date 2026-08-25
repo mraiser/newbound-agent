@@ -49,9 +49,11 @@ pub fn start() -> DataObject {
 // go through platform commands, the executive's own writes return here:
 // the self-model, for free.
 // Sensor runtime state under one globals key (the executive's pattern).
-// The cursor is runtime state for now - it resets to `now` on start, so a
-// restart never replays history; a persisted cursor record arrives with
-// the sensor-state work the contract reserves for it.
+// The cursor persists at runtime/agent/store_sense.json (the git
+// sensor's persisted-state pattern): a restart resumes from it, so
+// entries journaled while the sensor was down are perceived instead of
+// dropped. A box with no persisted state starts at `now` - a fresh
+// start never replays history.
 fn ensure_sensor_state(g: &mut DataObject) -> DataObject {
     if !g.has("AGENT_SENSOR_STORE") {
         let mut st = DataObject::new();
@@ -104,12 +106,47 @@ fn bind_claims(store: &DataStore, chg_lib: &str, chg_ctl: &str, chg_facet: &str)
             let id = item.get_string("id");
             if !store.exists(&lib, &id) { continue; }
             let dd = store.get_data(&lib, &id).get_object("data");
-            if !dd.has("memory") { continue; }
-            let w = match DataObject::try_from_string(&format!("{{\"a\":{}}}", dd.get_string("memory"))) {
-                Ok(w) => w,
-                Err(_) => continue,
-            };
-            let a = match w.try_get_array("a") { Ok(a) => a, Err(_) => continue };
+            // one-memory-cycle: a domain's effective claims are the union
+            // of its facet (legacy array or JSONL) and the instance-local
+            // overlay - a later overlay line with the same claim supersedes.
+            fn mem_union(src: &str, lib: &str, ctl: &str) -> DataArray {
+                let t = src.trim();
+                let mut v: Vec<DataObject> = Vec::new();
+                if t.starts_with('[') {
+                    if let Ok(w) = DataObject::try_from_string(&format!("{{\"a\":{}}}", t)) {
+                        if let Ok(a) = w.try_get_array("a") {
+                            for i in 0..a.len() { if let Ok(o) = a.try_get_object(i) { v.push(o); } }
+                        }
+                    }
+                } else {
+                    for ln in t.lines() {
+                        let ln = ln.trim();
+                        if ln.starts_with('{') {
+                            if let Ok(o) = DataObject::try_from_string(ln) { v.push(o); }
+                        }
+                    }
+                }
+                let of = format!("runtime/agent/memory-overlay/{}.{}.jsonl", lib, ctl);
+                for ln in std::fs::read_to_string(&of).unwrap_or_default().lines() {
+                    let ln = ln.trim();
+                    if !ln.starts_with('{') { continue; }
+                    if let Ok(o) = DataObject::try_from_string(ln) {
+                        if !o.has("claim") { continue; }
+                        let c = o.get_string("claim");
+                        let mut hit = false;
+                        for e in v.iter_mut() {
+                            if e.has("claim") && e.get_string("claim").trim() == c.trim() { *e = o.clone(); hit = true; break; }
+                        }
+                        if !hit { v.push(o); }
+                    }
+                }
+                let mut out = DataArray::new();
+                for o in v { out.push_object(o); }
+                out
+            }
+            let msrc = if dd.has("memory") { dd.get_string("memory") } else { String::new() };
+            let a = mem_union(&msrc, &lib, &item.get_string("name"));
+            if a.len() == 0 { continue; }
             for j in 0..a.len() {
                 let e = match a.try_get_object(j) { Ok(e) => e, Err(_) => continue };
                 if !e.has("claim") || !e.has("source") { continue; }
@@ -156,7 +193,19 @@ if st.get_boolean("running") {
     return o;
 }
 st.put_boolean("running", true);
-st.put_int("cursor", time());
+let mut cursor = time();
+if let Ok(s) = std::fs::read_to_string("runtime/agent/store_sense.json") {
+    // guard the shape: try_from_string panics on well-formed non-object JSON
+    if s.trim_start().starts_with('{') {
+        if let Ok(o) = DataObject::try_from_string(&s) {
+            if o.has("cursor") {
+                let c = o.get_int("cursor");
+                if c > 0 { cursor = c; }
+            }
+        }
+    }
+}
+st.put_int("cursor", cursor);
 st.put_int("started", time());
 
 std::thread::spawn(move || {
@@ -245,6 +294,9 @@ std::thread::spawn(move || {
             }
         }
         st.put_int("cursor", t0);
+        let _ = std::fs::create_dir_all("runtime/agent");
+        let _ = std::fs::write("runtime/agent/store_sense.json",
+                               format!("{{\"cursor\":{}}}", t0));
         // the system sensor rides the same loop (H4): one sweep every
         // 15 ticks (~30s) - one sensor family, one loop, no second
         // scheduler. The sweep itself coalesces (band crossings only),
@@ -254,6 +306,12 @@ std::thread::spawn(move || {
         if ticks % 15 == 0 {
             let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                 crate::agent::sensor::system_sense::system_sense()
+            }));
+            // the git sensor rides the same cadence (brick 4): one
+            // porcelain status per registered repo, emission edge-
+            // triggered, so ~30s sets latency, not volume.
+            let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                crate::agent::sensor::git_sense::git_sense()
             }));
         }
         std::thread::sleep(std::time::Duration::from_millis(2000));

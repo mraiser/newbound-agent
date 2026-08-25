@@ -1,6 +1,7 @@
 use ndata::dataobject::DataObject;
 use flowlang::datastore::DataStore;
 use flowlang::flowlang::system::time::time;
+use flowlang::flowlang::system::system_call::system_call;
 use ndata::data::Data;
 use ndata::dataarray::DataArray;
 
@@ -82,6 +83,13 @@ fn lookup_ctl_id(lib: &str, name: &str) -> String {
 // serializer is canonical (2-space, fixed field order, extras sorted) -
 // the FIRST remember on a hand- or script-seeded domain may reorder old
 // entries' fields once; byte-stable after that.
+// One-memory-cycle (A1): a deposit aimed at a SHIPPED domain (data/<lib>
+// tracked inside a registered git repo) lands in the instance-local
+// OVERLAY (runtime/agent/memory-overlay/<lib>.<ctl>.jsonl) instead of the
+// committed facet - recall reads the union immediately; promote is the
+// only door to shipped bytes. Local libraries (kb, scratch, anything
+// untracked) keep the in-place path, so normal operation never dirties
+// a tracked repo.
 fn esc(s: &str) -> String {
     let mut out = String::new();
     for c in s.chars() {
@@ -125,7 +133,7 @@ fn obj(o: DataObject, ind: usize) -> String {
     // then anything else sorted - hash-backed ndata loses file order, so
     // a fixed order is what makes rewrites diff cleanly.
     let canon = ["claim", "detail", "tags", "source", "confidence", "time",
-                 "lib", "ctl", "facet", "hash", "doc"];
+                 "lib", "ctl", "facet", "hash", "doc", "repo", "path", "commit"];
     let mut keys: Vec<String> = canon.iter().filter(|k| o.has(k)).map(|s| s.to_string()).collect();
     let mut extra: Vec<String> = o.get_keys().into_iter()
         .filter(|k| !canon.contains(&k.as_str())).collect();
@@ -143,6 +151,144 @@ fn obj(o: DataObject, ind: usize) -> String {
     out.push_str(&format!("\n{}}}", "  ".repeat(ind)));
     out
 }
+fn jval(d: Data) -> String {
+    match d {
+        Data::DString(s) => format!("\"{}\"", esc(&s)),
+        Data::DInt(i) => format!("{}", i),
+        Data::DFloat(f) => format!("{}", f),
+        Data::DBoolean(b) => format!("{}", b),
+        Data::DNull => "null".to_string(),
+        Data::DObject(r) => jobj(DataObject::get(r)),
+        Data::DArray(r) => {
+            let a = DataArray::get(r);
+            let mut out = String::from("[");
+            for i in 0..a.len() {
+                if i > 0 { out.push_str(", "); }
+                out.push_str(&jval(a.get_property(i)));
+            }
+            out.push(']');
+            out
+        }
+        _ => "null".to_string(),
+    }
+}
+fn jobj(o: DataObject) -> String {
+    // obj()'s JSONL twin: the same canonical field order, on ONE line -
+    // the unit the overlay appends and promote ships (B2).
+    let canon = ["claim", "detail", "tags", "source", "confidence", "time",
+                 "lib", "ctl", "facet", "hash", "doc", "repo", "path", "commit"];
+    let mut keys: Vec<String> = canon.iter().filter(|k| o.has(k)).map(|s| s.to_string()).collect();
+    let mut extra: Vec<String> = o.get_keys().into_iter()
+        .filter(|k| !canon.contains(&k.as_str())).collect();
+    extra.sort();
+    keys.extend(extra);
+    let mut out = String::from("{");
+    let mut first = true;
+    for k in &keys {
+        if !first { out.push_str(", "); }
+        first = false;
+        out.push_str(&format!("\"{}\": {}", esc(k), jval(o.get_property(k))));
+    }
+    out.push('}');
+    out
+}
+fn overlay_file(lib: &str, ctl: &str) -> String {
+    format!("runtime/agent/memory-overlay/{}.{}.jsonl", lib, ctl)
+}
+fn parse_entries(src: &str) -> DataArray {
+    // both facet formats: legacy pretty JSON array, or JSONL (B2)
+    let t = src.trim();
+    let mut out = DataArray::new();
+    if t.is_empty() { return out; }
+    if t.starts_with('[') {
+        if let Ok(w) = DataObject::try_from_string(&format!("{{\"a\":{}}}", t)) {
+            if let Ok(a) = w.try_get_array("a") {
+                for i in 0..a.len() {
+                    if let Ok(o) = a.try_get_object(i) { out.push_object(o); }
+                }
+            }
+        }
+        return out;
+    }
+    for ln in t.lines() {
+        let ln = ln.trim();
+        if ln.is_empty() || !ln.starts_with('{') { continue; }
+        if let Ok(o) = DataObject::try_from_string(ln) { out.push_object(o); }
+    }
+    out
+}
+fn apply_overlay(base: DataArray, lib: &str, ctl: &str) -> DataArray {
+    let txt = std::fs::read_to_string(overlay_file(lib, ctl)).unwrap_or_default();
+    if txt.trim().is_empty() { return base; }
+    let mut v: Vec<DataObject> = Vec::new();
+    for i in 0..base.len() {
+        if let Ok(o) = base.try_get_object(i) { v.push(o); }
+    }
+    for ln in txt.lines() {
+        let ln = ln.trim();
+        if ln.is_empty() || !ln.starts_with('{') { continue; }
+        if let Ok(o) = DataObject::try_from_string(ln) {
+            if !o.has("claim") { continue; }
+            let c = o.get_string("claim");
+            let mut hit = false;
+            for e in v.iter_mut() {
+                if e.has("claim") && e.get_string("claim").trim() == c.trim() {
+                    *e = o.clone();
+                    hit = true;
+                    break;
+                }
+            }
+            if !hit { v.push(o); }
+        }
+    }
+    let mut out = DataArray::new();
+    for o in v { out.push_object(o); }
+    out
+}
+fn overlay_append(lib: &str, ctl: &str, entry: DataObject) {
+    let _ = std::fs::create_dir_all("runtime/agent/memory-overlay");
+    let f = overlay_file(lib, ctl);
+    let mut txt = std::fs::read_to_string(&f).unwrap_or_default();
+    if !txt.is_empty() && !txt.ends_with('\n') { txt.push('\n'); }
+    txt.push_str(&jobj(entry));
+    txt.push('\n');
+    let _ = std::fs::write(&f, txt);
+}
+fn shipped(lib: &str) -> bool {
+    // SHIPPED = data/<lib> resolves inside a registered repo's working
+    // tree (longest match; a symlinked overlay library resolves to its
+    // own repo) AND git tracks bytes there. ls-files exits 0 either way -
+    // emptiness is the answer; no exit-code or locale parsing.
+    let dd = match std::fs::canonicalize(format!("data/{}", lib)) {
+        Ok(p) => p.to_string_lossy().to_string(),
+        Err(_) => return false,
+    };
+    let mut best = String::new();
+    if let Ok(txt) = std::fs::read_to_string("runtime/dev/repos.json") {
+        if let Ok(rj) = DataObject::try_from_string(&txt) {
+            for (_n, v) in rj.objects() {
+                if let Data::DObject(r) = v {
+                    let ro = DataObject::get(r);
+                    if !ro.has("path") { continue; }
+                    if let Ok(b) = std::fs::canonicalize(ro.get_string("path")) {
+                        let b = b.to_string_lossy().to_string();
+                        if (dd == b || dd.starts_with(&format!("{}/", b))) && b.len() > best.len() {
+                            best = b;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    if best.is_empty() { return false; }
+    let rel = if dd == best { ".".to_string() } else { dd[best.len() + 1..].to_string() };
+    let mut a = DataArray::new();
+    for s in ["git", "--no-optional-locks", "-C", best.as_str(), "ls-files", "--", rel.as_str()] {
+        a.push_string(s);
+    }
+    let r = system_call(a);
+    !r.try_get_string("out").unwrap_or_default().trim().is_empty()
+}
 fn content_hash(s: &str) -> String {
     // FNV-1a over the \r-normalized source - MUST stay in sync with
     // read_control_facet/patch_control_facet.
@@ -152,6 +298,41 @@ fn content_hash(s: &str) -> String {
         h = h.wrapping_mul(0x100000001b3);
     }
     format!("{:016x}", h)
+}
+fn repo_base(repo: &str) -> String {
+    // registered repo -> its path, from the dev.git registry
+    // (runtime/dev/repos.json); empty = unknown repo.
+    if let Ok(txt) = std::fs::read_to_string("runtime/dev/repos.json") {
+        if let Ok(rj) = DataObject::try_from_string(&txt) {
+            if let Ok(r) = rj.try_get_object(repo) {
+                if r.has("path") { return r.get_string("path"); }
+            }
+        }
+    }
+    String::new()
+}
+fn repo_head(base: &str) -> String {
+    // HEAD sha without spawning git: resolve .git/HEAD through the ref
+    // file or packed-refs; empty when unresolvable (commit is provenance,
+    // hash is the load-bearing field).
+    let head = std::fs::read_to_string(format!("{}/.git/HEAD", base)).unwrap_or_default();
+    let head = head.trim().to_string();
+    if let Some(r) = head.strip_prefix("ref: ") {
+        if let Ok(s) = std::fs::read_to_string(format!("{}/.git/{}", base, r)) {
+            return s.trim().to_string();
+        }
+        if let Ok(pk) = std::fs::read_to_string(format!("{}/.git/packed-refs", base)) {
+            for line in pk.lines() {
+                if line.starts_with('#') || line.starts_with('^') { continue; }
+                if let Some((sha, name)) = line.split_once(' ') {
+                    if name.trim() == r { return sha.to_string(); }
+                }
+            }
+        }
+        return String::new();
+    }
+    if head.len() == 40 && head.chars().all(|c| c.is_ascii_hexdigit()) { return head; }
+    String::new()
 }
 fn err(msg: String) -> DataObject {
     let mut o = DataObject::new();
@@ -201,8 +382,9 @@ if entry.has("source") {
         Err(_) => return err("entry.source must be an object ({lib, ctl, facet} or {doc})".to_string()),
     };
     let is_ptr = src.has("lib") && src.has("ctl") && src.has("facet");
-    if !is_ptr && !src.has("doc") {
-        return err("entry.source must carry lib+ctl+facet (a store pointer) or doc".to_string());
+    let is_repo = src.has("repo") && src.has("path");
+    if !is_ptr && !is_repo && !src.has("doc") {
+        return err("entry.source must carry lib+ctl+facet (a store pointer), repo+path (a registered-repo file), or doc".to_string());
     }
     if is_ptr {
         let slib = src.get_string("lib");
@@ -222,7 +404,76 @@ if entry.has("source") {
             src.put_string("hash", &content_hash(&content));
             stamped = true;
         }
-        entry.put_object("source", src);
+        entry.put_object("source", src.clone());
+    }
+    if is_repo {
+        // A registered-repo file pointer: hash the working-tree bytes (the
+        // load-bearing staleness field, same FNV as facets) and record HEAD
+        // as provenance. Relative paths only - the repo name, not the
+        // caller, decides where reads happen.
+        let repo = src.get_string("repo");
+        let path = src.get_string("path");
+        if path.starts_with('/') || path.split('/').any(|s| s == "..") {
+            return err("entry.source.path must be relative to the repo root, without '..'".to_string());
+        }
+        let base = repo_base(&repo);
+        if base.is_empty() {
+            return err(format!("source repo '{}' is not in the dev.git registry (runtime/dev/repos.json)", repo));
+        }
+        match std::fs::read_to_string(format!("{}/{}", base, path)) {
+            Ok(content) => {
+                if !src.has("hash") || src.get_string("hash").trim().is_empty() {
+                    src.put_string("hash", &content_hash(&content.replace("\r", "")));
+                    stamped = true;
+                }
+            }
+            Err(_) => return err(format!("source points at {}:{}, which does not exist or is not readable", repo, path)),
+        }
+        if !src.has("commit") || src.get_string("commit").trim().is_empty() {
+            let head = repo_head(&base);
+            if !head.is_empty() { src.put_string("commit", &head); }
+        }
+        entry.put_object("source", src.clone());
+    }
+    if !is_ptr && !is_repo && src.has("doc") {
+        // Bind a bare doc pointer when exactly ONE registered repo contains
+        // the file: the claim becomes checkable for free. Ambiguity or no
+        // match leaves the doc as-is - an unchecked pointer, never a guess.
+        let doc = src.get_string("doc");
+        if !doc.starts_with('/') && !doc.split('/').any(|s| s == "..") {
+            if let Ok(txt) = std::fs::read_to_string("runtime/dev/repos.json") {
+                if let Ok(rj) = DataObject::try_from_string(&txt) {
+                    let mut found: Vec<(String, String)> = Vec::new();
+                    for (name, v) in rj.objects() {
+                        if let Data::DObject(r) = v {
+                            let ro = DataObject::get(r);
+                            if ro.has("path") {
+                                let b = ro.get_string("path");
+                                if std::path::Path::new(&format!("{}/{}", b, doc)).is_file() {
+                                    found.push((name, b));
+                                }
+                            }
+                        }
+                    }
+                    if found.len() == 1 {
+                        let (name, b) = &found[0];
+                        src.put_string("repo", name);
+                        src.put_string("path", &doc);
+                        if let Ok(content) = std::fs::read_to_string(format!("{}/{}", b, doc)) {
+                            if !src.has("hash") || src.get_string("hash").trim().is_empty() {
+                                src.put_string("hash", &content_hash(&content.replace("\r", "")));
+                                stamped = true;
+                            }
+                        }
+                        let head = repo_head(b);
+                        if !head.is_empty() && (!src.has("commit") || src.get_string("commit").trim().is_empty()) {
+                            src.put_string("commit", &head);
+                        }
+                        entry.put_object("source", src);
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -239,6 +490,33 @@ if !store.exists(&lib, &ctlid) {
 // their own peers. Curation happens at the credentialed exits (repo push
 // rights, crates.io tokens, the owner's branch-diff review), never by
 // policing local writes.
+
+// ── A1: a shipped domain's deposit goes to the overlay, never to the
+// committed facet - promote is the only door to shipped bytes ───────────
+if shipped(&lib) {
+    let record = store.get_data(&lib, &ctlid);
+    let data_obj = record.get_object("data");
+    let msrc = if data_obj.has("memory") { data_obj.get_string("memory") } else { String::new() };
+    let eff = apply_overlay(parse_entries(&msrc), &lib, &domain);
+    for i in 0..eff.len() {
+        if let Ok(e) = eff.try_get_object(i) {
+            if e.has("claim") && e.get_string("claim").trim() == claim {
+                return err(format!("an entry with this exact claim already exists in {}.{}", lib, domain));
+            }
+        }
+    }
+    let n = eff.len() as i64;
+    overlay_append(&lib, &domain, entry);
+    let mut o = DataObject::new();
+    o.put_string("status", "ok");
+    o.put_string("domain", &domain);
+    o.put_string("claim", &claim);
+    o.put_boolean("stamped", stamped);
+    o.put_string("routed", "overlay");
+    o.put_int("entries", n + 1);
+    return o;
+}
+
 let mut record = store.get_data(&lib, &ctlid);
 let mut data_obj = record.get_object("data");
 let old_source = if data_obj.has("memory") {
@@ -337,5 +615,4 @@ o.put_boolean("stamped", stamped);
 o.put_int("entries", arr.len() as i64);
 o.put_string("patch_id", &patch_id);
 o
-
 }

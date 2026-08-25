@@ -54,6 +54,11 @@ pub fn epistemic_work() -> DataObject {
 //                   that channel stays curated (owner's ritual).
 // "Gapped" (knowledge gaps) needs semantic judgment and waits for the
 // salience tier (Phase 5). Read-only; safe at any tick rate.
+// One-memory-cycle (A1/A2/B2): each domain is read as the UNION of its
+// facet (legacy array or JSONL) and the instance-local overlay
+// (runtime/agent/memory-overlay/<lib>.<ctl>.jsonl) - a later overlay
+// line with the same claim supersedes, so the queue sees curation the
+// moment it happens, before any promote ships it.
 fn esc(s: &str) -> String {
     let mut out = String::new();
     for c in s.chars() {
@@ -67,49 +72,6 @@ fn esc(s: &str) -> String {
             c => out.push(c),
         }
     }
-    out
-}
-fn val(d: Data, ind: usize) -> String {
-    match d {
-        Data::DString(s) => format!("\"{}\"", esc(&s)),
-        Data::DInt(i) => format!("{}", i),
-        Data::DFloat(f) => format!("{}", f),
-        Data::DBoolean(b) => format!("{}", b),
-        Data::DNull => "null".to_string(),
-        Data::DObject(r) => obj(DataObject::get(r), ind),
-        Data::DArray(r) => {
-            let a = DataArray::get(r);
-            if a.len() == 0 { return "[]".to_string(); }
-            let pad = "  ".repeat(ind + 1);
-            let mut out = String::from("[");
-            for i in 0..a.len() {
-                if i > 0 { out.push(','); }
-                out.push_str(&format!("\n{}{}", pad, val(a.get_property(i), ind + 1)));
-            }
-            out.push_str(&format!("\n{}]", "  ".repeat(ind)));
-            out
-        }
-        _ => "null".to_string(),
-    }
-}
-fn obj(o: DataObject, ind: usize) -> String {
-    let canon = ["claim", "detail", "tags", "source", "confidence", "time",
-                 "lib", "ctl", "facet", "hash", "doc"];
-    let mut keys: Vec<String> = canon.iter().filter(|k| o.has(k)).map(|s| s.to_string()).collect();
-    let mut extra: Vec<String> = o.get_keys().into_iter()
-        .filter(|k| !canon.contains(&k.as_str())).collect();
-    extra.sort();
-    keys.extend(extra);
-    if keys.is_empty() { return "{}".to_string(); }
-    let pad = "  ".repeat(ind + 1);
-    let mut out = String::from("{");
-    let mut first = true;
-    for k in &keys {
-        if !first { out.push(','); }
-        first = false;
-        out.push_str(&format!("\n{}\"{}\": {}", pad, esc(k), val(o.get_property(k), ind + 1)));
-    }
-    out.push_str(&format!("\n{}}}", "  ".repeat(ind)));
     out
 }
 fn content_hash(s: &str) -> String {
@@ -135,8 +97,73 @@ fn lookup_ctl_id(lib: &str, name: &str) -> String {
     }
     String::new()
 }
+fn repo_base(repo: &str) -> String {
+    // registered repo -> its path (runtime/dev/repos.json) - matches
+    // remember's stamping side; empty = unknown repo, which is drift.
+    if let Ok(txt) = std::fs::read_to_string("runtime/dev/repos.json") {
+        if let Ok(rj) = DataObject::try_from_string(&txt) {
+            if let Ok(r) = rj.try_get_object(repo) {
+                if r.has("path") { return r.get_string("path"); }
+            }
+        }
+    }
+    String::new()
+}
+fn overlay_file(lib: &str, ctl: &str) -> String {
+    format!("runtime/agent/memory-overlay/{}.{}.jsonl", lib, ctl)
+}
+fn parse_entries(src: &str) -> DataArray {
+    // both facet formats: legacy pretty JSON array, or JSONL (B2)
+    let t = src.trim();
+    let mut out = DataArray::new();
+    if t.is_empty() { return out; }
+    if t.starts_with('[') {
+        if let Ok(w) = DataObject::try_from_string(&format!("{{\"a\":{}}}", t)) {
+            if let Ok(a) = w.try_get_array("a") {
+                for i in 0..a.len() {
+                    if let Ok(o) = a.try_get_object(i) { out.push_object(o); }
+                }
+            }
+        }
+        return out;
+    }
+    for ln in t.lines() {
+        let ln = ln.trim();
+        if ln.is_empty() || !ln.starts_with('{') { continue; }
+        if let Ok(o) = DataObject::try_from_string(ln) { out.push_object(o); }
+    }
+    out
+}
+fn apply_overlay(base: DataArray, lib: &str, ctl: &str) -> DataArray {
+    let txt = std::fs::read_to_string(overlay_file(lib, ctl)).unwrap_or_default();
+    if txt.trim().is_empty() { return base; }
+    let mut v: Vec<DataObject> = Vec::new();
+    for i in 0..base.len() {
+        if let Ok(o) = base.try_get_object(i) { v.push(o); }
+    }
+    for ln in txt.lines() {
+        let ln = ln.trim();
+        if ln.is_empty() || !ln.starts_with('{') { continue; }
+        if let Ok(o) = DataObject::try_from_string(ln) {
+            if !o.has("claim") { continue; }
+            let c = o.get_string("claim");
+            let mut hit = false;
+            for e in v.iter_mut() {
+                if e.has("claim") && e.get_string("claim").trim() == c.trim() {
+                    *e = o.clone();
+                    hit = true;
+                    break;
+                }
+            }
+            if !hit { v.push(o); }
+        }
+    }
+    let mut out = DataArray::new();
+    for o in v { out.push_object(o); }
+    out
+}
 
-let _ = val; let _ = obj; // serializer unused here; shared helper block
+let _ = esc; // shared helper block; serializer unused here
 let store = DataStore::new();
 let mut libs: Vec<String> = Vec::new();
 if let Ok(rd) = std::fs::read_dir(&store.root) {
@@ -151,6 +178,7 @@ let mut items: Vec<(i64, i64, DataObject)> = Vec::new();
 let mut n_stale = 0i64;
 let mut n_review = 0i64;
 let mut n_unpromoted = 0i64;
+let mut n_plan = 0i64;
 for lib in libs {
     if !store.exists(&lib, "controls") { continue; }
     let list = store.get_data(&lib, "controls").get_object("data").get_array("list");
@@ -161,12 +189,9 @@ for lib in libs {
         let id = item.get_string("id");
         if !store.exists(&lib, &id) { continue; }
         let dd = store.get_data(&lib, &id).get_object("data");
-        if !dd.has("memory") { continue; }
-        let w = match DataObject::try_from_string(&format!("{{\"a\":{}}}", dd.get_string("memory"))) {
-            Ok(w) => w,
-            Err(_) => continue,
-        };
-        let a = match w.try_get_array("a") { Ok(a) => a, Err(_) => continue };
+        let msrc = if dd.has("memory") { dd.get_string("memory") } else { String::new() };
+        let a = apply_overlay(parse_entries(&msrc), &lib, &name);
+        if a.len() == 0 { continue; }
         for j in 0..a.len() {
             let e = match a.try_get_object(j) { Ok(e) => e, Err(_) => continue };
             if !e.has("claim") || e.has("superseded") { continue; }
@@ -176,16 +201,34 @@ for lib in libs {
             let mut pushed = false;
             if e.has("source") {
                 if let Ok(src) = e.try_get_object("source") {
-                    if src.has("lib") && src.has("ctl") && src.has("facet") && src.has("hash") {
-                        let slib = src.get_string("lib");
-                        let sctl = src.get_string("ctl");
-                        let sfacet = src.get_string("facet");
-                        let sid = lookup_ctl_id(&slib, &sctl);
+                    // Two checkable shapes, one drift test: a store facet
+                    // pointer or a registered-repo file pointer (brick 3).
+                    let is_ptr = src.has("lib") && src.has("ctl") && src.has("facet") && src.has("hash");
+                    let is_repo = !is_ptr && src.has("repo") && src.has("path") && src.has("hash");
+                    if is_ptr || is_repo {
                         let mut current = "missing".to_string();
-                        if !sid.is_empty() && store.exists(&slib, &sid) {
-                            let sdata = store.get_data(&slib, &sid).get_object("data");
-                            if sdata.has(&sfacet) {
-                                current = content_hash(&sdata.get_string(&sfacet).replace("\r", ""));
+                        let srcdesc;
+                        if is_ptr {
+                            let slib = src.get_string("lib");
+                            let sctl = src.get_string("ctl");
+                            let sfacet = src.get_string("facet");
+                            srcdesc = format!("{}.{}:{}", slib, sctl, sfacet);
+                            let sid = lookup_ctl_id(&slib, &sctl);
+                            if !sid.is_empty() && store.exists(&slib, &sid) {
+                                let sdata = store.get_data(&slib, &sid).get_object("data");
+                                if sdata.has(&sfacet) {
+                                    current = content_hash(&sdata.get_string(&sfacet).replace("\r", ""));
+                                }
+                            }
+                        } else {
+                            let repo = src.get_string("repo");
+                            let path = src.get_string("path");
+                            srcdesc = format!("{}:{}", repo, path);
+                            let base = repo_base(&repo);
+                            if !base.is_empty() {
+                                if let Ok(c) = std::fs::read_to_string(format!("{}/{}", base, path)) {
+                                    current = content_hash(&c.replace("\r", ""));
+                                }
                             }
                         }
                         if current != src.get_string("hash") {
@@ -198,13 +241,13 @@ for lib in libs {
                             if acknowledged {
                                 it.put_string("kind", "review");
                                 it.put_int("priority", 2);
-                                it.put_string("why", &format!("source {}.{}:{} drift acknowledged; awaiting review", slib, sctl, sfacet));
+                                it.put_string("why", &format!("source {} drift acknowledged; awaiting review", srcdesc));
                                 n_review += 1;
                                 items.push((2, t0, it));
                             } else {
                                 it.put_string("kind", "stale");
                                 it.put_int("priority", 3);
-                                it.put_string("why", &format!("source {}.{}:{} drifted since this claim was stamped", slib, sctl, sfacet));
+                                it.put_string("why", &format!("source {} drifted since this claim was stamped", srcdesc));
                                 n_stale += 1;
                                 items.push((3, t0, it));
                             }
@@ -212,6 +255,53 @@ for lib in libs {
                         }
                     }
                 }
+            }
+            // plan (brick 5): kb.plan entries are INTENT, not belief -
+            // the lifecycle rides the tags (proposed | accepted |
+            // in-progress | done | abandoned). Active intent surfaces
+            // as derived work; finished or dropped intent surfaces as
+            // nothing. A plan entry whose source drifts still takes
+            // the stale path above - evidence decay re-opens planning
+            // by mechanism. Plan entries never fall through to the
+            // belief kinds: low confidence on intent is not review
+            // pressure, and intent is never promotion material.
+            if lib == "kb" && name == "plan" {
+                if !pushed {
+                    let mut tags = String::new();
+                    if e.has("tags") {
+                        match e.get_property("tags") {
+                            Data::DString(s) => tags = s,
+                            Data::DArray(r) => {
+                                let ta = DataArray::get(r);
+                                for k in 0..ta.len() {
+                                    if let Data::DString(s) = ta.get_property(k) {
+                                        tags.push_str(&s);
+                                        tags.push(',');
+                                    }
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                    let tags = tags.to_lowercase();
+                    let toks: Vec<&str> = tags.split(',').map(|t| t.trim()).collect();
+                    let has_tag = |s: &str| toks.iter().any(|t| *t == s);
+                    if !has_tag("done") && !has_tag("abandoned") {
+                        let (pr, stage) = if has_tag("in-progress") { (2i64, "in-progress") }
+                            else if has_tag("accepted") { (2i64, "accepted") }
+                            else { (1i64, "proposed") };
+                        let mut it = DataObject::new();
+                        it.put_string("kind", "plan");
+                        it.put_int("priority", pr);
+                        it.put_string("lib", &lib);
+                        it.put_string("domain", &name);
+                        it.put_string("claim", &claim);
+                        it.put_string("why", &format!("plan item ({}) - active intent in kb.plan, surfaced never auto-executed", stage));
+                        n_plan += 1;
+                        items.push((pr, t0, it));
+                    }
+                }
+                continue;
             }
             if !pushed && conf == "low" {
                 let mut it = DataObject::new();
@@ -225,7 +315,7 @@ for lib in libs {
                 items.push((2, t0, it));
                 pushed = true;
             }
-            if !pushed && e.has("subject") {
+            if !pushed && e.has("subject") && !e.has("promoted") {
                 let mut it = DataObject::new();
                 it.put_string("kind", "unpromoted");
                 it.put_int("priority", 1);
@@ -249,7 +339,7 @@ o.put_array("items", out);
 o.put_int("stale", n_stale);
 o.put_int("review", n_review);
 o.put_int("unpromoted", n_unpromoted);
+o.put_int("plan", n_plan);
 o.put_int("total", total);
 o
-
 }
