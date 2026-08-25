@@ -1,0 +1,16 @@
+<!-- plan — kanban over kb.plan: columns are the lifecycle tags the
+     epistemic work queue derives from; dragging a card is a journaled
+     tags edit on the entry, nothing else. -->
+<div class="pl-wrap">
+  <header class="pl-head">
+    <span class="lbl">kb.plan — drag a card to change its lifecycle; the epistemic work queue reshapes itself from these tags</span>
+    <button class="pl-refresh" title="reload the board from kb.plan">refresh</button>
+    <span class="pl-note lbl"></span>
+  </header>
+  <div class="pl-board"></div>
+  <form class="pl-add">
+    <input class="pl-add-claim" placeholder="new plan item — one atomic claim" aria-label="New plan item claim">
+    <input class="pl-add-detail" placeholder="detail — the why (optional)" aria-label="Detail">
+    <button type="submit">+ proposed</button>
+  </form>
+</div>

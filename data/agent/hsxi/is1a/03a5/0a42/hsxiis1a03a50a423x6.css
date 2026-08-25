@@ -1,0 +1,39 @@
+.pl-wrap { flex: 1; min-height: 0; display: flex; flex-direction: column;
+  padding: 12px 16px; gap: 10px; }
+.pl-head { display: flex; align-items: center; gap: 12px; flex: none; }
+.pl-refresh { background: none; border: 1px solid var(--line); border-radius: 8px;
+  padding: 3px 10px; color: var(--text-dim); cursor: pointer; }
+.pl-refresh:hover { color: var(--text); }
+.pl-note.err { color: var(--bad, #c0564f); }
+
+.pl-board { flex: 1; min-height: 0; display: flex; gap: 10px; overflow-x: auto; }
+.pl-col { flex: 1; min-width: 190px; display: flex; flex-direction: column;
+  border: 1px solid var(--line); border-radius: 10px; background: var(--panel);
+  min-height: 0; }
+.pl-col.over { border-color: var(--accent, #f0a63c); }
+.pl-col-h { flex: none; padding: 8px 10px; border-bottom: 1px solid var(--line);
+  text-transform: uppercase; letter-spacing: .06em; font-size: .75em;
+  color: var(--text-dim); display: flex; justify-content: space-between; }
+.pl-col-cards { flex: 1; min-height: 40px; overflow-y: auto; padding: 8px;
+  display: flex; flex-direction: column; gap: 8px; }
+.pl-col[data-lifecycle="done"] .pl-card,
+.pl-col[data-lifecycle="abandoned"] .pl-card { opacity: .55; }
+
+.pl-card { border: 1px solid var(--line); border-radius: 8px; padding: 7px 9px;
+  background: var(--bg); cursor: grab; font-size: .88em; }
+.pl-card.dragging { opacity: .4; }
+.pl-card-claim { overflow-wrap: anywhere; }
+.pl-card-meta { margin-top: 5px; display: flex; flex-wrap: wrap; gap: 4px 8px;
+  font-size: .82em; color: var(--text-faint); }
+.pl-card-detail { margin-top: 6px; font-size: .9em; color: var(--text-dim);
+  white-space: pre-wrap; overflow-wrap: anywhere; border-top: 1px solid var(--line);
+  padding-top: 6px; }
+.pl-card-detail[hidden] { display: none; }
+
+.pl-add { flex: none; display: flex; gap: 8px; }
+.pl-add input { flex: 1; min-width: 0; background: var(--bg); color: var(--text);
+  border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; }
+.pl-add .pl-add-detail { flex: 2; }
+.pl-add button { background: none; border: 1px solid var(--line); border-radius: 8px;
+  padding: 6px 12px; color: var(--text-dim); cursor: pointer; white-space: nowrap; }
+.pl-add button:hover { color: var(--text); }

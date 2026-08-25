@@ -111,7 +111,8 @@ async function init(host) {
     try { localStorage.setItem(SESS_INDEX, JSON.stringify(ix)); } catch { /* fine */ }
   };
   function sessTitle(msgs) {
-    const first = (msgs ?? []).find((m) => m.role === "user");
+    const first = (msgs ?? []).find((m) =>
+      m.role === "user" && !String(m.content ?? "").startsWith("[CONTEXT]"));
     const t = String(first?.content ?? "").replace(/\s+/g, " ").trim();
     return t ? t.slice(0, 48) : "untitled session";
   }
@@ -126,6 +127,18 @@ async function init(host) {
     }
     localStorage.removeItem(STORE_KEY);
   } catch { /* fresh */ }
+  // one-time repair: retitle sessions whose title was minted from the
+  // injected [CONTEXT] preamble before sessTitle learned to skip it
+  try {
+    const ix = loadIndex();
+    let dirty = false;
+    for (const s of ix) {
+      if (!String(s.title ?? "").startsWith("[CONTEXT]")) continue;
+      const rec = JSON.parse(localStorage.getItem(sessKey(s.id)) ?? "null");
+      if (rec && Array.isArray(rec.messages)) { s.title = sessTitle(rec.messages); dirty = true; }
+    }
+    if (dirty) saveIndex(ix);
+  } catch { /* fine */ }
   let sessId = null;        // minted at the first persisted message
   const persist = () => {
     if (!messages.length) return;   // empty sessions are never saved
