@@ -358,12 +358,14 @@ async function init(host) {
     if ((!message && !attachments.length) || sendBtn.disabled) return;
     input.value = "";
     sendBtn.disabled = true;
+    let images = [];
     if (attachments.length) {
       const batch = attachments.splice(0);
       renderAttachments();
       try {
-        const block = await uploadBatch(batch);
-        message = message ? message + "\n\n" + block : block;
+        const up = await uploadBatch(batch);
+        message = message ? message + "\n\n" + up.block : up.block;
+        images = up.images;
       } catch (e) {
         attachments.unshift(...batch);
         renderAttachments();
@@ -388,11 +390,12 @@ async function init(host) {
       messages[0].content = core + "\n\n" + CHAT_SHELL + agent.TOOLS_PROMPT +
         (addendum ? "\n\nOWNER ADDENDUM\n" + addendum : "");
       const ctx = agent.contextBlock(viewctx.snapshot());
+      const userMsg = { role: "user", content: message };
+      if (images.length) userMsg.images = images;
       if (ctx) {
-        messages.push({ role: "user", content: "[CONTEXT]\n\n" + ctx },
-                      { role: "user", content: message });
+        messages.push({ role: "user", content: "[CONTEXT]\n\n" + ctx }, userMsg);
       } else {
-        messages.push({ role: "user", content: message });
+        messages.push(userMsg);
       }
       const text = await agent.chatTurn({
         messages, tools, execTool,
@@ -503,14 +506,19 @@ async function init(host) {
   async function uploadBatch(files) {
     const lines = ["[ATTACHED FILES — saved on this instance; open them with your tools]"];
     const inlined = [];
+    const images = [];
     for (const f of files) {
       const r = await uploadOne(f);
       lines.push(`- ${r.path} (${f.type || "unknown type"}, ${fmtSize(f.size)})`);
+      // chat_llm renders these paths as image blocks per provider dialect,
+      // so vision models see the pixels, not just the path.
+      if (/\.(png|jpe?g|gif|webp)$/i.test(r.path)) images.push(r.path);
       if (f.size <= 32768 && texty(f)) {
         try { inlined.push(`--- ${f.name} (inlined) ---\n` + await f.text()); } catch (e) {}
       }
     }
-    return lines.join("\n") + (inlined.length ? "\n\n" + inlined.join("\n\n") : "");
+    return { block: lines.join("\n") + (inlined.length ? "\n\n" + inlined.join("\n\n") : ""),
+             images };
   }
   host.querySelector(".ag-attachbtn").addEventListener("click", () => fileInput.click());
   fileInput.addEventListener("change", () => { addFiles(fileInput.files); fileInput.value = ""; });
