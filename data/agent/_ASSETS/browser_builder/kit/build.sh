@@ -123,7 +123,7 @@ stage_configure() {
 stage_deps() {
     [[ -d "${SRC_DIR}" ]] || die "Source tree missing; run the 'extract' stage first"
     log "Bootstrapping build dependencies (this may prompt / take a while)"
-    ( cd "${SRC_DIR}" && ./mach bootstrap --application-choice browser --no-interactive )
+    ( cd "${SRC_DIR}" && ./mach --no-interactive bootstrap --application-choice browser )
 }
 
 stage_build() {
