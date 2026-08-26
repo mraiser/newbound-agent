@@ -343,6 +343,23 @@ static void NoobscapeInject(nsDocShell* self, nsIFile* file) {
     gNoobscapeLastId = id;
   }
 
+  // v2 navigation directive: a chrome-principal script cannot drive content
+  // navigation via location.href / location.assign / pushState — those do a
+  // same-origin / subject-principal check that the SYSTEM principal (which the
+  // injected script carries) fails, so the load silently vetoes. The driver
+  // sends "NOOBSCAPE_NAV <url>" instead and we perform a real top-level
+  // docshell load with a system triggering principal — the same path the URL
+  // bar uses. The bind gate above means only the bound tab navigates.
+  if (v2 && StringBeginsWith(scriptContent, u"NOOBSCAPE_NAV "_ns)) {
+    nsAutoString navUrl(Substring(scriptContent, 14));
+    navUrl.Trim(" \t\r\n");
+    mozilla::dom::LoadURIOptions navOpts;
+    navOpts.mTriggeringPrincipal = nsContentUtils::GetSystemPrincipal();
+    nsresult navRv = self->FixupAndLoadURIString(navUrl, navOpts);
+    NoobscapeWriteOut(id, NS_SUCCEEDED(navRv), NS_SUCCEEDED(navRv) ? "null" : "load failed");
+    return;
+  }
+
   nsIScriptSecurityManager* ssm = nsContentUtils::GetSecurityManager();
   if (!ssm) { if (v2) NoobscapeWriteOut(id, false, "no security manager"); return; }
   nsCOMPtr<nsIPrincipal> systemPrincipal;

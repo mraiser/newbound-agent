@@ -67,7 +67,14 @@ fn js_string(s: &str) -> String {
     out
 }
 
-let set = format!("window.location.href = {}; true", js_string(&url));
+// Navigation cannot go through the DOM (location.href / assign / pushState):
+// the injected script carries the SYSTEM principal, so those APIs fail their
+// same-origin / subject-principal check and silently veto. The mechanism
+// recognizes this directive and performs a real top-level docshell load with
+// a system triggering principal (the URL-bar path). js_string stays used by
+// the escaping above; the directive body is a raw URL line, trimmed in C++.
+let _ = js_string("");
+let set = format!("NOOBSCAPE_NAV {}", url);
 let r = crate::agent::browser::eval::eval(set, 5000);
 if !r.try_get_string("status").map(|s| s == "ok").unwrap_or(false) {
     return r; // propagate the eval error
