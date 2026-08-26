@@ -1,0 +1,26 @@
+# mozconfig — build configuration for Firefox 128 ESR (noobscape)
+#
+# See: https://firefox-source-docs.mozilla.org/setup/configuring_build_options.html
+# This file is copied into the source tree as ./mozconfig by build.sh.
+
+# Build the browser (as opposed to Thunderbird, etc.).
+ac_add_options --enable-application=browser
+
+# Keep all build output in one predictable objdir so build.sh can find the
+# resulting binary at obj-firefox/dist/bin/firefox.
+mk_add_options MOZ_OBJDIR=@TOPSRCDIR@/obj-firefox
+
+# Release-style build: optimized, no debug assertions.
+ac_add_options --enable-optimize
+ac_add_options --disable-debug
+
+# Use unbranded ("Nightly") branding. Official Firefox branding requires
+# permission from Mozilla; leave this commented unless you have it.
+# ac_add_options --enable-official-branding
+
+# Speed up rebuilds if sccache is installed (optional).
+# ac_add_options --with-ccache=sccache
+
+# Reduce noise / footprint for a headless build environment (optional):
+# ac_add_options --disable-crashreporter
+# ac_add_options --disable-updater

@@ -1,0 +1,12 @@
+# Build workspace: downloaded tarballs, extracted source, and objdirs.
+/work/
+*.source.tar.xz
+*.source.tar.xz.part
+
+# Firefox build artifacts (in case a tree is built in place).
+obj-*/
+*.mozconfig.local
+
+# Editor / OS noise
+*.swp
+.DS_Store

@@ -1,0 +1,53 @@
+<div class="nbld">
+  <div class="nbld-head">
+    <h1>Noobscape&nbsp;v2 Builder</h1>
+    <p class="nbld-sub">Build Marc's chrome-privileged Firefox fork &mdash; the browser <code>agent.browser</code> drives &amp; grabmore scrapes with &mdash; from source, patch in the v2 file-RPC mechanism, and install it where both look.</p>
+    <button class="nbld-refresh" data-act="refresh">&#8635; Refresh</button>
+  </div>
+
+  <div class="nbld-card">
+    <h2>1 &middot; Configuration</h2>
+    <p class="nbld-note">The install path is a config option, so the build can live anywhere and still be found. <code>NOOBSCAPE_BIN</code> defaults to <code>/noobscape/bin/firefox</code> &mdash; grabmore's hardcoded path &mdash; and <code>agent.browser</code> reads it too.</p>
+    <div class="nbld-grid">
+      <label>Build workspace<input type="text" data-cfg="NOOBSCAPE_WORKSPACE" placeholder="/newbound/runtime/agent/noobscape-build"><small>Needs ~40&nbsp;GB free. Anywhere you like.</small></label>
+      <label>Firefox version<input type="text" data-cfg="NOOBSCAPE_VERSION" placeholder="128.0esr"><small>Any 128.x ESR point release.</small></label>
+      <label>Install path (NOOBSCAPE_BIN)<input type="text" data-cfg="NOOBSCAPE_BIN" placeholder="/noobscape/bin/firefox"><small>Where the binary/symlink lands.</small></label>
+      <label>Channel dir (NOOBSCAPE_DIR)<input type="text" data-cfg="NOOBSCAPE_DIR" placeholder="/noobscape"><small>inject.js / inject.out live here.</small></label>
+      <label>Display (BROWSER_DISPLAY)<input type="text" data-cfg="BROWSER_DISPLAY" placeholder="(empty = headless)"><small>e.g. :99 to watch over VNC.</small></label>
+    </div>
+    <button class="nbld-btn" data-act="saveconfig">Save configuration</button>
+    <span class="nbld-cfgmsg"></span>
+  </div>
+
+  <div class="nbld-card">
+    <h2>2 &middot; Build pipeline</h2>
+    <p class="nbld-note">Run the steps in order. Download &rarr; extract &rarr; deps &rarr; build are long (30&nbsp;min&ndash;hours, background); the log below streams while they run.</p>
+    <ol class="nbld-steps">
+      <li data-step="materialize"><span class="dot"></span><span class="lbl">Materialize kit</span><button class="nbld-btn sm" data-act="stage" data-stage="materialize">Run</button></li>
+      <li data-step="extract"><span class="dot"></span><span class="lbl">Download &amp; extract source</span><span class="grp"><button class="nbld-btn sm" data-act="stage" data-stage="download">Download</button><button class="nbld-btn sm" data-act="stage" data-stage="extract">Extract</button></span></li>
+      <li data-step="patched"><span class="dot"></span><span class="lbl">Patch (v2 nsDocShell mechanism)</span><button class="nbld-btn sm" data-act="stage" data-stage="patch">Run</button></li>
+      <li data-step="deps"><span class="dot"></span><span class="lbl">Install build deps (mach bootstrap)</span><button class="nbld-btn sm" data-act="stage" data-stage="deps">Run</button></li>
+      <li data-step="built"><span class="dot"></span><span class="lbl">Build Firefox</span><button class="nbld-btn sm" data-act="stage" data-stage="build">Run</button></li>
+    </ol>
+  </div>
+
+  <div class="nbld-card">
+    <h2>3 &middot; Install</h2>
+    <p class="nbld-note">Point <code>NOOBSCAPE_BIN</code> at the built browser. <b>Symlink</b> is the light default; <b>copy</b> clones the whole <code>dist/bin</code> so it survives cleaning the workspace.</p>
+    <div class="nbld-install">
+      <label class="inline"><input type="radio" name="nbmode" value="symlink" checked> symlink</label>
+      <label class="inline"><input type="radio" name="nbmode" value="copy"> copy</label>
+      <button class="nbld-btn" data-act="install">Install</button>
+      <span class="nbld-installmsg"></span>
+    </div>
+  </div>
+
+  <div class="nbld-card">
+    <h2>Build monitor <span class="nbld-run" style="display:none"></span></h2>
+    <div class="nbld-monitor-bar">
+      <span class="nbld-stage"></span>
+      <button class="nbld-btn sm danger" data-act="stop" style="display:none">Stop build</button>
+    </div>
+    <pre class="nbld-log">(no build log yet)</pre>
+  </div>
+</div>
