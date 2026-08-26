@@ -59,9 +59,11 @@ pub fn screenshot(url: String, path: String, width: i64, height: i64) -> DataObj
 //  - url empty: capture the LIVE driven tab's real pixels. A chrome-targeted
 //    request (//NOOBSCAPE-CHROME) is answered by a parent-process chrome
 //    docshell, which calls drawSnapshot on the bound browsing context
-//    (bind.id) - so the actual current document, mutations and login state
-//    included, is rendered - encodes PNG via OffscreenCanvas, and writes it
-//    with IOUtils. The driver polls shot.out for the async chain's verdict.
+//    (bind.id) - the actual current document, mutations and login state
+//    included - encodes PNG via OffscreenCanvas, and writes it with IOUtils.
+//    The capture JS bounds each async step with an internal timeout and the
+//    driver retries, so an occasional drawSnapshot stall recovers instead of
+//    hanging. The driver polls shot.out for each attempt's verdict.
 fn prop(key: &str, dflt: &str) -> String {
     (|| -> Option<String> {
         let s = DataStore::globals().try_get_object("system").ok()?;
@@ -120,7 +122,6 @@ let target = url.trim().to_string();
 // LIVE MODE: url empty -> capture the bound tab's real pixels.
 // ===================================================================
 if target.is_empty() {
-    // Require a running session: bind.id is the bound tab's browsing-context id.
     let bind_id_path = format!("{}/bind.id", dir);
     let bindid = match std::fs::read_to_string(&bind_id_path) {
         Ok(s) => s.trim().to_string(),
@@ -142,30 +143,30 @@ if target.is_empty() {
         }
     }
 
-    // The chrome-side async capture. Runs in a parent-process chrome global:
-    // BrowsingContext/IOUtils/OffscreenCanvas/DOMRect are all available there,
-    // and drawSnapshot lives on WindowGlobalParent. It writes shot.out at the
-    // end of the chain (ok or err) - that is the driver's completion signal.
+    // Chrome-side async capture, run in a parent-process chrome global.
+    // withTimeout bounds each await so a stalled drawSnapshot rejects fast
+    // (the driver then retries) rather than hanging the whole call.
     let js_tpl = r#"(async () => {
   const DIR = "__DIR__";
   const OUT = "__OUT__";
   const BINDID = __BINDID__;
   const W = __W__, H = __H__;
   const done = (ok, err) => { try { IOUtils.writeUTF8(DIR + "/shot.out", JSON.stringify({ok: ok, err: err || ""})); } catch (e) {} };
+  const withTimeout = (p, ms, label) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error("TIMEOUT " + label)), ms))]);
   try {
     const bc = BrowsingContext.get(BINDID);
     if (!bc) { done(false, "no browsing context " + BINDID); return "started"; }
     const wgp = bc.currentWindowGlobal;
     if (!wgp) { done(false, "no currentWindowGlobal for " + BINDID); return "started"; }
     const rect = new DOMRect(0, 0, W, H);
-    const bitmap = await wgp.drawSnapshot(rect, 1.0, "rgb(255,255,255)", false);
+    const bitmap = await withTimeout(wgp.drawSnapshot(rect, 1.0, "rgb(255,255,255)", false), 10000, "drawSnapshot");
     if (!bitmap) { done(false, "drawSnapshot returned null"); return "started"; }
     const oc = new OffscreenCanvas(bitmap.width, bitmap.height);
     const ctx = oc.getContext("2d");
     ctx.drawImage(bitmap, 0, 0);
-    const blob = await oc.convertToBlob({type: "image/png"});
+    const blob = await withTimeout(oc.convertToBlob({type: "image/png"}), 10000, "convertToBlob");
     const buf = await blob.arrayBuffer();
-    await IOUtils.write(OUT, new Uint8Array(buf));
+    await withTimeout(IOUtils.write(OUT, new Uint8Array(buf)), 10000, "write");
     done(true, "");
   } catch (e) { done(false, String(e)); }
   return "started";
@@ -178,61 +179,70 @@ if target.is_empty() {
         .replace("__H__", &h.to_string());
 
     let shot_out = format!("{}/shot.out", dir);
-    let _ = std::fs::remove_file(&shot_out);
-
-    // Write the chrome request envelope tmp+rename so no watcher sees a partial.
-    let id = format!("nbshot{}_{}", time(), rand_range(0, 1_000_000));
-    let envelope = format!("//NOOBSCAPE-CHROME\n{}\n{}", id, js);
     let req = format!("{}/inject.js", dir);
-    let tmp = format!("{}.tmp", req);
-    if std::fs::write(&tmp, envelope.as_bytes()).is_err() {
-        return errobj(&format!("cannot write capture request under {} (writable?)", dir));
-    }
-    if std::fs::rename(&tmp, &req).is_err() {
-        let _ = std::fs::remove_file(&tmp);
-        return errobj("cannot place capture request file");
-    }
 
-    // Poll shot.out for the async chain's verdict (watcher fires within ~1s).
-    let deadline = time() + 30000;
-    let mut verdict: Option<(bool, String)> = None;
-    while time() < deadline {
-        if let Ok(s) = std::fs::read_to_string(&shot_out) {
-            let wrap = format!("{{\"v\":{}}}", s.trim());
-            if let Ok(o) = DataObject::try_from_string(&wrap) {
-                if let Ok(v) = o.try_get_object("v") {
-                    let ok = v.try_get_boolean("ok").unwrap_or(false);
-                    let err = v.try_get_string("err").unwrap_or_default();
-                    let _ = std::fs::remove_file(&shot_out);
-                    verdict = Some((ok, err));
-                    break;
+    // Up to 3 attempts; each internally bounded to ~10s, polled to 15s.
+    let mut last_reason = String::from("no attempt ran");
+    for attempt in 0..3 {
+        let _ = std::fs::remove_file(&shot_out);
+        let id = format!("nbshot{}_{}", time(), rand_range(0, 1_000_000));
+        let envelope = format!("//NOOBSCAPE-CHROME\n{}\n{}", id, js);
+        let tmp = format!("{}.tmp", req);
+        if std::fs::write(&tmp, envelope.as_bytes()).is_err() {
+            return errobj(&format!("cannot write capture request under {} (writable?)", dir));
+        }
+        if std::fs::rename(&tmp, &req).is_err() {
+            let _ = std::fs::remove_file(&tmp);
+            return errobj("cannot place capture request file");
+        }
+
+        let deadline = time() + 15000;
+        let mut verdict: Option<(bool, String)> = None;
+        while time() < deadline {
+            if let Ok(s) = std::fs::read_to_string(&shot_out) {
+                let wrap = format!("{{\"v\":{}}}", s.trim());
+                if let Ok(o) = DataObject::try_from_string(&wrap) {
+                    if let Ok(v) = o.try_get_object("v") {
+                        let ok = v.try_get_boolean("ok").unwrap_or(false);
+                        let err = v.try_get_string("err").unwrap_or_default();
+                        let _ = std::fs::remove_file(&shot_out);
+                        verdict = Some((ok, err));
+                        break;
+                    }
                 }
             }
-            // else: partial write - keep polling.
+            std::thread::sleep(std::time::Duration::from_millis(100));
         }
-        std::thread::sleep(std::time::Duration::from_millis(100));
-    }
 
-    match verdict {
-        None => return errobj("timeout waiting for live capture (no shot.out; is a Noobscape-v2 session running?)"),
-        Some((false, err)) => return errobj(&format!("live capture failed: {}", if err.is_empty() { "unknown".to_string() } else { err })),
-        Some((true, _)) => {
-            let bytes = std::fs::metadata(&abs).map(|m| m.len()).unwrap_or(0);
-            if bytes == 0 {
-                let _ = std::fs::remove_file(&abs);
-                return errobj("live capture reported ok but produced no bytes");
+        match verdict {
+            Some((true, _)) => {
+                let bytes = std::fs::metadata(&abs).map(|m| m.len()).unwrap_or(0);
+                if bytes == 0 {
+                    let _ = std::fs::remove_file(&abs);
+                    last_reason = "capture reported ok but produced no bytes".to_string();
+                } else {
+                    let mut o = DataObject::new();
+                    o.put_string("status", "ok");
+                    o.put_string("mode", "live");
+                    o.put_string("path", &abs);
+                    o.put_int("bytes", bytes as i64);
+                    o.put_string("url", &live_url);
+                    o.put_int("width", w);
+                    o.put_int("height", h);
+                    o.put_int("attempts", (attempt + 1) as i64);
+                    return o;
+                }
             }
-            let mut o = DataObject::new();
-            o.put_string("status", "ok");
-            o.put_string("mode", "live");
-            o.put_string("path", &abs);
-            o.put_int("bytes", bytes as i64);
-            o.put_string("url", &live_url);
-            o.put_int("width", w);
-            o.put_int("height", h);
-            return o;
+            Some((false, err)) => {
+                last_reason = if err.is_empty() { "unknown".to_string() } else { err };
+            }
+            None => {
+                last_reason = "no verdict (watcher silent)".to_string();
+            }
         }
+        std::thread::sleep(std::time::Duration::from_millis(400));
     }
+    return errobj(&format!("live capture failed after 3 attempts: {}", last_reason));
 }
 
 // ===================================================================
