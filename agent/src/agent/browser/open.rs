@@ -102,8 +102,14 @@ let line = format!(
 
 let mut cmd = Command::new("bash");
 cmd.arg("-c").arg(&line);
+// The child must be wait()ed or the exited firefox lingers as a zombie
+// of this host and /proc/<pid> keeps answering liveness probes.
 let pid = match cmd.spawn() {
-    Ok(child) => child.id(),
+    Ok(mut child) => {
+        let p = child.id();
+        std::thread::spawn(move || { let _ = child.wait(); });
+        p
+    }
     Err(e) => return errobj(&format!("spawn failed: {}", e)),
 };
 let _ = std::fs::write(format!("{}/firefox.pid", dir), pid.to_string());
