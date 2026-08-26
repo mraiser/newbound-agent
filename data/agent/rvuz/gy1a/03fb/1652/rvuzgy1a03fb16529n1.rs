@@ -76,9 +76,12 @@ if std::fs::create_dir_all(&profdir).is_err() {
 }
 
 // timeout(1) backstops a hung page; firefox exits on its own after the shot.
+// NOOBSCAPE_DIR points the mechanism's file-watcher at the empty throwaway
+// dir: otherwise it reads the LIVE channel, where a leftover QUIT sentinel
+// from close() force-quits the screenshot browser before the shot.
 let line = format!(
-    "MOZ_DISABLE_JEMALLOC=1 MOZ_DISABLE_CONTENT_SANDBOX=1 LIBGL_ALWAYS_SOFTWARE=1 timeout 90 '{}' --headless --no-remote --profile '{}' --window-size={},{} --screenshot '{}' '{}'",
-    bin, profdir, w, h, abs, target
+    "NOOBSCAPE_DIR='{}' MOZ_DISABLE_JEMALLOC=1 MOZ_DISABLE_CONTENT_SANDBOX=1 LIBGL_ALWAYS_SOFTWARE=1 timeout 90 '{}' --headless --no-remote --profile '{}' --window-size={},{} --screenshot '{}' '{}'",
+    profdir, bin, profdir, w, h, abs, target
 );
 let run = Command::new("bash").arg("-c").arg(&line).output();
 let _ = std::fs::remove_dir_all(&profdir);

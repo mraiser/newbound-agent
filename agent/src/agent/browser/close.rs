@@ -72,6 +72,10 @@ if let Ok(pids) = std::fs::read_to_string(&pidfile) {
     }
 }
 let _ = std::fs::remove_file(&pidfile);
+// The QUIT sentinel must not outlive the session: any later firefox
+// launch on this channel (a screenshot, a hand launch) would read it
+// and force-quit itself at startup.
+let _ = std::fs::remove_file(format!("{}/inject.js", dir));
 let _ = std::fs::remove_file(format!("{}/inject.out", dir));
 let _ = std::fs::remove_file(format!("{}/bind.id", dir));
 let _ = std::fs::remove_file(format!("{}/bind.url", dir));
