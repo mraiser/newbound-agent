@@ -73,6 +73,8 @@ if let Ok(pids) = std::fs::read_to_string(&pidfile) {
 }
 let _ = std::fs::remove_file(&pidfile);
 let _ = std::fs::remove_file(format!("{}/inject.out", dir));
+let _ = std::fs::remove_file(format!("{}/bind.id", dir));
+let _ = std::fs::remove_file(format!("{}/bind.url", dir));
 
 let mut o = DataObject::new();
 o.put_string("status", "ok");

@@ -33,6 +33,10 @@ if std::fs::create_dir_all(&dir).is_err() {
     return errobj(&format!("cannot create channel dir {}", dir));
 }
 let _ = std::fs::remove_file(format!("{}/inject.out", dir));
+// Noobscape v2 bind channel: clear any prior latch and record the launch
+// URL so the mechanism binds to the ONE tab that loads exactly this url.
+let _ = std::fs::remove_file(format!("{}/bind.id", dir));
+let _ = std::fs::write(format!("{}/bind.url", dir), &url);
 let _ = std::fs::write(format!("{}/inject.js", dir), "//NOOBSCAPE\nseed\nvoid 0");
 
 // Build the launch line. `exec` replaces bash so the child pid is firefox.

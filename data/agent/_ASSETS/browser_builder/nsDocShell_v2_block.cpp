@@ -8,6 +8,9 @@
 #include <cstdlib>   // getenv
 #include <cstdio>    // rename
 #include <string>
+#include <fcntl.h>   // open + O_CREAT|O_EXCL — atomic bind latch
+#include <unistd.h>  // write, close
+#include "mozilla/dom/BrowsingContext.h"  // BrowsingContext: Id/IsTop/IsContent
 
 static std::string NoobscapeDir() {
   const char* e = getenv("NOOBSCAPE_DIR");
@@ -17,6 +20,30 @@ static std::string NoobscapeDir() {
 }
 static std::string NoobscapeReqPath() { return NoobscapeDir() + "/inject.js"; }
 static std::string NoobscapeOutPath() { return NoobscapeDir() + "/inject.out"; }
+static std::string NoobscapeBindIdPath()  { return NoobscapeDir() + "/bind.id"; }
+static std::string NoobscapeBindUrlPath() { return NoobscapeDir() + "/bind.url"; }
+
+// Read a small channel file, trimming trailing whitespace/newlines.
+static std::string NoobscapeReadFile(const std::string& p) {
+  std::ifstream f(p.c_str(), std::ios::binary);
+  if (!f) return std::string();
+  std::stringstream ss; ss << f.rdbuf();
+  std::string s = ss.str();
+  while (!s.empty() && (s.back()=='\n' || s.back()=='\r' || s.back()==' ' || s.back()=='\t')) s.pop_back();
+  return s;
+}
+
+// Atomically create bind.id with our top browsing-context id. O_EXCL means the
+// first writer wins; any later caller takes the already-bound path instead.
+static bool NoobscapeLatch(uint64_t id) {
+  int fd = ::open(NoobscapeBindIdPath().c_str(), O_CREAT | O_EXCL | O_WRONLY, 0644);
+  if (fd < 0) return false;
+  std::string s = std::to_string(id);
+  ssize_t w = ::write(fd, s.data(), s.size());
+  (void)w;
+  ::close(fd);
+  return true;
+}
 
 // v2 request dedup — per process, i.e. per Noobscape browser.
 static std::string gNoobscapeLastId;
@@ -257,19 +284,63 @@ static void NoobscapeInject(nsDocShell* self, nsIFile* file) {
     }
   }
 
-  if (v2) {
-    if (id == gNoobscapeLastId) return;   // run each id at most once
-    gNoobscapeLastId = id;
-  }
-
   nsAutoString scriptContent;
   scriptContent.Assign(NS_ConvertUTF8toUTF16((v2 ? jsUtf8 : raw).c_str()));
   scriptContent.Trim(" \t\r\n");
 
   if (scriptContent.EqualsLiteral("QUIT")) {
     if (v2) NoobscapeWriteOut(id, true, "null");
+    ::remove(NoobscapeBindIdPath().c_str());   // let the next session re-latch
     NoobscapeForceQuit();
     return;
+  }
+
+  // ---- Noobscape v2 bind gate --------------------------------------------
+  // Firefox runs many docshells (the real tab, the page-thumbnail service,
+  // extension background pages), and every one watches the same request file.
+  // Ungated they race to answer and the last writer wins. We bind to exactly
+  // one tab: the FIRST top-level *content* docshell that loads the launch URL
+  // latches its top browsing-context id into bind.id, and from then on ONLY
+  // that id answers. The id survives goto() navigations (the document is
+  // replaced, the browsing context is not), and the file makes the latch
+  // visible across the parent/content process split that the per-process
+  // dedup static alone cannot bridge.
+  if (v2) {
+    mozilla::dom::Document* gdoc = self->GetDocument();
+    mozilla::dom::BrowsingContext* bc = gdoc ? gdoc->GetBrowsingContext() : nullptr;
+    if (!bc) return;  // no browsing context yet — unanswerable; stay silent
+    uint64_t myId = bc->Id();
+    std::string boundStr = NoobscapeReadFile(NoobscapeBindIdPath());
+    if (!boundStr.empty()) {
+      // Bound: only the top-level docshell whose id matches may answer.
+      uint64_t boundId = strtoull(boundStr.c_str(), nullptr, 10);
+      if (!(bc->IsTop() && myId == boundId)) return;  // silent
+    } else {
+      // Unbound: latch iff I am a top-level content docshell at the launch URL.
+      if (!(bc->IsTop() && bc->IsContent())) return;  // silent
+      std::string launch = NoobscapeReadFile(NoobscapeBindUrlPath());
+      if (!launch.empty()) {
+        std::string mine;
+        nsCOMPtr<nsIURI> u = gdoc->GetDocumentURI();
+        if (u) { nsAutoCString spec; u->GetSpec(spec); mine.assign(spec.get()); }
+        auto strip = [](std::string v) { while (!v.empty() && v.back()=='/') v.pop_back(); return v; };
+        if (strip(mine) != strip(launch)) return;  // not our tab yet — silent
+      }
+      if (!NoobscapeLatch(myId)) {
+        // Lost the create race (only one docshell loads the launch URL, so
+        // this should not happen); proceed only if the winner is in fact us.
+        std::string b2 = NoobscapeReadFile(NoobscapeBindIdPath());
+        if (strtoull(b2.c_str(), nullptr, 10) != myId) return;
+      }
+    }
+  }
+
+  // Dedup AFTER the gate: only the docshell that will actually answer consumes
+  // the id, so a subframe sharing this process can never eat a request meant
+  // for the top document.
+  if (v2) {
+    if (id == gNoobscapeLastId) return;   // run each id at most once
+    gNoobscapeLastId = id;
   }
 
   nsIScriptSecurityManager* ssm = nsContentUtils::GetSecurityManager();
