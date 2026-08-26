@@ -270,13 +270,14 @@ static void NoobscapeInject(nsDocShell* self, nsIFile* file) {
   std::string raw = ss.str();
 
   // v2 sentinel: first line exactly "//NOOBSCAPE"; line 2 = id; rest = JS.
-  bool v2 = false; std::string id, jsUtf8;
+  bool v2 = false; bool chromeMode = false; std::string id, jsUtf8;
   {
     size_t nl1 = raw.find('\n');
     std::string l1 = (nl1 == std::string::npos) ? raw : raw.substr(0, nl1);
     while (!l1.empty() && l1.back() == '\r') l1.pop_back();
-    if (l1 == "//NOOBSCAPE" && nl1 != std::string::npos) {
+    if ((l1 == "//NOOBSCAPE" || l1 == "//NOOBSCAPE-CHROME") && nl1 != std::string::npos) {
       v2 = true;
+      chromeMode = (l1 == "//NOOBSCAPE-CHROME");
       size_t nl2 = raw.find('\n', nl1 + 1);
       if (nl2 == std::string::npos) { id = raw.substr(nl1 + 1); }
       else { id = raw.substr(nl1 + 1, nl2 - (nl1 + 1)); jsUtf8 = raw.substr(nl2 + 1); }
@@ -309,6 +310,15 @@ static void NoobscapeInject(nsDocShell* self, nsIFile* file) {
     mozilla::dom::Document* gdoc = self->GetDocument();
     mozilla::dom::BrowsingContext* bc = gdoc ? gdoc->GetBrowsingContext() : nullptr;
     if (!bc) return;  // no browsing context yet — unanswerable; stay silent
+    if (chromeMode) {
+      // CHROME-targeted request: answered by a top-level CHROME (non-content)
+      // docshell — a parent-process chrome window. Content docshells stay
+      // silent (they lack chrome WebIDL and cannot reach WindowGlobalParent).
+      // Among the parent's chrome docshells the per-process dedup below elects
+      // one answerer; the payload targets the bound tab by id via
+      // BrowsingContext.get(bind.id).currentWindowGlobal.drawSnapshot(...).
+      if (!(bc->IsTop() && !bc->IsContent())) return;  // silent
+    } else {
     uint64_t myId = bc->Id();
     std::string boundStr = NoobscapeReadFile(NoobscapeBindIdPath());
     if (!boundStr.empty()) {
@@ -332,6 +342,7 @@ static void NoobscapeInject(nsDocShell* self, nsIFile* file) {
         std::string b2 = NoobscapeReadFile(NoobscapeBindIdPath());
         if (strtoull(b2.c_str(), nullptr, 10) != myId) return;
       }
+    }
     }
   }
 
