@@ -2,7 +2,7 @@
 
 This directory builds **Noobscape** — a Firefox 128 ESR fork carrying one
 patch (`nsDocShell.cpp`) that adds a chrome-privileged, filesystem-driven JS
-injection channel. It is what `grabmore` and the `agent.browser` control drive
+injection channel. It is what the `agent.browser` control drives
 instead of geckodriver: injected JS runs as the system principal, so CSP,
 CORS, and anti-automation surfaces don't apply.
 
@@ -38,9 +38,9 @@ The built binary lands at:
 
     work/firefox-<version>/obj-firefox/dist/bin/firefox
 
-## Placing it for grabmore
+## Placing the built browser
 
-`grabmore` looks for the browser at a fixed path (`NOOBSCAPE_BIN`, default
+The driver looks for the browser at a fixed path (`NOOBSCAPE_BIN`, default
 `/noobscape/bin/firefox`). The wizard's **install** step points that path at
 the build — either a symlink to `dist/bin/firefox` (light; Firefox finds
 `libxul` beside the real binary) or a copy of the whole `dist/bin` tree

@@ -1,16 +1,16 @@
 # Noobscape v2 — a chrome-privileged browser driver for the agent
 
-Noobscape is Marc's Firefox fork: a `nsDocShell` hook that watches a file
+Noobscape is a Firefox fork: a `nsDocShell` hook that watches a file
 and evaluates its contents **as the system principal, inside the live
 page** — bypassing CSP/CORS with no automation surface to fingerprint
 (unlike geckodriver's content-sandbox `executeScript`). That is the moat.
 
 v1 was one-way: it evaluated `/noobscape/inject.js` and **discarded the
-result**, so callers (grabmore) had the injected JS write its own ad-hoc
+result**, so callers had the injected JS write their own ad-hoc
 result files, correlating by naming convention and 500 ms sleeps.
 
 v2 keeps the moat and the one-file channel, adds three things, and stays
-**fully back-compatible** with the v1 grabmore flow:
+**fully back-compatible** with the v1 flow:
 
 1. **Capture the result.** After `JS::Evaluate`, `JSON.stringify(rval)`
    is written to a response file — so injected JS is now just *an
@@ -32,7 +32,7 @@ Channel dir `D` = `$NOOBSCAPE_DIR` or `/noobscape`.
   **first line is exactly `//NOOBSCAPE`**; then line 2 is the correlation
   `id` and the remainder is the JS source. Any `inject.js` **without**
   that sentinel is treated as **v1 legacy** — evaluated as before, result
-  discarded, `QUIT` force-quits — so grabmore is untouched.
+  discarded, `QUIT` force-quits — so v1 callers are untouched.
 - **Response** — `D/inject.out`, written atomically (tmp+rename), three
   lines: `id` / `OK`|`ERR` / payload. On `OK` the payload is
   `JSON.stringify(result)` (compact, single line — `undefined`->`null`,

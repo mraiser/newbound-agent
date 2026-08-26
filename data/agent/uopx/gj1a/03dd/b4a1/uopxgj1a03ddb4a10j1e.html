@@ -1,13 +1,13 @@
 <div class="nbld">
   <div class="nbld-head">
     <h1>Noobscape&nbsp;v2 Builder</h1>
-    <p class="nbld-sub">Build Marc's chrome-privileged Firefox fork &mdash; the browser <code>agent.browser</code> drives &amp; grabmore scrapes with &mdash; from source, patch in the v2 file-RPC mechanism, and install it where both look.</p>
+    <p class="nbld-sub">Build a chrome-privileged Firefox fork &mdash; the browser <code>agent.browser</code> drives &mdash; from source, patch in the v2 file-RPC mechanism, and install it where <code>agent.browser</code> looks.</p>
     <button class="nbld-refresh" data-act="refresh">&#8635; Refresh</button>
   </div>
 
   <div class="nbld-card">
     <h2>1 &middot; Configuration</h2>
-    <p class="nbld-note">The install path is a config option, so the build can live anywhere and still be found. <code>NOOBSCAPE_BIN</code> defaults to <code>/noobscape/bin/firefox</code> &mdash; grabmore's hardcoded path &mdash; and <code>agent.browser</code> reads it too.</p>
+    <p class="nbld-note">The install path is a config option, so the build can live anywhere and still be found. <code>NOOBSCAPE_BIN</code> defaults to <code>/noobscape/bin/firefox</code>, and <code>agent.browser</code> reads it.</p>
     <div class="nbld-grid">
       <label>Build workspace<input type="text" data-cfg="NOOBSCAPE_WORKSPACE" placeholder="/newbound/runtime/agent/noobscape-build"><small>Needs ~40&nbsp;GB free. Anywhere you like.</small></label>
       <label>Firefox version<input type="text" data-cfg="NOOBSCAPE_VERSION" placeholder="128.0esr"><small>Any 128.x ESR point release.</small></label>

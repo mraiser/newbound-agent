@@ -1,4 +1,4 @@
-// Place the freshly built Noobscape where grabmore + agent.browser look
+// Place the freshly built Noobscape where agent.browser looks
 // (NOOBSCAPE_BIN). mode=symlink points at the built binary in its dist/bin
 // (Firefox finds libxul beside the real path); mode=copy clones the whole
 // dist/bin so the install survives a workspace clean. Also ensures the
