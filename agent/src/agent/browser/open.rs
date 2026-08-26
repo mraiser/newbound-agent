@@ -89,8 +89,10 @@ let _ = std::fs::write(format!("{}/inject.js", dir), "//NOOBSCAPE\nseed\nvoid 0"
 // Build the launch line. `exec` replaces bash so the child pid is firefox.
 let headless = if display.is_empty() { "-headless" } else { "" };
 let disp = if display.is_empty() { String::new() } else { format!("DISPLAY='{}' ", display) };
+// Assignments must precede `exec` (a builtin): `exec VAR=1 cmd` makes
+// bash try to execute the file "VAR=1" and die with 127.
 let line = format!(
-    "exec {}MOZ_DISABLE_JEMALLOC=1 MOZ_DISABLE_CONTENT_SANDBOX=1 LIBGL_ALWAYS_SOFTWARE=1 '{}' {} '{}'",
+    "{}MOZ_DISABLE_JEMALLOC=1 MOZ_DISABLE_CONTENT_SANDBOX=1 LIBGL_ALWAYS_SOFTWARE=1 exec '{}' {} '{}'",
     disp, bin, headless, url
 );
 
