@@ -760,6 +760,58 @@ pub mod agent {
         }
 
     }
+    pub mod browser_builder {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+        pub fn builder_status() -> DataObject {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("gvozsx1a03ddbd726n20").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn set_config(key: String, value: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("key", &key);
+            d.put_string("value", &value);
+            ::flowlang::rustcmd::RustCmd::new("utnyms1a03ddc23f4y22").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn materialize_kit() -> DataObject {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("wtuxuj1a03ddc855aq24").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn apply_patch() -> DataObject {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("kzmmqr1a03ddce867n26").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn run_stage(stage: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("stage", &stage);
+            ::flowlang::rustcmd::RustCmd::new("qquzjv1a03ddd9cc1y28").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn stage_log(tail_lines: i64) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_int("tail_lines", tail_lines);
+            ::flowlang::rustcmd::RustCmd::new("wkttsj1a03dddee5ek2a").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn stop_build() -> DataObject {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("tggjti1a03dde0bb4i2c").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn install(mode: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("mode", &mode);
+            ::flowlang::rustcmd::RustCmd::new("jnuoor1a03dde99c1l2e").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+    }
 }
 
 pub mod app {
@@ -3328,6 +3380,13 @@ pub mod gudrun {
             ::flowlang::rustcmd::RustCmd::new("lzpspi1a0341ec531v1").execute(d).expect("Rust command execution failed").get_object("a")
         }
 
+        pub fn dataset_captions(jobid: String, nn_sessionid: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("jobid", &jobid);
+            d.put_string("nn_sessionid", &nn_sessionid);
+            ::flowlang::rustcmd::RustCmd::new("whssht1a03e666a7bh1").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
     }
     pub mod health {
         use ::ndata::dataobject::DataObject;
@@ -3839,6 +3898,13 @@ pub mod kb {
         use ::ndata::data::Data;
 
     }
+    pub mod plan {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+    }
 }
 
 pub mod minifig {
@@ -4027,6 +4093,38 @@ pub mod nebula {
             d.put_string("servicename", &servicename);
             d.put_string("peer", &peer);
             ::flowlang::rustcmd::RustCmd::new("lnrqmk19ff0944578v1").execute(d).expect("Rust command execution failed").get_string("a")
+        }
+
+        pub fn stop(servicename: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("servicename", &servicename);
+            ::flowlang::rustcmd::RustCmd::new("kzitxo1a03e29c32bk1").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn set_boot(servicename: String, enabled: bool) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("servicename", &servicename);
+            d.put_boolean("enabled", enabled);
+            ::flowlang::rustcmd::RustCmd::new("riwrxj1a03e2afc73o1").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn releases() -> DataObject {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("ugmpxx1a03e2b03e0p1").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn endpoints(servicename: String, observe: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("servicename", &servicename);
+            d.put_string("observe", &observe);
+            ::flowlang::rustcmd::RustCmd::new("gnnlzm1a03e2ba6c8y1").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn update_hosts(servicename: String, hosts: DataObject) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("servicename", &servicename);
+            d.put_object("hosts", hosts);
+            ::flowlang::rustcmd::RustCmd::new("rrpqpp1a03e2baf27y1").execute(d).expect("Rust command execution failed").get_object("a")
         }
 
     }
@@ -4236,6 +4334,11 @@ pub mod scratch {
         pub fn eval_kvytvt1a03e072c30s6() -> DataObject {
             let d = DataObject::new();
             ::flowlang::rustcmd::RustCmd::new("siqpqm1a03e072c30w8").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn eval_hhjkti1a03ebcc8bfo6() -> DataObject {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("pozvyu1a03ebcc8bfg8").execute(d).expect("Rust command execution failed").get_object("a")
         }
 
     }
@@ -4450,6 +4553,12 @@ pub mod trainmore {
             d.put_string("dir", &dir);
             d.put_string("trigger", &trigger);
             ::flowlang::rustcmd::RustCmd::new("prrjlt1a0364b5673v1").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn load_user_captions(dir: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("dir", &dir);
+            ::flowlang::rustcmd::RustCmd::new("totsmo1a03e84382bs1").execute(d).expect("Rust command execution failed").get_object("a")
         }
 
     }
@@ -4734,6 +4843,7 @@ pub struct old_agent_context {}
 pub struct old_agent_tools {}
 pub struct old_agent_plan {}
 pub struct old_agent_browser {}
+pub struct old_agent_browser_builder {}
 pub struct old_app_api {}
 pub struct old_app_app {}
 pub struct old_app_appcard {}
@@ -4858,6 +4968,7 @@ pub struct old_kb_m2026_07 {}
 pub struct old_kb_doctrine {}
 pub struct old_kb_nebula {}
 pub struct old_kb_camera {}
+pub struct old_kb_plan {}
 pub struct old_minifig_minifig {}
 pub struct old_nebula_lighthouse {}
 pub struct old_nebula_nebula {}
@@ -4907,6 +5018,7 @@ pub struct old_agent {
     pub tools: old_agent_tools,
     pub plan: old_agent_plan,
     pub browser: old_agent_browser,
+    pub browser_builder: old_agent_browser_builder,
 }
 pub struct old_app {
     pub api: old_app_api,
@@ -5045,6 +5157,7 @@ pub struct old_kb {
     pub doctrine: old_kb_doctrine,
     pub nebula: old_kb_nebula,
     pub camera: old_kb_camera,
+    pub plan: old_kb_plan,
 }
 pub struct old_minifig {
     pub minifig: old_minifig_minifig,
@@ -5132,6 +5245,7 @@ pub const fn new() -> api {
             tools: old_agent_tools {},
             plan: old_agent_plan {},
             browser: old_agent_browser {},
+            browser_builder: old_agent_browser_builder {},
         },
         app: old_app {
             api: old_app_api {},
@@ -5270,6 +5384,7 @@ pub const fn new() -> api {
             doctrine: old_kb_doctrine {},
             nebula: old_kb_nebula {},
             camera: old_kb_camera {},
+            plan: old_kb_plan {},
         },
         minifig: old_minifig {
             minifig: old_minifig_minifig {},
@@ -5710,6 +5825,40 @@ impl old_agent_browser {
     #[deprecated(note = "use api::agent::browser::close instead")]
     pub fn close(&self) -> DataObject {
         self::agent::browser::close()
+    }
+}
+impl old_agent_browser_builder {
+    #[deprecated(note = "use api::agent::browser_builder::builder_status instead")]
+    pub fn builder_status(&self) -> DataObject {
+        self::agent::browser_builder::builder_status()
+    }
+    #[deprecated(note = "use api::agent::browser_builder::set_config instead")]
+    pub fn set_config(&self, key: String, value: String) -> DataObject {
+        self::agent::browser_builder::set_config(key, value)
+    }
+    #[deprecated(note = "use api::agent::browser_builder::materialize_kit instead")]
+    pub fn materialize_kit(&self) -> DataObject {
+        self::agent::browser_builder::materialize_kit()
+    }
+    #[deprecated(note = "use api::agent::browser_builder::apply_patch instead")]
+    pub fn apply_patch(&self) -> DataObject {
+        self::agent::browser_builder::apply_patch()
+    }
+    #[deprecated(note = "use api::agent::browser_builder::run_stage instead")]
+    pub fn run_stage(&self, stage: String) -> DataObject {
+        self::agent::browser_builder::run_stage(stage)
+    }
+    #[deprecated(note = "use api::agent::browser_builder::stage_log instead")]
+    pub fn stage_log(&self, tail_lines: i64) -> DataObject {
+        self::agent::browser_builder::stage_log(tail_lines)
+    }
+    #[deprecated(note = "use api::agent::browser_builder::stop_build instead")]
+    pub fn stop_build(&self) -> DataObject {
+        self::agent::browser_builder::stop_build()
+    }
+    #[deprecated(note = "use api::agent::browser_builder::install instead")]
+    pub fn install(&self, mode: String) -> DataObject {
+        self::agent::browser_builder::install(mode)
     }
 }
 impl old_app_app {
@@ -6905,6 +7054,10 @@ impl old_gudrun_gudrun {
     pub fn dataset_update(&self, payload: DataObject, nn_sessionid: String) -> DataObject {
         self::gudrun::gudrun::dataset_update(payload, nn_sessionid)
     }
+    #[deprecated(note = "use api::gudrun::gudrun::dataset_captions instead")]
+    pub fn dataset_captions(&self, jobid: String, nn_sessionid: String) -> DataObject {
+        self::gudrun::gudrun::dataset_captions(jobid, nn_sessionid)
+    }
 }
 impl old_gudrun_job {
     #[deprecated(note = "use api::gudrun::job::accept_result_file instead")]
@@ -7187,6 +7340,26 @@ impl old_nebula_nebula {
     pub fn remove_member(&self, servicename: String, peer: String) -> String {
         self::nebula::nebula::remove_member(servicename, peer)
     }
+    #[deprecated(note = "use api::nebula::nebula::stop instead")]
+    pub fn stop(&self, servicename: String) -> DataObject {
+        self::nebula::nebula::stop(servicename)
+    }
+    #[deprecated(note = "use api::nebula::nebula::set_boot instead")]
+    pub fn set_boot(&self, servicename: String, enabled: bool) -> DataObject {
+        self::nebula::nebula::set_boot(servicename, enabled)
+    }
+    #[deprecated(note = "use api::nebula::nebula::releases instead")]
+    pub fn releases(&self) -> DataObject {
+        self::nebula::nebula::releases()
+    }
+    #[deprecated(note = "use api::nebula::nebula::endpoints instead")]
+    pub fn endpoints(&self, servicename: String, observe: String) -> DataObject {
+        self::nebula::nebula::endpoints(servicename, observe)
+    }
+    #[deprecated(note = "use api::nebula::nebula::update_hosts instead")]
+    pub fn update_hosts(&self, servicename: String, hosts: DataObject) -> DataObject {
+        self::nebula::nebula::update_hosts(servicename, hosts)
+    }
 }
 impl old_peer_peer {
     #[deprecated(note = "use api::peer::peer::discovery instead")]
@@ -7278,6 +7451,10 @@ impl old_scratch_scratch {
     #[deprecated(note = "use api::scratch::scratch::eval_kvytvt1a03e072c30s6 instead")]
     pub fn eval_kvytvt1a03e072c30s6(&self) -> DataObject {
         self::scratch::scratch::eval_kvytvt1a03e072c30s6()
+    }
+    #[deprecated(note = "use api::scratch::scratch::eval_hhjkti1a03ebcc8bfo6 instead")]
+    pub fn eval_hhjkti1a03ebcc8bfo6(&self) -> DataObject {
+        self::scratch::scratch::eval_hhjkti1a03ebcc8bfo6()
     }
 }
 impl old_security_security {
@@ -7400,6 +7577,10 @@ impl old_trainmore_common {
     #[deprecated(note = "use api::trainmore::common::ensure_trigger instead")]
     pub fn ensure_trigger(&self, dir: String, trigger: String) -> DataObject {
         self::trainmore::common::ensure_trigger(dir, trigger)
+    }
+    #[deprecated(note = "use api::trainmore::common::load_user_captions instead")]
+    pub fn load_user_captions(&self, dir: String) -> DataObject {
+        self::trainmore::common::load_user_captions(dir)
     }
 }
 impl old_trainmore_ernie {
