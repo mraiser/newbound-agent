@@ -104,7 +104,7 @@ if target.is_empty() {
     const wgp = bc.currentWindowGlobal;
     if (!wgp) { done(false, "no currentWindowGlobal for " + BINDID); return "started"; }
     const rect = new DOMRect(0, 0, W, H);
-    const bitmap = await withTimeout(wgp.drawSnapshot(rect, 1.0, "rgb(255,255,255)", false), 10000, "drawSnapshot");
+    const bitmap = await withTimeout(wgp.drawSnapshot(rect, 1.0, "rgb(255,255,255)", false), 5000, "drawSnapshot");
     if (!bitmap) { done(false, "drawSnapshot returned null"); return "started"; }
     const oc = new OffscreenCanvas(bitmap.width, bitmap.height);
     const ctx = oc.getContext("2d");
