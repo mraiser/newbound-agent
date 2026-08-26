@@ -355,9 +355,14 @@ static void NoobscapeInject(nsDocShell* self, nsIFile* file) {
   nsCOMPtr<nsPIDOMWindowInner> innerWindow = outerWindow->GetCurrentInnerWindow();
   if (!innerWindow) { if (v2) NoobscapeWriteOut(id, false, "no inner window"); return; }
 
-  AutoJSAPI jsapi;
-  if (!jsapi.Init(innerWindow)) { if (v2) NoobscapeWriteOut(id, false, "jsapi init failed"); return; }
-  JSContext* cx = jsapi.cx();
+  // v2: AutoEntryScript (not AutoJSAPI) establishes the entry-script settings
+  // a script-initiated navigation (location.href=, location.assign, goto) needs
+  // to resolve its source browsing context; AutoJSAPI leaves that unset, so such
+  // navigations silently no-op. Entering the global's realm is handled by aes.
+  nsCOMPtr<nsIGlobalObject> global = do_QueryInterface(innerWindow);
+  if (!global) { if (v2) NoobscapeWriteOut(id, false, "no global object"); return; }
+  AutoEntryScript aes(global, "Noobscape", true);
+  JSContext* cx = aes.cx();
   JS::RootedValue rval(cx);
   JS::CompileOptions options(cx);
   options.setFileAndLine("injected-script.js", 1);
