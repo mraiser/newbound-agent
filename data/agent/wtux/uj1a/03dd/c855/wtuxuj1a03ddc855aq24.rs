@@ -22,6 +22,7 @@ let files = [
     ("kit/apply-patches.sh", "apply-patches.sh", true),
     ("kit/mozconfig", "mozconfig", false),
     ("kit/dotgitignore", ".gitignore", false),
+    ("kit/README.md", "README.md", false),
     ("nsDocShell_v2_block.cpp", "nsDocShell_v2_block.cpp", false),
 ];
 let mut written = DataArray::new();
