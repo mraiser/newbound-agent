@@ -24,3 +24,7 @@ ac_add_options --disable-debug
 # Reduce noise / footprint for a headless build environment (optional):
 # ac_add_options --disable-crashreporter
 # ac_add_options --disable-updater
+
+# No WASI sysroot on this box: build third-party libs natively instead of
+# wasm-sandboxing them (configure's own suggested fallback).
+ac_add_options --without-wasm-sandboxed-libraries
