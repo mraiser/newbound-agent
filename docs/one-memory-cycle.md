@@ -92,7 +92,7 @@ another sentence is future amputation.
 
 Sensor-state vs. claim is the load-bearing distinction hollis already
 demonstrates: the *voiceprint* is sensor-owned perceptual state; the
-*binding* of that voiceprint to "Marc" is a claim in the one memory,
+*binding* of that voiceprint to "Alex" is a claim in the one memory,
 with provenance and confidence. Every future sensor follows this split.
 
 ---
