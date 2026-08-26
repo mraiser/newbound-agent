@@ -1,5 +1,5 @@
 {
-  "time": 1787750759701,
+  "time": 1787152478925,
   "domains": [
     {
       "tags": "doctrine,owner",
@@ -841,11 +841,6 @@
           },
           "confidence": "high",
           "time": 1787152443127
-        },
-        {
-          "claim": "The Claude sandbox container can create tun devices and network namespaces (after apt-get install iproute2): a full two-instance Newbound peer fleet is testable with instance B under ip netns exec on a veth pair - real UDP peer handshakes, remote exec over the peer proxy, and live nebula overlay pings across the netns boundary all verified 2026-08-26. Boot the second instance with fresh runtime/peer+app botd.properties and its own http_port; drive it with ip netns exec curl.",
-          "tags": "sandbox,netns,nebula,qa",
-          "time": 1787750621611
         }
       ],
       "name": "workflow"
