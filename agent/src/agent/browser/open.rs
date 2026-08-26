@@ -96,8 +96,8 @@ let disp = if display.is_empty() { String::new() } else { format!("DISPLAY='{}' 
 // Assignments must precede `exec` (a builtin): `exec VAR=1 cmd` makes
 // bash try to execute the file "VAR=1" and die with 127.
 let line = format!(
-    "{}MOZ_DISABLE_JEMALLOC=1 MOZ_DISABLE_CONTENT_SANDBOX=1 LIBGL_ALWAYS_SOFTWARE=1 exec '{}' {} '{}' >'{}/firefox.log' 2>&1",
-    disp, bin, headless, url, dir
+    "{}MOZ_DISABLE_JEMALLOC=1 MOZ_DISABLE_CONTENT_SANDBOX=1 LIBGL_ALWAYS_SOFTWARE=1 exec '{}' {} '{}'",
+    disp, bin, headless, url
 );
 
 let mut cmd = Command::new("bash");

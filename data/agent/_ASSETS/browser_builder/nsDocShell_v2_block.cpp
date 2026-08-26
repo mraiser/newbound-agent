@@ -343,33 +343,6 @@ static void NoobscapeInject(nsDocShell* self, nsIFile* file) {
     gNoobscapeLastId = id;
   }
 
-  // v2 navigation directive: a chrome-principal script cannot drive content
-  // navigation via location.href / location.assign / pushState — those do a
-  // same-origin / subject-principal check that the SYSTEM principal (which the
-  // injected script carries) fails, so the load silently vetoes. The driver
-  // sends "NOOBSCAPE_NAV <url>" instead and we perform a real top-level
-  // docshell load with a system triggering principal — the same path the URL
-  // bar uses. The bind gate above means only the bound tab navigates.
-  if (v2 && StringBeginsWith(scriptContent, u"NOOBSCAPE_NAV "_ns)) {
-    nsAutoString navUrl(Substring(scriptContent, 14));
-    navUrl.Trim(" \t\r\n");
-    // Triggering principal = the current document's OWN principal. A content
-    // process initiating a top-level load with the SYSTEM principal is rejected
-    // by the parent (it looks like a sandbox escape) and silently no-ops; the
-    // page's own principal is what a normal self-navigation carries, and the
-    // parent accepts it for both same-origin and cross-origin top-level loads.
-    nsCOMPtr<nsIPrincipal> navTrigger;
-    if (mozilla::dom::Document* ndoc = self->GetDocument()) {
-      navTrigger = ndoc->NodePrincipal();
-    }
-    if (!navTrigger) navTrigger = nsContentUtils::GetSystemPrincipal();
-    mozilla::dom::LoadURIOptions navOpts;
-    navOpts.mTriggeringPrincipal = navTrigger;
-    nsresult navRv = self->FixupAndLoadURIString(navUrl, navOpts);
-    NoobscapeWriteOut(id, NS_SUCCEEDED(navRv), NS_SUCCEEDED(navRv) ? "null" : "load failed");
-    return;
-  }
-
   nsIScriptSecurityManager* ssm = nsContentUtils::GetSecurityManager();
   if (!ssm) { if (v2) NoobscapeWriteOut(id, false, "no security manager"); return; }
   nsCOMPtr<nsIPrincipal> systemPrincipal;
@@ -382,14 +355,9 @@ static void NoobscapeInject(nsDocShell* self, nsIFile* file) {
   nsCOMPtr<nsPIDOMWindowInner> innerWindow = outerWindow->GetCurrentInnerWindow();
   if (!innerWindow) { if (v2) NoobscapeWriteOut(id, false, "no inner window"); return; }
 
-  // v2: AutoEntryScript (not AutoJSAPI) establishes the entry-script settings
-  // a script-initiated navigation (location.href=, location.assign, goto) needs
-  // to resolve its source browsing context; AutoJSAPI leaves that unset, so such
-  // navigations silently no-op. Entering the global's realm is handled by aes.
-  nsCOMPtr<nsIGlobalObject> global = do_QueryInterface(innerWindow);
-  if (!global) { if (v2) NoobscapeWriteOut(id, false, "no global object"); return; }
-  AutoEntryScript aes(global, "Noobscape", true);
-  JSContext* cx = aes.cx();
+  AutoJSAPI jsapi;
+  if (!jsapi.Init(innerWindow)) { if (v2) NoobscapeWriteOut(id, false, "jsapi init failed"); return; }
+  JSContext* cx = jsapi.cx();
   JS::RootedValue rval(cx);
   JS::CompileOptions options(cx);
   options.setFileAndLine("injected-script.js", 1);
