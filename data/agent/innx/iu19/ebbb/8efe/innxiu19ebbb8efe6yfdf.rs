@@ -175,9 +175,9 @@ const MAX_ITERATIONS: usize = 5;
 
 //let thewholeenchilada = base_system_prompt.clone() + "\n\n" + &conversation_prompt  + "\n\nAssistant:\n-----------------------------------------------------";
 //println!("FULL PROMPT TO LLM:\n{}", thewholeenchilada);
-//std::fs::write("/home/mraiser/Desktop/last_call.txt", &thewholeenchilada).ok();
+//std::fs::write("/tmp/nb_last_call.txt", &thewholeenchilada).ok();
 println!("FULL PROMPT TO LLM:\n{}", conversation_prompt);
-std::fs::write("/home/mraiser/Desktop/last_call.txt", &conversation_prompt).ok();
+std::fs::write("/tmp/nb_last_call.txt", &conversation_prompt).ok();
 
 // 4. Main conversation loop
 for i in 0..MAX_ITERATIONS {
@@ -230,7 +230,7 @@ for i in 0..MAX_ITERATIONS {
     if tool_call_found {
         continue;
     } else {
-        std::fs::write("/home/mraiser/Desktop/last_response.txt", &llm_response).ok();
+        std::fs::write("/tmp/nb_last_response.txt", &llm_response).ok();
         return llm_response;
     }
 }

@@ -1,0 +1,37 @@
+.nbld{max-width:900px;margin:0 auto;padding:18px;font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#d7dde3;font-size:14px;line-height:1.45}
+.nbld h1{font-size:22px;margin:0;color:#fff}
+.nbld h2{font-size:15px;margin:0 0 8px;color:#9fd0ff;font-weight:600}
+.nbld-head{position:relative;margin-bottom:16px}
+.nbld-sub{color:#9aa4ad;margin:6px 0 0;max-width:680px}
+.nbld-refresh{position:absolute;top:0;right:0;background:#243040;color:#cfe3ff;border:1px solid #3a4a60;border-radius:6px;padding:6px 10px;cursor:pointer}
+.nbld-refresh:hover{background:#2c3a4d}
+.nbld-card{background:#171d25;border:1px solid #263140;border-radius:10px;padding:16px;margin-bottom:14px}
+.nbld-note{color:#8f99a3;margin:0 0 12px;font-size:13px}
+.nbld code{background:#0e1319;padding:1px 5px;border-radius:4px;color:#e6c07b;font-size:12px}
+.nbld-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.nbld-grid label{display:flex;flex-direction:column;font-size:12px;color:#9aa4ad;gap:4px}
+.nbld-grid input{background:#0e1319;border:1px solid #2b3644;border-radius:6px;padding:8px;color:#e8edf2;font-size:13px;font-family:ui-monospace,Menlo,monospace}
+.nbld-grid input:focus{outline:none;border-color:#4a86c8}
+.nbld-grid small{color:#5f6b76;font-size:11px}
+.nbld-btn{background:#2b6cb0;color:#fff;border:none;border-radius:6px;padding:9px 16px;cursor:pointer;font-size:13px;margin-top:12px}
+.nbld-btn:hover{background:#3a7cc0}
+.nbld-btn.sm{padding:5px 12px;margin:0;font-size:12px}
+.nbld-btn.danger{background:#a33}
+.nbld-btn.danger:hover{background:#c44}
+.nbld-btn:disabled{background:#3a4653;color:#7c8894;cursor:not-allowed}
+.nbld-cfgmsg,.nbld-installmsg{margin-left:12px;font-size:12px;color:#7fd18f}
+.nbld-steps{list-style:none;margin:0;padding:0}
+.nbld-steps li{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid #1f2732}
+.nbld-steps li:last-child{border-bottom:none}
+.nbld-steps .lbl{flex:1}
+.nbld-steps .grp{display:flex;gap:6px}
+.nbld-steps .dot{width:11px;height:11px;border-radius:50%;background:#3a4653;flex:none;box-shadow:0 0 0 3px #12171d}
+.nbld-steps li.done .dot{background:#4caf7d}
+.nbld-steps li.done .lbl{color:#8fb7a3}
+.nbld-install{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.nbld-install label.inline{display:inline-flex;align-items:center;gap:5px;font-size:13px;color:#cfd6dd}
+.nbld-run{font-size:12px;color:#111;background:#e6b800;border-radius:10px;padding:2px 9px;font-weight:600;vertical-align:middle}
+.nbld-monitor-bar{display:flex;align-items:center;gap:12px;margin-bottom:8px;min-height:24px}
+.nbld-stage{font-size:12px;color:#9aa4ad;font-family:ui-monospace,monospace}
+.nbld-log{background:#0a0e13;border:1px solid #1f2732;border-radius:8px;padding:12px;color:#a8c7a8;font-family:ui-monospace,Menlo,monospace;font-size:11.5px;line-height:1.4;max-height:340px;overflow:auto;white-space:pre-wrap;margin:0}
+@media(max-width:640px){.nbld-grid{grid-template-columns:1fr}}

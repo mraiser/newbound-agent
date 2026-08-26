@@ -77,7 +77,7 @@ contract:
   heuristics, no model.
 - **Hollis**: voiceprint→entity resolution — the sensor's perceptual
   state (acoustic signatures) resolves a speaker, and the binding
-  targets the claims that name that entity (e.g. the signature→"Marc"
+  targets the claims that name that entity (e.g. the signature→"Alex"
   binding claim in the brain).
 - **Camera**: its visual-signature mapping, same shape, later.
 

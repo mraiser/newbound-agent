@@ -8,23 +8,23 @@ peer init waits forever on `security_ready` because the app bootstrap needs
 
 ```bash
 rsync -a --exclude .git --exclude target --exclude graphify-out \
-  /home/gm/Desktop/Marc/newbound/ /home/gm/Desktop/Marc/newbound-scratch/
-mkdir -p /home/gm/Desktop/Marc/newbound-scratch/target/release
-cp /home/gm/Desktop/Marc/newbound/target/release/newbound \
-   /home/gm/Desktop/Marc/newbound-scratch/target/release/
+  /path/to/newbound/ /path/to/newbound-scratch/
+mkdir -p /path/to/newbound-scratch/target/release
+cp /path/to/newbound/target/release/newbound \
+   /path/to/newbound-scratch/target/release/
 # fresh P2P identity + fresh ports, without breaking app bootstrap:
-rm -f /home/gm/Desktop/Marc/newbound-scratch/runtime/peer/botd.properties \
-      /home/gm/Desktop/Marc/newbound-scratch/runtime/app/botd.properties
-sed -i 's/^http_port=.*/http_port=33182/' /home/gm/Desktop/Marc/newbound-scratch/config.properties
+rm -f /path/to/newbound-scratch/runtime/peer/botd.properties \
+      /path/to/newbound-scratch/runtime/app/botd.properties
+sed -i 's/^http_port=.*/http_port=33182/' /path/to/newbound-scratch/config.properties
 # the bench is a published app (DESIGN 7.3 as-built) — put its lib in apps=
 # at creation and no restart is ever needed to serve /bench/:
-sed -i 's/^apps=\(.*\)/apps=\1,bench/' /home/gm/Desktop/Marc/newbound-scratch/config.properties
+sed -i 's/^apps=\(.*\)/apps=\1,bench/' /path/to/newbound-scratch/config.properties
 ```
 
 Start it:
 
 ```bash
-cd /home/gm/Desktop/Marc/newbound-scratch && ./target/release/newbound
+cd /path/to/newbound-scratch && ./target/release/newbound
 ```
 
 It comes up with HTTP on 33182 and a freshly assigned P2P port/identity.

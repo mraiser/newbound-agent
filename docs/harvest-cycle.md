@@ -291,12 +291,12 @@ emits). It takes the recent transcript window — perceptions of kind
 entity claims the agent itself holds, never a reach into the sensor's
 own library (the layering rule), assembles an H2
 context, and asks the frontier for CLAIMS: what happened, who was
-involved, what was decided, what patterns recur ("Marc works
+involved, what was decided, what patterns recur ("Alex works
 evenings", "the household discusses X on Sundays"). Deposits go to a
 new `environment` domain (or per-entity homes) with `inferred`
 confidence, subject to the same hysteresis and owner audit as
 everything else. Entity naming closes the loop: when a voiceprint
-entity gains a name in conversation ("I'm Marc"), that becomes a
+entity gains a name in conversation ("I'm Alex"), that becomes a
 claim binding voiceprint → person — the binding hollis's contract
 always promised.
 
