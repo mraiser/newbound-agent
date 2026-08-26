@@ -76,7 +76,9 @@ let installed = bin_exists && (!bin_target.is_empty() || Path::new(&bin).is_file
 // Build process liveness + current stage.
 let pid = std::fs::read_to_string(format!("{}/build.pid", workspace)).ok()
     .and_then(|s| s.trim().parse::<i64>().ok()).unwrap_or(0);
-let build_running = pid > 0 && Path::new(&format!("/proc/{}", pid)).exists();
+let build_running = pid > 0 && std::fs::read_to_string(format!("/proc/{}/stat", pid)).ok()
+    .and_then(|st| st.rsplit(')').next().map(|r| r.trim_start().chars().next() != Some('Z')))
+    .unwrap_or(false);
 let stage = std::fs::read_to_string(format!("{}/build.stage", workspace)).unwrap_or_default().trim().to_string();
 
 // Log tail (last ~40 lines) + last stage exit code if the marker is present.

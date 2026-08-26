@@ -15,7 +15,10 @@ let pid = std::fs::read_to_string(&pidfile).ok().and_then(|s| s.trim().parse::<i
 
 let mut o = DataObject::new();
 o.put_string("status", "ok");
-if pid <= 0 || !Path::new(&format!("/proc/{}", pid)).exists() {
+let alive = pid > 0 && std::fs::read_to_string(format!("/proc/{}/stat", pid)).ok()
+    .and_then(|st| st.rsplit(')').next().map(|r| r.trim_start().chars().next() != Some('Z')))
+    .unwrap_or(false);
+if !alive {
     o.put_boolean("killed", false);
     o.put_string("msg", "no running build");
     return o;

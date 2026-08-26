@@ -13,7 +13,9 @@ let n: usize = if tail_lines > 0 { tail_lines as usize } else { 60 };
 
 let pid = std::fs::read_to_string(format!("{}/build.pid", workspace)).ok()
     .and_then(|s| s.trim().parse::<i64>().ok()).unwrap_or(0);
-let running = pid > 0 && Path::new(&format!("/proc/{}", pid)).exists();
+let running = pid > 0 && std::fs::read_to_string(format!("/proc/{}/stat", pid)).ok()
+    .and_then(|st| st.rsplit(')').next().map(|r| r.trim_start().chars().next() != Some('Z')))
+    .unwrap_or(false);
 let stage = std::fs::read_to_string(format!("{}/build.stage", workspace)).unwrap_or_default().trim().to_string();
 let log = std::fs::read_to_string(format!("{}/build.log", workspace)).unwrap_or_default();
 let lines: Vec<&str> = log.lines().collect();

@@ -87,7 +87,12 @@ if !Path::new(&format!("{}/build.sh", workspace)).is_file() {
 let pidfile = format!("{}/build.pid", workspace);
 if let Ok(s) = std::fs::read_to_string(&pidfile) {
     if let Ok(pid) = s.trim().parse::<i64>() {
-        if pid > 0 && Path::new(&format!("/proc/{}", pid)).exists() {
+        // A finished stage can linger as a zombie (/proc entry still
+        // present), so liveness must exclude state Z.
+        let alive = pid > 0 && std::fs::read_to_string(format!("/proc/{}/stat", pid)).ok()
+            .and_then(|st| st.rsplit(')').next().map(|r| r.trim_start().chars().next() != Some('Z')))
+            .unwrap_or(false);
+        if alive {
             return err(format!("a build stage is already running (pid {}); wait for it or stop it first", pid));
         }
     }
@@ -106,7 +111,11 @@ let script = format!(
 let child = Command::new("setsid").arg("bash").arg("-c").arg(&script)
     .stdin(Stdio::null()).stdout(Stdio::from(log)).stderr(Stdio::from(logerr))
     .spawn();
-let pid = match child { Ok(c) => c.id(), Err(e) => return err(format!("spawn failed: {}", e)) };
+let mut child = match child { Ok(c) => c, Err(e) => return err(format!("spawn failed: {}", e)) };
+let pid = child.id();
+// Reap the child when it exits — without this it stays a zombie whose
+// /proc entry makes every liveness check read the stage as running.
+std::thread::spawn(move || { let _ = child.wait(); });
 
 let _ = std::fs::write(&pidfile, pid.to_string());
 let _ = std::fs::write(format!("{}/build.stage", workspace), &stage);
