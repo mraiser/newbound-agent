@@ -2,8 +2,8 @@
 // 2026-08-16). Idempotent and settings-driven - no seams, no runbook
 // steps: SALIENCE=on in botd.properties turns the subsystem on, and the
 // executive fires this once per start whenever the service isn't
-// answering. Modeled on the owner's oneshot-installer idiom: donefile-
-// guarded stages, everything under the agent app's own runtime folder
+// answering. Modeled on a donefile-guarded installer idiom: staged
+// steps, everything under the agent app's own runtime folder
 // (runtime/agent/model - the runtime/ root belongs to apps), nothing
 // at a hardcoded absolute path.
 //

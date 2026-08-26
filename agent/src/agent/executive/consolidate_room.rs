@@ -65,7 +65,7 @@ pub fn consolidate_room(min_quiet_s: i64, window: i64, budget: i64) -> DataObjec
 // to understand. Products are CLAIMS in kb.environment - inferred,
 // hysteresis-guarded via adjudicate, owner-auditable - including the
 // voiceprint->person bindings the contract always promised ("I'm
-// Marc" heard in the room becomes the claim that binds the print).
+// Alex" heard in the room becomes the claim that binds the print).
 fn err(msg: String) -> DataObject {
     let mut o = DataObject::new();
     o.put_string("status", "err");
