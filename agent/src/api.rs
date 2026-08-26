@@ -674,6 +674,92 @@ pub mod agent {
         }
 
     }
+    pub mod plan {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+        pub fn board() -> DataObject {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("hgqxqv1a03a50c89cw8").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn move_item(claim: String, lifecycle: String, base: String, nn_sessionid: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("claim", &claim);
+            d.put_string("lifecycle", &lifecycle);
+            d.put_string("base", &base);
+            d.put_string("nn_sessionid", &nn_sessionid);
+            ::flowlang::rustcmd::RustCmd::new("ijyjoz1a03a510268ta").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn add_item(claim: String, detail: String, nn_sessionid: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("claim", &claim);
+            d.put_string("detail", &detail);
+            d.put_string("nn_sessionid", &nn_sessionid);
+            ::flowlang::rustcmd::RustCmd::new("uyunpg1a03a5137c3yc").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+    }
+    pub mod browser {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+        pub fn eval(js: String, timeout_ms: i64) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("js", &js);
+            d.put_int("timeout_ms", timeout_ms);
+            ::flowlang::rustcmd::RustCmd::new("xhuqpr1a03b7fe957i8").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn open(url: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("url", &url);
+            ::flowlang::rustcmd::RustCmd::new("jqgspz1a03b805a1bja").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn goto(url: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("url", &url);
+            ::flowlang::rustcmd::RustCmd::new("tzwzqk1a03b80b9a5zc").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn text(selector: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("selector", &selector);
+            ::flowlang::rustcmd::RustCmd::new("lxgqyp1a03b80e4c0te").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn click(selector: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("selector", &selector);
+            ::flowlang::rustcmd::RustCmd::new("igmtmw1a03b810adfk10").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn fill(selector: String, value: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("selector", &selector);
+            d.put_string("value", &value);
+            ::flowlang::rustcmd::RustCmd::new("nhvyyr1a03b817969g14").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn wait_for(selector: String, timeout_ms: i64) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("selector", &selector);
+            d.put_int("timeout_ms", timeout_ms);
+            ::flowlang::rustcmd::RustCmd::new("xkiujg1a03b821c3fu16").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn close() -> DataObject {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("ykmzmg1a03b82db11g1e").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+    }
 }
 
 pub mod app {
@@ -4147,6 +4233,11 @@ pub mod scratch {
         use ::ndata::databytes::DataBytes;
         use ::ndata::data::Data;
 
+        pub fn eval_kvytvt1a03e072c30s6() -> DataObject {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("siqpqm1a03e072c30w8").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
     }
 }
 
@@ -4641,6 +4732,8 @@ pub struct old_agent_model {}
 pub struct old_agent_msg {}
 pub struct old_agent_context {}
 pub struct old_agent_tools {}
+pub struct old_agent_plan {}
+pub struct old_agent_browser {}
 pub struct old_app_api {}
 pub struct old_app_app {}
 pub struct old_app_appcard {}
@@ -4812,6 +4905,8 @@ pub struct old_agent {
     pub msg: old_agent_msg,
     pub context: old_agent_context,
     pub tools: old_agent_tools,
+    pub plan: old_agent_plan,
+    pub browser: old_agent_browser,
 }
 pub struct old_app {
     pub api: old_app_api,
@@ -5035,6 +5130,8 @@ pub const fn new() -> api {
             msg: old_agent_msg {},
             context: old_agent_context {},
             tools: old_agent_tools {},
+            plan: old_agent_plan {},
+            browser: old_agent_browser {},
         },
         app: old_app {
             api: old_app_api {},
@@ -5565,6 +5662,54 @@ impl old_agent_tools {
     #[deprecated(note = "use api::agent::tools::rsync_push instead")]
     pub fn rsync_push(&self, host: String, src: String, dst: String) -> DataObject {
         self::agent::tools::rsync_push(host, src, dst)
+    }
+}
+impl old_agent_plan {
+    #[deprecated(note = "use api::agent::plan::board instead")]
+    pub fn board(&self) -> DataObject {
+        self::agent::plan::board()
+    }
+    #[deprecated(note = "use api::agent::plan::move_item instead")]
+    pub fn move_item(&self, claim: String, lifecycle: String, base: String, nn_sessionid: String) -> DataObject {
+        self::agent::plan::move_item(claim, lifecycle, base, nn_sessionid)
+    }
+    #[deprecated(note = "use api::agent::plan::add_item instead")]
+    pub fn add_item(&self, claim: String, detail: String, nn_sessionid: String) -> DataObject {
+        self::agent::plan::add_item(claim, detail, nn_sessionid)
+    }
+}
+impl old_agent_browser {
+    #[deprecated(note = "use api::agent::browser::eval instead")]
+    pub fn eval(&self, js: String, timeout_ms: i64) -> DataObject {
+        self::agent::browser::eval(js, timeout_ms)
+    }
+    #[deprecated(note = "use api::agent::browser::open instead")]
+    pub fn open(&self, url: String) -> DataObject {
+        self::agent::browser::open(url)
+    }
+    #[deprecated(note = "use api::agent::browser::goto instead")]
+    pub fn goto(&self, url: String) -> DataObject {
+        self::agent::browser::goto(url)
+    }
+    #[deprecated(note = "use api::agent::browser::text instead")]
+    pub fn text(&self, selector: String) -> DataObject {
+        self::agent::browser::text(selector)
+    }
+    #[deprecated(note = "use api::agent::browser::click instead")]
+    pub fn click(&self, selector: String) -> DataObject {
+        self::agent::browser::click(selector)
+    }
+    #[deprecated(note = "use api::agent::browser::fill instead")]
+    pub fn fill(&self, selector: String, value: String) -> DataObject {
+        self::agent::browser::fill(selector, value)
+    }
+    #[deprecated(note = "use api::agent::browser::wait_for instead")]
+    pub fn wait_for(&self, selector: String, timeout_ms: i64) -> DataObject {
+        self::agent::browser::wait_for(selector, timeout_ms)
+    }
+    #[deprecated(note = "use api::agent::browser::close instead")]
+    pub fn close(&self) -> DataObject {
+        self::agent::browser::close()
     }
 }
 impl old_app_app {
@@ -7127,6 +7272,12 @@ impl old_peer_service {
     #[deprecated(note = "use api::peer::service::udp_connect instead")]
     pub fn udp_connect(&self, ipaddr: String, port: i64) -> DataObject {
         self::peer::service::udp_connect(ipaddr, port)
+    }
+}
+impl old_scratch_scratch {
+    #[deprecated(note = "use api::scratch::scratch::eval_kvytvt1a03e072c30s6 instead")]
+    pub fn eval_kvytvt1a03e072c30s6(&self) -> DataObject {
+        self::scratch::scratch::eval_kvytvt1a03e072c30s6()
     }
 }
 impl old_security_security {
