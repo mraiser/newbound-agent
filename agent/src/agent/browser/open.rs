@@ -90,41 +90,14 @@ let _ = std::fs::remove_file(format!("{}/bind.id", dir));
 let _ = std::fs::write(format!("{}/bind.url", dir), &url);
 let _ = std::fs::write(format!("{}/inject.js", dir), "//NOOBSCAPE\nseed\nvoid 0");
 
-// Single-process profile. A chrome-principal docshell load (the goto
-// mechanism) only COMMITS when the top content docshell is parent-owned,
-// i.e. non-remote; on a multiprocess/Fission browser it queues in a content
-// process and the parent drops it. Multiprocess also spawns the background
-// tab-content docshells (thumbnailer, extensions, preallocated) that forced
-// the original broadcast hack. One profile with remote + fission OFF
-// collapses the browser to a single parent process: injection AND navigation
-// both act on the real top docshell in-process, and the cross-process
-// response race disappears (the bind latch becomes belt-and-suspenders).
-let profile = format!("{}/profile", dir);
-let _ = std::fs::create_dir_all(&profile);
-// Clear any stale single-instance lock from a previously killed run so
-// firefox does not refuse the profile as "already in use".
-let _ = std::fs::remove_file(format!("{}/lock", profile));
-let _ = std::fs::remove_file(format!("{}/.parentlock", profile));
-let user_js = concat!(
-    "user_pref(\"fission.autostart\", false);\n",
-    "user_pref(\"browser.tabs.remote.autostart\", false);\n",
-    "user_pref(\"dom.ipc.processCount\", 1);\n",
-    "user_pref(\"browser.tabs.remote.separatePrivilegedContentProcess\", false);\n",
-    "user_pref(\"toolkit.telemetry.enabled\", false);\n",
-    "user_pref(\"datareporting.policy.dataSubmissionEnabled\", false);\n",
-    "user_pref(\"browser.shell.checkDefaultBrowser\", false);\n",
-    "user_pref(\"browser.startup.homepage_override.mstone\", \"ignore\");\n",
-);
-let _ = std::fs::write(format!("{}/user.js", profile), user_js);
-
 // Build the launch line. `exec` replaces bash so the child pid is firefox.
 let headless = if display.is_empty() { "-headless" } else { "" };
 let disp = if display.is_empty() { String::new() } else { format!("DISPLAY='{}' ", display) };
 // Assignments must precede `exec` (a builtin): `exec VAR=1 cmd` makes
 // bash try to execute the file "VAR=1" and die with 127.
 let line = format!(
-    "{}MOZ_DISABLE_JEMALLOC=1 MOZ_DISABLE_CONTENT_SANDBOX=1 LIBGL_ALWAYS_SOFTWARE=1 exec '{}' {} -profile '{}' '{}'",
-    disp, bin, headless, profile, url
+    "{}MOZ_DISABLE_JEMALLOC=1 MOZ_DISABLE_CONTENT_SANDBOX=1 LIBGL_ALWAYS_SOFTWARE=1 exec '{}' {} '{}'",
+    disp, bin, headless, url
 );
 
 let mut cmd = Command::new("bash");

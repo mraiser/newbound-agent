@@ -353,8 +353,18 @@ static void NoobscapeInject(nsDocShell* self, nsIFile* file) {
   if (v2 && StringBeginsWith(scriptContent, u"NOOBSCAPE_NAV "_ns)) {
     nsAutoString navUrl(Substring(scriptContent, 14));
     navUrl.Trim(" \t\r\n");
+    // Triggering principal = the current document's OWN principal. A content
+    // process initiating a top-level load with the SYSTEM principal is rejected
+    // by the parent (it looks like a sandbox escape) and silently no-ops; the
+    // page's own principal is what a normal self-navigation carries, and the
+    // parent accepts it for both same-origin and cross-origin top-level loads.
+    nsCOMPtr<nsIPrincipal> navTrigger;
+    if (mozilla::dom::Document* ndoc = self->GetDocument()) {
+      navTrigger = ndoc->NodePrincipal();
+    }
+    if (!navTrigger) navTrigger = nsContentUtils::GetSystemPrincipal();
     mozilla::dom::LoadURIOptions navOpts;
-    navOpts.mTriggeringPrincipal = nsContentUtils::GetSystemPrincipal();
+    navOpts.mTriggeringPrincipal = navTrigger;
     nsresult navRv = self->FixupAndLoadURIString(navUrl, navOpts);
     NoobscapeWriteOut(id, NS_SUCCEEDED(navRv), NS_SUCCEEDED(navRv) ? "null" : "load failed");
     return;
