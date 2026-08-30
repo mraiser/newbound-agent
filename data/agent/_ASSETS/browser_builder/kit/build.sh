@@ -56,6 +56,32 @@ warn() { printf '\033[1;33mWARN:\033[0m %s\n' "$*" >&2; }
 die()  { printf '\033[1;31mERROR:\033[0m %s\n' "$*" >&2; exit 1; }
 
 # --------------------------------------------------------------------------
+# Helpers
+# --------------------------------------------------------------------------
+# The release tarball is not a VCS checkout, but mach's toolchain machinery
+# (taskgraph hash_paths, `mach bootstrap`, --enable-bootstrap toolchain
+# fetches) enumerates files through mozversioncontrol's tracked-files finder;
+# outside a repo the patterns match nothing and bootstrap dies with
+# "<pattern> did not match anything". Committing the pristine tree into a
+# throwaway local git repo makes the tarball look like the checkout the tools
+# expect. Digests hash file contents, so they still match upstream CI's and
+# prebuilt toolchain artifacts resolve from the cache.
+ensure_git_repo() {
+    [[ -d "${SRC_DIR}" ]] || return 0
+    [[ -d "${SRC_DIR}/.git" ]] && return 0
+    if ! command -v git >/dev/null 2>&1; then
+        warn "git not found: mach's toolchain digests need a VCS checkout; bootstrap may fail"
+        return 0
+    fi
+    log "Initialising throwaway git repo in ${SRC_DIR} (mach's file finder only sees tracked files)"
+    ( cd "${SRC_DIR}" \
+        && git init -q \
+        && git add -A \
+        && git -c user.email=noobscape@localhost -c user.name=noobscape \
+               commit -qm "firefox ${FIREFOX_VERSION} source tarball" )
+}
+
+# --------------------------------------------------------------------------
 # Stages
 # --------------------------------------------------------------------------
 stage_download() {
@@ -93,6 +119,7 @@ stage_extract() {
     [[ -f "${WORKDIR}/${TARBALL}" ]] || die "Tarball missing; run the 'download' stage first"
     if [[ -d "${SRC_DIR}" ]]; then
         log "Source tree already extracted at ${SRC_DIR}"
+        ensure_git_repo
         return
     fi
     log "Extracting ${TARBALL}"
@@ -105,6 +132,7 @@ stage_extract() {
         [[ -n "${extracted}" ]] && mv "${extracted}" "${SRC_DIR}"
     fi
     [[ -d "${SRC_DIR}" ]] || die "Extraction did not produce ${SRC_DIR}"
+    ensure_git_repo
 }
 
 stage_patch() {
@@ -122,8 +150,12 @@ stage_configure() {
 
 stage_deps() {
     [[ -d "${SRC_DIR}" ]] || die "Source tree missing; run the 'extract' stage first"
-    log "Bootstrapping build dependencies (this may prompt / take a while)"
-    ( cd "${SRC_DIR}" && ./mach --no-interactive bootstrap --application-choice browser )
+    ensure_git_repo
+    log "Bootstrapping build dependencies (toolchains only; system packages untouched)"
+    # --no-system-changes: a detached non-interactive build can never answer a
+    # sudo password prompt; system packages are the sysroot's job (see the
+    # --enable-bootstrap line in mozconfig).
+    ( cd "${SRC_DIR}" && ./mach --no-interactive bootstrap --application-choice browser --no-system-changes )
 }
 
 stage_build() {
