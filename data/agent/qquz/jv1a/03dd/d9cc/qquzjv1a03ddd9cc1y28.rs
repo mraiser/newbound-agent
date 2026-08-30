@@ -27,6 +27,11 @@ if stage == "patch" {
     return r;
 }
 
+// The assets are the kit's source of truth: refresh the workspace copy at
+// every launch so an asset fix can never lose to a stale materialization.
+let m = crate::agent::browser_builder::materialize_kit::materialize_kit();
+if m.get_string("status") != "ok" { return m; }
+
 if !Path::new(&format!("{}/build.sh", workspace)).is_file() {
     return err(format!("build kit not materialized in {} (run materialize_kit first)", workspace));
 }
@@ -52,10 +57,24 @@ let logerr = match log.try_clone() { Ok(f) => f, Err(e) => return err(format!("l
 
 // setsid detaches into a new session so the build survives this call
 // returning (and even a newbound restart). stdbuf keeps the log live.
-let script = format!(
-    "cd '{ws}' && FIREFOX_VERSION='{v}' WORKDIR='{ws}/work' stdbuf -oL -eL ./build.sh {stage}; echo \"===NOOBSCAPE_STAGE_EXIT $?===\"",
-    ws = workspace, v = version, stage = stage
-);
+// 'all' must carry the Noobscape mechanism, which lives in the Rust
+// apply_patch command — build.sh's own patch stage only applies patches/.
+// Chain it between deps and build via `newbound exec`, and gate the build
+// on the mechanism marker actually being present in the source.
+let script = if stage == "all" {
+    let exe = std::env::current_exe().map(|p| p.display().to_string()).unwrap_or_else(|_| "newbound".to_string());
+    let root = std::env::current_dir().map(|p| p.display().to_string()).unwrap_or_else(|_| ".".to_string());
+    let cpp = format!("{}/work/firefox-{}/docshell/base/nsDocShell.cpp", workspace, version);
+    format!(
+        "cd '{ws}' && FIREFOX_VERSION='{v}' WORKDIR='{ws}/work' stdbuf -oL -eL ./build.sh download extract patch deps && (cd '{root}' && '{exe}' exec agent browser_builder apply_patch '{{}}') && grep -q NoobscapeStartWatcher '{cpp}' && cd '{ws}' && FIREFOX_VERSION='{v}' WORKDIR='{ws}/work' stdbuf -oL -eL ./build.sh build; echo \"===NOOBSCAPE_STAGE_EXIT $?===\"",
+        ws = workspace, v = version, root = root, exe = exe, cpp = cpp
+    )
+} else {
+    format!(
+        "cd '{ws}' && FIREFOX_VERSION='{v}' WORKDIR='{ws}/work' stdbuf -oL -eL ./build.sh {stage}; echo \"===NOOBSCAPE_STAGE_EXIT $?===\"",
+        ws = workspace, v = version, stage = stage
+    )
+};
 let child = Command::new("setsid").arg("bash").arg("-c").arg(&script)
     .stdin(Stdio::null()).stdout(Stdio::from(log)).stderr(Stdio::from(logerr))
     .spawn();
