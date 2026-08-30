@@ -43,9 +43,29 @@ let build_running = pid > 0 && std::fs::read_to_string(format!("/proc/{}/stat", 
 let stage = std::fs::read_to_string(format!("{}/build.stage", workspace)).unwrap_or_default().trim().to_string();
 
 // Log tail (last ~40 lines) + last stage exit code if the marker is present.
-let log = std::fs::read_to_string(format!("{}/build.log", workspace)).unwrap_or_default();
-let lines: Vec<&str> = log.lines().collect();
+// Bounded tail: read only the last 256KB and treat \r as a newline, so a
+// giant log or a progress-meter mega-line can never blow up the response.
+let log = {
+    use std::io::{Read, Seek, SeekFrom};
+    match std::fs::File::open(format!("{}/build.log", workspace)) {
+        Ok(mut f) => {
+            let len = f.metadata().map(|m| m.len()).unwrap_or(0);
+            let cap: u64 = 262144;
+            if len > cap { let _ = f.seek(SeekFrom::Start(len - cap)); }
+            let mut buf = Vec::new();
+            let _ = f.read_to_end(&mut buf);
+            String::from_utf8_lossy(&buf).replace('\r', "\n")
+        }
+        Err(_) => String::new(),
+    }
+};
+let lines: Vec<&str> = log.lines().filter(|l| !l.trim().is_empty()).collect();
 let tail: String = lines.iter().rev().take(40).rev().cloned().collect::<Vec<_>>().join("\n");
+let tail: String = if tail.len() > 8000 {
+    let mut i = tail.len() - 8000;
+    while !tail.is_char_boundary(i) { i += 1; }
+    tail[i..].to_string()
+} else { tail };
 let last_exit = lines.iter().rev().find_map(|l| l.strip_prefix("===NOOBSCAPE_STAGE_EXIT ").map(|s| s.trim_end_matches('=').trim().to_string())).unwrap_or_default();
 
 let mut cfg = DataObject::new();
