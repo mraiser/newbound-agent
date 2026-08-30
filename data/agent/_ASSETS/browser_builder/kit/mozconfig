@@ -10,12 +10,12 @@ ac_add_options --enable-application=browser
 # resulting binary at obj-firefox/dist/bin/firefox.
 mk_add_options MOZ_OBJDIR=@TOPSRCDIR@/obj-firefox
 
-# Fetch any missing toolchains (clang, node, cbindgen, the compile sysroot
-# with its GTK/pango/pulse headers, ...) from Mozilla's CI artifact cache
-# into ~/.mozbuild at configure time. This is what lets the build run on a
-# box with no root access and no system dev packages; it requires the source
-# tree to be a git checkout, which build.sh's extract stage guarantees.
-ac_add_options --enable-bootstrap
+# Use the toolchains build.sh's deps stage staged into ~/.mozbuild (clang,
+# node, cbindgen, and the compile sysroot with its GTK/pango/pulse headers)
+# — this is what lets the build run with no root access and no system dev
+# packages. no-update: never re-resolve them against the CI cache, whose
+# digest lookup requires a real mozilla-central checkout.
+ac_add_options --enable-bootstrap=no-update
 
 # Release-style build: optimized, no debug assertions.
 ac_add_options --enable-optimize

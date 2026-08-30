@@ -11,7 +11,7 @@
 #   ./build.sh <stage>...   # run only the named stage(s), in order given
 #
 # Stages:
-#   deps      Install build prerequisites via `mach bootstrap`
+#   deps      Fetch prebuilt toolchains from Mozilla CI into ~/.mozbuild
 #   download  Download and verify the source tarball
 #   extract   Extract the tarball into the build directory
 #   patch     Apply everything under patches/ to the extracted tree
@@ -48,6 +48,10 @@ TARBALL_URL="${MOZ_FTP_BASE}/${FIREFOX_VERSION}/source/${TARBALL}"
 CHECKSUMS_URL="${MOZ_FTP_BASE}/${FIREFOX_VERSION}/SHA256SUMS"
 SRC_DIR="${WORKDIR}/firefox-${FIREFOX_VERSION}"
 
+MOZBUILD="${MOZBUILD_STATE_PATH:-${HOME}/.mozbuild}"
+TC_INDEX="https://firefox-ci-tc.services.mozilla.com/api/index/v1/task"
+TC_QUEUE="https://firefox-ci-tc.services.mozilla.com/api/queue/v1/task"
+
 # --------------------------------------------------------------------------
 # Logging helpers
 # --------------------------------------------------------------------------
@@ -58,19 +62,15 @@ die()  { printf '\033[1;31mERROR:\033[0m %s\n' "$*" >&2; exit 1; }
 # --------------------------------------------------------------------------
 # Helpers
 # --------------------------------------------------------------------------
-# The release tarball is not a VCS checkout, but mach's toolchain machinery
-# (taskgraph hash_paths, `mach bootstrap`, --enable-bootstrap toolchain
-# fetches) enumerates files through mozversioncontrol's tracked-files finder;
-# outside a repo the patterns match nothing and bootstrap dies with
-# "<pattern> did not match anything". Committing the pristine tree into a
-# throwaway local git repo makes the tarball look like the checkout the tools
-# expect. Digests hash file contents, so they still match upstream CI's and
-# prebuilt toolchain artifacts resolve from the cache.
+# The release tarball is not a VCS checkout, but mach's tooling enumerates
+# files through mozversioncontrol's tracked-files finder; outside a repo the
+# patterns match nothing. Committing the pristine tree into a throwaway local
+# git repo makes the tarball look like the checkout the tools expect.
 ensure_git_repo() {
     [[ -d "${SRC_DIR}" ]] || return 0
     [[ -d "${SRC_DIR}/.git" ]] && return 0
     if ! command -v git >/dev/null 2>&1; then
-        warn "git not found: mach's toolchain digests need a VCS checkout; bootstrap may fail"
+        warn "git not found: mach's file finder needs a VCS checkout; some mach tooling may fail"
         return 0
     fi
     log "Initialising throwaway git repo in ${SRC_DIR} (mach's file finder only sees tracked files)"
@@ -79,6 +79,34 @@ ensure_git_repo() {
         && git add -A \
         && git -c user.email=noobscape@localhost -c user.name=noobscape \
                commit -qm "firefox ${FIREFOX_VERSION} source tarball" )
+}
+
+# Fetch one prebuilt toolchain from Mozilla CI's cache by NAME (the .latest
+# index route), never by digest: `mach bootstrap`'s digest lookup hashes a
+# VCS file listing a tarball can never reproduce, so it always misses. These
+# are the same artifacts bootstrap would have installed, addressed stably.
+fetch_toolchain() {  # <index-name> <dest-dir-under-~/.mozbuild>
+    local name="$1" dest="$2"
+    if [[ -e "${MOZBUILD}/${dest}" ]]; then
+        log "Toolchain already present: ${MOZBUILD}/${dest}"
+        return 0
+    fi
+    local ns="gecko.cache.level-3.toolchains.v3.${name}.latest"
+    local tid art
+    tid="$(curl -fsSL --retry 3 "${TC_INDEX}/${ns}" \
+        | python3 -c 'import json,sys; print(json.load(sys.stdin)["taskId"])')"
+    [[ -n "${tid}" ]] || die "No task in the toolchain cache for ${ns}"
+    art="$(curl -fsSL --retry 3 "${TC_QUEUE}/${tid}/artifacts" \
+        | python3 -c 'import json,sys; print(next(a["name"] for a in json.load(sys.stdin)["artifacts"] if a["name"].startswith("public/build/") and ".tar." in a["name"]))')"
+    [[ -n "${art}" ]] || die "No public/build artifact on task ${tid} (${name})"
+    log "Fetching ${name}: task ${tid}, ${art}"
+    mkdir -p "${MOZBUILD}"
+    local tmp="${MOZBUILD}/.fetch-${dest##*/}.tar.zst"
+    curl -fSL --retry 3 -o "${tmp}" "${TC_QUEUE}/${tid}/artifacts/${art}"
+    tar --zstd -xf "${tmp}" -C "${MOZBUILD}"
+    rm -f "${tmp}"
+    [[ -e "${MOZBUILD}/${dest}" ]] \
+        || die "Extracting ${art} did not produce ${MOZBUILD}/${dest}"
 }
 
 # --------------------------------------------------------------------------
@@ -151,11 +179,37 @@ stage_configure() {
 stage_deps() {
     [[ -d "${SRC_DIR}" ]] || die "Source tree missing; run the 'extract' stage first"
     ensure_git_repo
-    log "Bootstrapping build dependencies (toolchains only; system packages untouched)"
-    # --no-system-changes: a detached non-interactive build can never answer a
-    # sudo password prompt; system packages are the sysroot's job (see the
-    # --enable-bootstrap line in mozconfig).
-    ( cd "${SRC_DIR}" && ./mach --no-interactive bootstrap --application-choice browser --no-system-changes )
+    # `mach bootstrap` is unusable in this environment: its toolchain path
+    # computes cache digests a tarball can never reproduce, and its system
+    # package path needs an interactive sudo. Fetch the same CI artifacts it
+    # would have installed, into the same ~/.mozbuild layout that mozconfig's
+    # --enable-bootstrap=no-update reads.
+    local arch
+    arch="$(uname -m)"
+    log "Fetching prebuilt toolchains for ${arch} into ${MOZBUILD}"
+    case "${arch}" in
+        aarch64|arm64)
+            fetch_toolchain "linux64-aarch64-clang-19"   "clang"
+            fetch_toolchain "linux64-aarch64-cbindgen"   "cbindgen"
+            fetch_toolchain "linux64-aarch64-node-22"    "node"
+            fetch_toolchain "sysroot-aarch64-linux-gnu"  "sysroot-aarch64-linux-gnu"
+            [[ -d "${MOZBUILD}/sysroot-aarch64-linux-gnu/usr/include/gtk-3.0" ]] \
+                || die "sysroot lacks gtk-3.0 headers; configure cannot build a desktop browser against it"
+            ;;
+        x86_64)
+            fetch_toolchain "linux64-clang-19"           "clang"
+            fetch_toolchain "linux64-cbindgen"           "cbindgen"
+            fetch_toolchain "linux64-node-22"            "node"
+            fetch_toolchain "linux64-nasm"               "nasm"
+            fetch_toolchain "sysroot-x86_64-linux-gnu"   "sysroot-x86_64-linux-gnu"
+            [[ -d "${MOZBUILD}/sysroot-x86_64-linux-gnu/usr/include/gtk-3.0" ]] \
+                || die "sysroot lacks gtk-3.0 headers; configure cannot build a desktop browser against it"
+            ;;
+        *)
+            die "No toolchain mapping for ${arch}"
+            ;;
+    esac
+    log "Toolchains ready (mozconfig --enable-bootstrap=no-update picks them up)"
 }
 
 stage_build() {
