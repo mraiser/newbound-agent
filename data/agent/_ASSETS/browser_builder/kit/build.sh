@@ -52,6 +52,11 @@ MOZBUILD="${MOZBUILD_STATE_PATH:-${HOME}/.mozbuild}"
 TC_INDEX="https://firefox-ci-tc.services.mozilla.com/api/index/v1/task"
 TC_QUEUE="https://firefox-ci-tc.services.mozilla.com/api/queue/v1/task"
 
+# The cbindgen this tree's headers were written for. CI's .latest artifact
+# tracks mozilla-central and panics on 128's cbindgen.toml, so this one is
+# built from source with cargo and version-gated.
+CBINDGEN_VERSION="0.26.0"
+
 # --------------------------------------------------------------------------
 # Logging helpers
 # --------------------------------------------------------------------------
@@ -107,6 +112,28 @@ fetch_toolchain() {  # <index-name> <dest-dir-under-~/.mozbuild>
     rm -f "${tmp}"
     [[ -e "${MOZBUILD}/${dest}" ]] \
         || die "Extracting ${art} did not produce ${MOZBUILD}/${dest}"
+}
+
+# cbindgen is the one tool the CI cache cannot supply: .latest tracks
+# mozilla-central and its config parser rejects this older tree. Build the
+# pinned version with the box's own cargo, into the exact path configure's
+# bootstrap search reads (~/.mozbuild/cbindgen/cbindgen). Version-gated so a
+# wrong binary (e.g. an earlier fetched .latest) is replaced, not trusted.
+provision_cbindgen() {
+    local dest="${MOZBUILD}/cbindgen/cbindgen"
+    if [[ -x "${dest}" ]] && "${dest}" --version 2>/dev/null | grep -q "${CBINDGEN_VERSION}"; then
+        log "cbindgen ${CBINDGEN_VERSION} already present: ${dest}"
+        return 0
+    fi
+    command -v cargo >/dev/null 2>&1 || die "cargo not found; needed to build cbindgen ${CBINDGEN_VERSION}"
+    log "Building cbindgen ${CBINDGEN_VERSION} with cargo (CI's .latest artifact is too new for this tree)"
+    cargo install --locked --quiet --version "${CBINDGEN_VERSION}" \
+        --root "${MOZBUILD}/cbindgen-cargo" cbindgen
+    rm -rf "${MOZBUILD}/cbindgen"
+    mkdir -p "${MOZBUILD}/cbindgen"
+    cp "${MOZBUILD}/cbindgen-cargo/bin/cbindgen" "${dest}"
+    "${dest}" --version | grep -q "${CBINDGEN_VERSION}" \
+        || die "built cbindgen reports the wrong version: $("${dest}" --version)"
 }
 
 # --------------------------------------------------------------------------
@@ -190,7 +217,6 @@ stage_deps() {
     case "${arch}" in
         aarch64|arm64)
             fetch_toolchain "linux64-aarch64-clang-19"   "clang"
-            fetch_toolchain "linux64-aarch64-cbindgen"   "cbindgen"
             fetch_toolchain "linux64-aarch64-node-22"    "node"
             fetch_toolchain "sysroot-aarch64-linux-gnu"  "sysroot-aarch64-linux-gnu"
             [[ -d "${MOZBUILD}/sysroot-aarch64-linux-gnu/usr/include/gtk-3.0" ]] \
@@ -198,7 +224,6 @@ stage_deps() {
             ;;
         x86_64)
             fetch_toolchain "linux64-clang-19"           "clang"
-            fetch_toolchain "linux64-cbindgen"           "cbindgen"
             fetch_toolchain "linux64-node-22"            "node"
             fetch_toolchain "linux64-nasm"               "nasm"
             fetch_toolchain "sysroot-x86_64-linux-gnu"   "sysroot-x86_64-linux-gnu"
@@ -209,6 +234,7 @@ stage_deps() {
             die "No toolchain mapping for ${arch}"
             ;;
     esac
+    provision_cbindgen
     log "Toolchains ready (mozconfig --enable-bootstrap=no-update picks them up)"
 }
 
