@@ -303,11 +303,12 @@ static void NoobscapeInject(nsDocShell* self, nsIFile* file) {
   // extension background pages), and every one watches the same request file.
   // Ungated they race to answer and the last writer wins. We bind to exactly
   // one tab: the FIRST top-level *content* docshell that loads the launch URL
-  // latches its top browsing-context id into bind.id, and from then on ONLY
-  // that id answers. The id survives goto() navigations (the document is
-  // replaced, the browsing context is not), and the file makes the latch
-  // visible across the parent/content process split that the per-process
-  // dedup static alone cannot bridge.
+  // latches its BROWSER id (the tab's stable identity) into bind.id, and from
+  // then on ONLY that tab answers. The browser id -- unlike the browsing-
+  // context id -- survives cross-process navigations, which REPLACE the
+  // browsing context with a fresh id; the file makes the latch visible across
+  // the parent/content process split that the per-process dedup static alone
+  // cannot bridge.
   if (v2) {
     mozilla::dom::Document* gdoc = self->GetDocument();
     mozilla::dom::BrowsingContext* bc = gdoc ? gdoc->GetBrowsingContext() : nullptr;
@@ -318,13 +319,19 @@ static void NoobscapeInject(nsDocShell* self, nsIFile* file) {
       // silent (they lack chrome WebIDL and cannot reach WindowGlobalParent).
       // Among the parent's chrome docshells the per-process dedup below elects
       // one answerer; the payload targets the bound tab by id via
-      // BrowsingContext.get(bind.id).currentWindowGlobal.drawSnapshot(...).
+      // BrowsingContext.getCurrentTopByBrowserId(bind.id)
+      //   .currentWindowGlobal.drawSnapshot(...).
       if (!(bc->IsTop() && !bc->IsContent())) return;  // silent
     } else {
-    uint64_t myId = bc->Id();
+    // Browser id, not browsing-context id: a cross-process navigation
+    // REPLACES the browsing context (fresh id), and the pre-navigation page
+    // lingers in the bfcache with a live watcher. Gate on the tab's stable
+    // browser id and silence any context that no longer fronts the tab.
+    if (bc->IsDiscarded() || bc->IsInBFCache()) return;  // silent
+    uint64_t myId = bc->BrowserId();
     std::string boundStr = NoobscapeReadFile(NoobscapeBindIdPath());
     if (!boundStr.empty()) {
-      // Bound: only the top-level docshell whose id matches may answer.
+      // Bound: only the current top docshell of the latched tab may answer.
       uint64_t boundId = strtoull(boundStr.c_str(), nullptr, 10);
       if (!(bc->IsTop() && myId == boundId)) return;  // silent
     } else {

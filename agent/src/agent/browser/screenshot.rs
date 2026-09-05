@@ -154,8 +154,8 @@ if target.is_empty() {
   const done = (ok, err) => { try { IOUtils.writeUTF8(DIR + "/shot.out", JSON.stringify({ok: ok, err: err || ""})); } catch (e) {} };
   const withTimeout = (p, ms, label) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error("TIMEOUT " + label)), ms))]);
   try {
-    const bc = BrowsingContext.get(BINDID);
-    if (!bc) { done(false, "no browsing context " + BINDID); return "started"; }
+    const bc = BrowsingContext.getCurrentTopByBrowserId(BINDID);
+    if (!bc) { done(false, "no tab for browser id " + BINDID); return "started"; }
     const wgp = bc.currentWindowGlobal;
     if (!wgp) { done(false, "no currentWindowGlobal for " + BINDID); return "started"; }
     const rect = new DOMRect(0, 0, W, H);
