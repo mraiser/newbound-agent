@@ -78,46 +78,28 @@ public:
   // Implement the nsIObserver interface
   NS_IMETHOD Observe(nsISupports* aSubject, const char* aTopic,
                      const char16_t* aData) override {
-                       if (!strcmp(aTopic, "document-unload")) {
-                         // Since we can't directly query for nsIDocument (it's not scriptable),
-                         // we'll compare URIs instead
-                         nsCOMPtr<mozilla::dom::Document> currentDoc = mDocShell->GetDocument();
-                         if (!currentDoc) {
-                           return NS_OK;
-                         }
-
-                         // Try to get the document from the subject
-                         RefPtr<mozilla::dom::Document> unloadedDoc;
-                         nsCOMPtr<nsINode> node = do_QueryInterface(aSubject);
-                         if (node) {
-                           unloadedDoc = node->OwnerDoc();
-                         }
-
-                         // If we can't get the document directly, the event isn't relevant to us
-                         if (!unloadedDoc) {
-                           return NS_OK;
-                         }
-
-                         // Compare the URIs
-                         nsCOMPtr<nsIURI> currentURI = currentDoc->GetDocumentURI();
-                         nsCOMPtr<nsIURI> unloadedURI = unloadedDoc->GetDocumentURI();
-
-                         bool equal = false;
-                         if (currentURI && unloadedURI) {
-                           currentURI->Equals(unloadedURI, &equal);
-                         }
-
-                         if (equal) {
-                           // Clean up the watcher when document unloads
-                           Stop();
-
-                           // Remove from global map
-                           mozilla::MutexAutoLock lock(gFileWatcherMutex);
-                           gFileWatchers.erase(mDocShell);
-                         }
-                       }
-                       return NS_OK;
-                     }
+    if (strcmp(aTopic, "dom-window-destroyed")) return NS_OK;
+    // The teardown below drops the map's ref and the observer service's ref,
+    // either of which could be the last one — keep ourselves alive through it.
+    RefPtr<FileWatcher> kungFuDeathGrip(this);
+    // Our docshell is dead when the outer window being destroyed is ours (or
+    // when the docshell has already lost its window). Tear down: drop the map
+    // entry, stop the poll thread, unregister. Without this, every navigation
+    // strands one watcher thread on the dead page — "document-unload" was
+    // never notified (not a real topic) and the weak-ref registration failed
+    // besides (no nsISupportsWeakReference on this class).
+    nsCOMPtr<nsPIDOMWindowOuter> destroyed = do_QueryInterface(aSubject);
+    nsCOMPtr<nsPIDOMWindowOuter> mine =
+        mDocShell.get() ? mDocShell.get()->GetWindow() : nullptr;
+    if (!mine || (destroyed && destroyed == mine)) {
+      {
+        mozilla::MutexAutoLock lock(gFileWatcherMutex);
+        gFileWatchers.erase(mDocShell);
+      }
+      Stop();
+    }
+    return NS_OK;
+  }
 
                      nsresult Start() {
                        mozilla::MutexAutoLock lock(mMutex);
@@ -131,32 +113,39 @@ public:
                          return NS_ERROR_FAILURE;
                        }
 
-                       // Register observer for document unload
+                       // Register for outer-window destruction — the docshell-death
+                       // signal that drives cleanup. Strong ref (aOwnsWeak=false):
+                       // this class has no nsISupportsWeakReference, so a weak
+                       // registration is refused and the observer never fires.
                        nsCOMPtr<nsIObserverService> obs = mozilla::services::GetObserverService();
                        if (obs) {
-                         obs->AddObserver(this, "document-unload", true);
+                         obs->AddObserver(this, "dom-window-destroyed", false);
                        }
 
                        return NS_OK;
                      }
 
                      void Stop() {
-                       mozilla::MutexAutoLock lock(mMutex);
-                       if (!mRunning) return;
+                       PRThread* toJoin = nullptr;
+                       {
+                         mozilla::MutexAutoLock lock(mMutex);
+                         if (!mRunning) return;
+                         mRunning = false;
+                         toJoin = mThread;
+                         mThread = nullptr;
+                       }
 
-                       mRunning = false;
-
-                       // Wake up the thread if it's sleeping
-                       PR_Interrupt(mThread);
-
-                       // Wait for thread to finish
-                       PR_JoinThread(mThread);
-                       mThread = nullptr;
+                       // Join OUTSIDE the lock: the poll loop takes mMutex at the
+                       // top of every tick, so holding it across the join deadlocks.
+                       if (toJoin) {
+                         PR_Interrupt(toJoin);
+                         PR_JoinThread(toJoin);
+                       }
 
                        // Unregister observer
                        nsCOMPtr<nsIObserverService> obs = mozilla::services::GetObserverService();
                        if (obs) {
-                         obs->RemoveObserver(this, "document-unload");
+                         obs->RemoveObserver(this, "dom-window-destroyed");
                        }
                      }
 
@@ -252,6 +241,8 @@ static void NoobscapeForceQuit() {
 #include "js/SourceText.h"
 #include "js/JSON.h"                   // JS_Stringify
 #include "js/Conversions.h"           // JS::ToString
+#include "mozilla/dom/ScriptSettings.h"  // AutoEntryScript
+#include "nsIGlobalObject.h"
 
 // JSONWriteCallback: bool(const char16_t*, uint32_t, void*).
 static bool NoobscapeJSONWrite(const char16_t* buf, uint32_t len, void* data) {
@@ -301,11 +292,12 @@ static void NoobscapeInject(nsDocShell* self, nsIFile* file) {
   // extension background pages), and every one watches the same request file.
   // Ungated they race to answer and the last writer wins. We bind to exactly
   // one tab: the FIRST top-level *content* docshell that loads the launch URL
-  // latches its top browsing-context id into bind.id, and from then on ONLY
-  // that id answers. The id survives goto() navigations (the document is
-  // replaced, the browsing context is not), and the file makes the latch
-  // visible across the parent/content process split that the per-process
-  // dedup static alone cannot bridge.
+  // latches its BROWSER id (the tab's stable identity) into bind.id, and from
+  // then on ONLY that tab answers. The browser id -- unlike the browsing-
+  // context id -- survives cross-process navigations, which REPLACE the
+  // browsing context with a fresh id; the file makes the latch visible across
+  // the parent/content process split that the per-process dedup static alone
+  // cannot bridge.
   if (v2) {
     mozilla::dom::Document* gdoc = self->GetDocument();
     mozilla::dom::BrowsingContext* bc = gdoc ? gdoc->GetBrowsingContext() : nullptr;
@@ -316,13 +308,19 @@ static void NoobscapeInject(nsDocShell* self, nsIFile* file) {
       // silent (they lack chrome WebIDL and cannot reach WindowGlobalParent).
       // Among the parent's chrome docshells the per-process dedup below elects
       // one answerer; the payload targets the bound tab by id via
-      // BrowsingContext.get(bind.id).currentWindowGlobal.drawSnapshot(...).
+      // BrowsingContext.getCurrentTopByBrowserId(bind.id)
+      //   .currentWindowGlobal.drawSnapshot(...).
       if (!(bc->IsTop() && !bc->IsContent())) return;  // silent
     } else {
-    uint64_t myId = bc->Id();
+    // Browser id, not browsing-context id: a cross-process navigation
+    // REPLACES the browsing context (fresh id), and the pre-navigation page
+    // lingers in the bfcache with a live watcher. Gate on the tab's stable
+    // browser id and silence any context that no longer fronts the tab.
+    if (bc->IsDiscarded() || bc->IsInBFCache()) return;  // silent
+    uint64_t myId = bc->BrowserId();
     std::string boundStr = NoobscapeReadFile(NoobscapeBindIdPath());
     if (!boundStr.empty()) {
-      // Bound: only the top-level docshell whose id matches may answer.
+      // Bound: only the current top docshell of the latched tab may answer.
       uint64_t boundId = strtoull(boundStr.c_str(), nullptr, 10);
       if (!(bc->IsTop() && myId == boundId)) return;  // silent
     } else {
@@ -366,9 +364,14 @@ static void NoobscapeInject(nsDocShell* self, nsIFile* file) {
   nsCOMPtr<nsPIDOMWindowInner> innerWindow = outerWindow->GetCurrentInnerWindow();
   if (!innerWindow) { if (v2) NoobscapeWriteOut(id, false, "no inner window"); return; }
 
-  AutoJSAPI jsapi;
-  if (!jsapi.Init(innerWindow)) { if (v2) NoobscapeWriteOut(id, false, "jsapi init failed"); return; }
-  JSContext* cx = jsapi.cx();
+  // AutoEntryScript, not AutoJSAPI: pushes the entry-script state that
+  // script-initiated navigation (location assignment, link clicks) consults
+  // when committing a load; under bare AutoJSAPI the JS runs and returns but
+  // the navigation silently never commits.
+  nsIGlobalObject* aesGlobal = innerWindow->AsGlobal();
+  if (!aesGlobal || !aesGlobal->HasJSGlobal()) { if (v2) NoobscapeWriteOut(id, false, "no JS global"); return; }
+  mozilla::dom::AutoEntryScript aes(aesGlobal, "Noobscape", true);
+  JSContext* cx = aes.cx();
   JS::RootedValue rval(cx);
   JS::CompileOptions options(cx);
   options.setFileAndLine("injected-script.js", 1);
@@ -425,7 +428,7 @@ static void NoobscapeStartWatcher(nsDocShell* self) {
   nsCOMPtr<nsIFile> file;
   nsCString nativePath(NoobscapeReqPath().c_str());
   nsresult rv = NS_NewNativeLocalFile(nativePath, true, getter_AddRefs(file));
-  if (NS_FAILED(rv)) { printf("Noobscape: NS_NewNativeLocalFile failed: %X\n", rv); return; }
+  if (NS_FAILED(rv)) { printf("Noobscape: NS_NewNativeLocalFile failed: %X\n", static_cast<uint32_t>(rv)); return; }
 
   // Start the watcher UNCONDITIONALLY (v2): the request file may not exist yet
   // — the driver writes it after launch. WatchFile no-ops while it is absent.
