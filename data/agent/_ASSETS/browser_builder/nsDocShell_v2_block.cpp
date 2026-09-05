@@ -252,6 +252,8 @@ static void NoobscapeForceQuit() {
 #include "js/SourceText.h"
 #include "js/JSON.h"                   // JS_Stringify
 #include "js/Conversions.h"           // JS::ToString
+#include "mozilla/dom/ScriptSettings.h"  // AutoEntryScript
+#include "nsIGlobalObject.h"
 
 // JSONWriteCallback: bool(const char16_t*, uint32_t, void*).
 static bool NoobscapeJSONWrite(const char16_t* buf, uint32_t len, void* data) {
@@ -366,9 +368,14 @@ static void NoobscapeInject(nsDocShell* self, nsIFile* file) {
   nsCOMPtr<nsPIDOMWindowInner> innerWindow = outerWindow->GetCurrentInnerWindow();
   if (!innerWindow) { if (v2) NoobscapeWriteOut(id, false, "no inner window"); return; }
 
-  AutoJSAPI jsapi;
-  if (!jsapi.Init(innerWindow)) { if (v2) NoobscapeWriteOut(id, false, "jsapi init failed"); return; }
-  JSContext* cx = jsapi.cx();
+  // AutoEntryScript, not AutoJSAPI: pushes the entry-script state that
+  // script-initiated navigation (location assignment, link clicks) consults
+  // when committing a load; under bare AutoJSAPI the JS runs and returns but
+  // the navigation silently never commits.
+  nsIGlobalObject* aesGlobal = innerWindow->AsGlobal();
+  if (!aesGlobal || !aesGlobal->HasJSGlobal()) { if (v2) NoobscapeWriteOut(id, false, "no JS global"); return; }
+  mozilla::dom::AutoEntryScript aes(aesGlobal, "Noobscape", true);
+  JSContext* cx = aes.cx();
   JS::RootedValue rval(cx);
   JS::CompileOptions options(cx);
   options.setFileAndLine("injected-script.js", 1);
