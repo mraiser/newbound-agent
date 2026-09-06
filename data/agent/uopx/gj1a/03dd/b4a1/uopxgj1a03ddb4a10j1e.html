@@ -25,15 +25,20 @@
     <ol class="nbld-steps">
       <li data-step="materialize"><span class="dot"></span><span class="lbl">Materialize kit</span><button class="nbld-btn sm" data-act="stage" data-stage="materialize">Run</button></li>
       <li data-step="extract"><span class="dot"></span><span class="lbl">Download &amp; extract source</span><span class="grp"><button class="nbld-btn sm" data-act="stage" data-stage="download">Download</button><button class="nbld-btn sm" data-act="stage" data-stage="extract">Extract</button></span></li>
-      <li data-step="patched"><span class="dot"></span><span class="lbl">Patch (v2 nsDocShell mechanism)</span><button class="nbld-btn sm" data-act="stage" data-stage="patch">Run</button></li>
+      <li data-step="patched"><span class="dot"></span><span class="lbl">Patch (v2 nsDocShell mechanism)</span><span class="grp"><button class="nbld-btn sm" data-act="stage" data-stage="patch">Patch</button><button class="nbld-btn sm" data-act="stage" data-stage="repatch" title="Restore the pristine nsDocShell.cpp, then apply the current v2 block">Re-patch</button></span></li>
       <li data-step="deps"><span class="dot"></span><span class="lbl">Install build deps (mach bootstrap)</span><button class="nbld-btn sm" data-act="stage" data-stage="deps">Run</button></li>
       <li data-step="built"><span class="dot"></span><span class="lbl">Build Firefox</span><button class="nbld-btn sm" data-act="stage" data-stage="build">Run</button></li>
     </ol>
+    <div class="nbld-stagemsg"></div>
+    <div class="nbld-update">
+      <div class="nbld-update-text"><b>Mechanism updated?</b> <span>After a new <code>nsDocShell_v2_block.cpp</code> lands, <i>Patch</i> alone is a no-op on an already-patched tree. This restores the pristine source, applies the current block, and runs an incremental build (minutes). Then install below.</span></div>
+      <button class="nbld-btn accent" data-act="stage" data-stage="rebuild">Re-patch &amp; rebuild</button>
+    </div>
   </div>
 
   <div class="nbld-card">
     <h2>3 &middot; Install</h2>
-    <p class="nbld-note">Point <code>NOOBSCAPE_BIN</code> at the built browser. <b>Symlink</b> is the light default; <b>copy</b> clones the whole <code>dist/bin</code> so it survives cleaning the workspace.</p>
+    <p class="nbld-note">Point <code>NOOBSCAPE_BIN</code> at the built browser. <b>Symlink</b> is the light default; <b>copy</b> clones the whole <code>dist/bin</code> so it survives cleaning the workspace. Close any open <code>agent.browser</code> session first so it picks up the new libxul.</p>
     <div class="nbld-install">
       <label class="inline"><input type="radio" name="nbmode" value="symlink" checked> symlink</label>
       <label class="inline"><input type="radio" name="nbmode" value="copy"> copy</label>

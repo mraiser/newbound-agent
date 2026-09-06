@@ -6,6 +6,10 @@ me.loaded = false;
 function U(r){ return (r && typeof r === 'object' && r.data) ? r.data : r; }
 function $f(sel){ return $(ME).find(sel); }
 
+// Stages that run inline (a text edit) and return their result directly;
+// everything else launches detached and is followed in the monitor.
+var SYNC_STAGES = { materialize: 1, patch: 1, repatch: 1 };
+
 me.ready = function(){
   $(ME).on('click', '[data-act]', function(){
     var act = $(this).attr('data-act');
@@ -45,6 +49,16 @@ me.mark = function(step, done){
   if (done) li.addClass('done'); else li.removeClass('done');
 };
 
+// The stage message line: every stage answers here, ok or err, so a
+// silent no-op (patch answering `already`) can never look like a click
+// that did nothing. kind: ok | warn | err.
+me.stageMsg = function(text, kind){
+  var el = $f('.nbld-stagemsg');
+  el.removeClass('ok warn err');
+  if (!text){ el.text('').hide(); return; }
+  el.addClass(kind || 'ok').text(text).show();
+};
+
 me.updateMonitor = function(running, stage, pid, lastExit, log){
   $f('.nbld-run').toggle(!!running).text(running ? 'running' : '');
   $f('[data-act="stop"]').toggle(!!running);
@@ -67,7 +81,15 @@ me.startPoll = function(){
       var d = U(r);
       if (!d) return;
       me.updateMonitor(d.running, d.stage, d.pid, d.last_exit, d.log_tail);
-      if (!d.running){ me.stopPoll(); me.refresh(); }
+      if (!d.running){
+        me.stopPoll();
+        var ex = d.last_exit;
+        if (ex !== '' && ex != null){
+          if (String(ex) === '0') me.stageMsg('stage ' + (d.stage||'') + ' finished (exit 0).', 'ok');
+          else me.stageMsg('stage ' + (d.stage||'') + ' failed (exit ' + ex + ') - see the build log.', 'err');
+        }
+        me.refresh();
+      }
     });
   }, 2500);
 };
@@ -97,12 +119,21 @@ me.saveConfig = function(btn){
 
 me.runStage = function(stage, btn){
   $(btn).prop('disabled', true);
+  me.stageMsg('running ' + stage + '…', 'ok');
   var done = function(r){
     $(btn).prop('disabled', false);
-    var d = U(r);
-    if (d && d.status === 'err'){ alert('Noobscape: ' + (d.msg || 'stage failed')); }
+    var d = U(r) || {};
+    if (d.status === 'err'){
+      me.stageMsg(stage + ': ' + (d.msg || 'stage failed'), 'err');
+    } else if (stage === 'patch' && d.action === 'already'){
+      me.stageMsg('Source already carries the mechanism - nothing changed. If the v2 block was updated, use Re-patch (or Re-patch & rebuild).', 'warn');
+    } else if (stage === 'materialize'){
+      me.stageMsg('Build kit materialized from the library assets.', 'ok');
+    } else {
+      me.stageMsg(d.msg || (stage + ': ok'), 'ok');
+    }
     me.refresh();
-    if (stage !== 'materialize' && stage !== 'patch') me.startPoll();
+    if (d.status !== 'err' && !SYNC_STAGES[stage]) me.startPoll();
   };
   if (stage === 'materialize') send_materialize_kit(done);
   else send_run_stage(stage, done);
@@ -126,6 +157,7 @@ me.stopBuild = function(btn){
   send_stop_build(function(r){
     $(btn).prop('disabled', false);
     me.stopPoll();
+    me.stageMsg('build stopped.', 'warn');
     me.refresh();
   });
 };

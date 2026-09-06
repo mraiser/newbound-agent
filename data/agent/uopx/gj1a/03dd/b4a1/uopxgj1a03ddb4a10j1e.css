@@ -28,6 +28,15 @@
 .nbld-steps .dot{width:11px;height:11px;border-radius:50%;background:#3a4653;flex:none;box-shadow:0 0 0 3px #12171d}
 .nbld-steps li.done .dot{background:#4caf7d}
 .nbld-steps li.done .lbl{color:#8fb7a3}
+.nbld-stagemsg{display:none;margin-top:10px;padding:8px 10px;border-radius:6px;font-size:12.5px;font-family:ui-monospace,Menlo,monospace;white-space:pre-wrap;background:#0e1319;border:1px solid #2b3644;color:#a8c7a8}
+.nbld-stagemsg.ok{color:#7fd18f;border-color:#2f5a3a}
+.nbld-stagemsg.warn{color:#e6c07b;border-color:#6a5a2a}
+.nbld-stagemsg.err{color:#e08a8a;border-color:#6a2f2f}
+.nbld-update{display:flex;align-items:center;gap:14px;margin-top:14px;padding:12px;border-radius:8px;background:#1b2330;border:1px dashed #3a4a60}
+.nbld-update-text{flex:1;font-size:12.5px;color:#9aa4ad}
+.nbld-update-text b{color:#cfe3ff}
+.nbld-btn.accent{background:#b8860b;color:#111;margin-top:0;white-space:nowrap}
+.nbld-btn.accent:hover{background:#d19a12}
 .nbld-install{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
 .nbld-install label.inline{display:inline-flex;align-items:center;gap:5px;font-size:13px;color:#cfd6dd}
 .nbld-run{font-size:12px;color:#111;background:#e6b800;border-radius:10px;padding:2px 9px;font-weight:600;vertical-align:middle}
