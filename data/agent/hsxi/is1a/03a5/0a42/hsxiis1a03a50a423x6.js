@@ -5,7 +5,7 @@
 // the board's hash as concurrency token — stale_base means someone else
 // wrote kb.plan since we loaded, so we reload and ask again.
 var me = this;
-var ME = $('#' + me.UUID)[0];
+var ME = document.getElementById(me.UUID);
 
 var LIFECYCLES = ['proposed', 'accepted', 'in-progress', 'done', 'abandoned'];
 var boardHash = '';

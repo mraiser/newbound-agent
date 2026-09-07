@@ -196,7 +196,9 @@
   </main>
 </section>
 <div class="data-control" data-control="app:tokens" hidden></div>
-<div class="data-control" data-control="dev:viewctx" hidden></div>
+<!-- the page's ONE viewctx registry (.nb-viewctx — the class consumers
+     resolve); memory rides agentloop's own child mount, so it is not
+     mounted again here -->
+<div class="nb-viewctx data-control" data-control="dev:viewctx" hidden></div>
 <div class="data-control" data-control="agent:agentloop" hidden></div>
 <div class="data-control" data-control="agent:agentprompt" hidden></div>
-<div class="data-control" data-control="agent:memory" hidden></div>

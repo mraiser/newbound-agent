@@ -7,19 +7,22 @@
 // agent-flavored — prompts, tool defs, gating vocabulary, the archivist,
 // config hints — stays on this side of the graft; dev names nothing.
 var me = this;
-var ME = $('#' + me.UUID)[0];
+var ME = document.getElementById(me.UUID);
 
 me.ready = async function () {
-  var up = $(ME).parent();
-  while (up[0] && !up[0].api) up = up.parent();
-  const notebook = up[0] ? up[0].api : null;
+  var up = ME.parentElement;
+  while (up && !up.api) up = up.parentElement;
+  const notebook = up ? up.api : null;
   if (!notebook || !notebook.pushCell) {
     console.warn("askrow: no notebook api above the graft point — not wiring");
     return;
   }
-  const { viewctx } = window.NB_VIEWCTX;
-  const loop = window.NB_AGENTLOOP;
-  const promptMod = window.NB_AGENTPROMPT;
+  // zero-globals doctrine: the registry is the PAGE's .nb-viewctx mount
+  // (the frame's, on the bench this grafts into); the libraries ride
+  // this control's own child mounts (ready before this fires).
+  const viewctx = document.querySelector(".nb-viewctx").api;
+  const loop = ME.querySelector('[data-control="agent:agentloop"]').api;
+  const promptMod = ME.querySelector('[data-control="agent:agentprompt"]').api;
   const jsonP = (c2, v2) => new Promise((res2) => json(c2, v2, res2));
   const invokeP = (l2, c2, m2, a2) => new Promise((res2) => invokeCommand(l2, c2, m2, a2, res2));
   const invoke = async (l2, c2, m2, a2) => {
