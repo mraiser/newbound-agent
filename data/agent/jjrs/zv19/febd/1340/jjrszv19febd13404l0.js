@@ -9,12 +9,14 @@
 // nb-command-meta event; this control injects the generate button and
 // drives agent.plugin.describe_command.
 var me = this;
-var ME = $('#' + me.UUID)[0];
+var ME = document.getElementById(me.UUID);
 
 me.ready = async function () {
   var host = ME.parentElement;
   if (!host) return;
-  const loop = window.NB_AGENTLOOP;
+  // zero-globals doctrine: agentloop rides this control's own child
+  // mount, ready before this fires; its api rides its element.
+  const loop = ME.querySelector('[data-control="agent:agentloop"]').api;
   const invokeP = (l2, c2, m2, a2) => new Promise((res2) => invokeCommand(l2, c2, m2, a2, res2));
   const readCommand = async (l2, c2, m2) => {
     const r2 = await invokeP("dev", "code", "read_command", { lib: l2, ctl: c2, cmd: m2 });

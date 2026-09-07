@@ -1,23 +1,27 @@
 var me = this;
-var ME = $('#' + me.UUID)[0];
+var ME = document.getElementById(me.UUID);
 me.pollTimer = null;
 me.loaded = false;
 
 function U(r){ return (r && typeof r === 'object' && r.data) ? r.data : r; }
-function $f(sel){ return $(ME).find(sel); }
+function $f(sel){ return ME.querySelector(sel); }
+function $fa(sel){ return Array.from(ME.querySelectorAll(sel)); }
+function show(el, on){ if (el) el.style.display = on ? '' : 'none'; }
 
 // Stages that run inline (a text edit) and return their result directly;
 // everything else launches detached and is followed in the monitor.
 var SYNC_STAGES = { materialize: 1, patch: 1, repatch: 1 };
 
 me.ready = function(){
-  $(ME).on('click', '[data-act]', function(){
-    var act = $(this).attr('data-act');
+  ME.addEventListener('click', function(e){
+    var btn = e.target.closest('[data-act]');
+    if (!btn || !ME.contains(btn)) return;
+    var act = btn.getAttribute('data-act');
     if (act === 'refresh')      me.refresh();
-    else if (act === 'saveconfig') me.saveConfig(this);
-    else if (act === 'stage')   me.runStage($(this).attr('data-stage'), this);
-    else if (act === 'install') me.doInstall(this);
-    else if (act === 'stop')    me.stopBuild(this);
+    else if (act === 'saveconfig') me.saveConfig(btn);
+    else if (act === 'stage')   me.runStage(btn.getAttribute('data-stage'), btn);
+    else if (act === 'install') me.doInstall(btn);
+    else if (act === 'stop')    me.stopBuild(btn);
   });
   me.refresh();
 };
@@ -28,9 +32,9 @@ me.refresh = function(){
     if (!d || d.status !== 'ok'){ return; }
     var c = d.config || {};
     // Populate config inputs (skip any the user is currently editing).
-    $f('input[data-cfg]').each(function(){
-      var k = $(this).attr('data-cfg');
-      if (!me.loaded || this !== document.activeElement){ this.value = c[k] || ''; }
+    $fa('input[data-cfg]').forEach(function(el){
+      var k = el.getAttribute('data-cfg');
+      if (!me.loaded || el !== document.activeElement){ el.value = c[k] || ''; }
     });
     me.loaded = true;
     // Step dots.
@@ -46,7 +50,7 @@ me.refresh = function(){
 
 me.mark = function(step, done){
   var li = $f('li[data-step="' + step + '"]');
-  if (done) li.addClass('done'); else li.removeClass('done');
+  if (li) li.classList.toggle('done', !!done);
 };
 
 // The stage message line: every stage answers here, ok or err, so a
@@ -54,20 +58,25 @@ me.mark = function(step, done){
 // that did nothing. kind: ok | warn | err.
 me.stageMsg = function(text, kind){
   var el = $f('.nbld-stagemsg');
-  el.removeClass('ok warn err');
-  if (!text){ el.text('').hide(); return; }
-  el.addClass(kind || 'ok').text(text).show();
+  if (!el) return;
+  el.classList.remove('ok', 'warn', 'err');
+  if (!text){ el.textContent = ''; show(el, false); return; }
+  el.classList.add(kind || 'ok');
+  el.textContent = text;
+  show(el, true);
 };
 
 me.updateMonitor = function(running, stage, pid, lastExit, log){
-  $f('.nbld-run').toggle(!!running).text(running ? 'running' : '');
-  $f('[data-act="stop"]').toggle(!!running);
+  var run = $f('.nbld-run');
+  show(run, !!running);
+  if (run) run.textContent = running ? 'running' : '';
+  show($f('[data-act="stop"]'), !!running);
   var s = '';
   if (running) s = 'stage: ' + (stage||'?') + '  (pid ' + (pid||'?') + ')';
   else if (stage) s = 'last stage: ' + stage + (lastExit !== '' && lastExit != null ? '  → exit ' + lastExit : '');
-  $f('.nbld-stage').text(s);
+  $f('.nbld-stage').textContent = s;
   if (log != null && log !== '') {
-    var pre = $f('.nbld-log')[0];
+    var pre = $f('.nbld-log');
     var atBottom = pre.scrollHeight - pre.scrollTop - pre.clientHeight < 40;
     pre.textContent = log;
     if (atBottom) pre.scrollTop = pre.scrollHeight;
@@ -96,32 +105,34 @@ me.startPoll = function(){
 me.stopPoll = function(){ if (me.pollTimer){ clearInterval(me.pollTimer); me.pollTimer = null; } };
 
 me.saveConfig = function(btn){
-  var inputs = $f('input[data-cfg]').toArray();
-  var msg = $f('.nbld-cfgmsg').text('Saving…').css('color', '#7fd18f');
-  $(btn).prop('disabled', true);
+  var inputs = $fa('input[data-cfg]');
+  var msg = $f('.nbld-cfgmsg');
+  msg.textContent = 'Saving…';
+  msg.style.color = '#7fd18f';
+  btn.disabled = true;
   var i = 0;
   (function next(){
     if (i >= inputs.length){
-      $(btn).prop('disabled', false);
-      msg.text('Saved.');
-      setTimeout(function(){ msg.text(''); }, 2500);
+      btn.disabled = false;
+      msg.textContent = 'Saved.';
+      setTimeout(function(){ msg.textContent = ''; }, 2500);
       me.refresh();
       return;
     }
     var el = inputs[i++];
-    send_set_config($(el).attr('data-cfg'), el.value.trim(), function(r){
+    send_set_config(el.getAttribute('data-cfg'), el.value.trim(), function(r){
       var d = U(r);
-      if (d && d.status === 'err'){ msg.text(d.msg || 'error').css('color', '#e08a8a'); }
+      if (d && d.status === 'err'){ msg.textContent = d.msg || 'error'; msg.style.color = '#e08a8a'; }
       next();
     });
   })();
 };
 
 me.runStage = function(stage, btn){
-  $(btn).prop('disabled', true);
+  btn.disabled = true;
   me.stageMsg('running ' + stage + '…', 'ok');
   var done = function(r){
-    $(btn).prop('disabled', false);
+    btn.disabled = false;
     var d = U(r) || {};
     if (d.status === 'err'){
       me.stageMsg(stage + ': ' + (d.msg || 'stage failed'), 'err');
@@ -140,22 +151,25 @@ me.runStage = function(stage, btn){
 };
 
 me.doInstall = function(btn){
-  var mode = $f('input[name="nbmode"]:checked').val() || 'symlink';
-  var msg = $f('.nbld-installmsg').text('Installing…').css('color', '#7fd18f');
-  $(btn).prop('disabled', true);
+  var checked = ME.querySelector('input[name="nbmode"]:checked');
+  var mode = checked ? checked.value : 'symlink';
+  var msg = $f('.nbld-installmsg');
+  msg.textContent = 'Installing…';
+  msg.style.color = '#7fd18f';
+  btn.disabled = true;
   send_install(mode, function(r){
-    $(btn).prop('disabled', false);
+    btn.disabled = false;
     var d = U(r);
-    if (d && d.status === 'ok'){ msg.text(d.msg || 'installed').css('color', '#7fd18f'); }
-    else { msg.text((d && d.msg) || 'install failed').css('color', '#e08a8a'); }
+    if (d && d.status === 'ok'){ msg.textContent = d.msg || 'installed'; msg.style.color = '#7fd18f'; }
+    else { msg.textContent = (d && d.msg) || 'install failed'; msg.style.color = '#e08a8a'; }
     me.refresh();
   });
 };
 
 me.stopBuild = function(btn){
-  $(btn).prop('disabled', true);
+  btn.disabled = true;
   send_stop_build(function(r){
-    $(btn).prop('disabled', false);
+    btn.disabled = false;
     me.stopPoll();
     me.stageMsg('build stopped.', 'warn');
     me.refresh();
