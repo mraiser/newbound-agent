@@ -1,4 +1,4 @@
-<!-- module dependencies ride the graft as children — activated before
-     me.ready fires; registration is idempotent across consumers -->
+<!-- library dependency rides the graft as a child — activated before
+     me.ready fires; its api rides its own element (memory rides
+     agentloop's child mount) -->
 <div class="data-control" data-control="agent:agentloop" hidden></div>
-<div class="data-control" data-control="agent:memory" hidden></div>
