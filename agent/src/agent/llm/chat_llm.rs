@@ -521,7 +521,13 @@ fn parse_openai(root: &DataObject, arm: &str) -> Result<DataObject, DataObject> 
                         for (i, c) in calls.objects().iter().enumerate() {
                             let c = c.object();
                             let f = c.get_object("function");
-                            let id = if c.has("id") { c.get_string("id") } else { format!("call_{}", i) };
+                            // Kimi intermittently returns "id": "" - blank is absent, or the
+                            // echoed tool_call_id "" 400s on the next request. Millis seed keeps
+                            // synthesized ids unique across turns for strict validators.
+                            let id = match c.try_get_string("id") {
+                                Ok(s) if !s.trim().is_empty() => s,
+                                _ => format!("call_{}_{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis(), i),
+                            };
                             raw.push((id, f.get_string("name"),
                                       args_to_string(&f.get_property("arguments")),
                                       String::new()));
