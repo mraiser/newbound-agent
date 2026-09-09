@@ -1,0 +1,1 @@
+{"data":{"list":[{"author":"agent","facet":"js","label":"de-jQuery: vanilla ME lookup","new":"var me = this;\nvar ME = document.getElementById(me.UUID);","old":"var me = this;\nvar ME = $('#' + me.UUID)[0];","patch_id":"p1","time":1788784442000}]},"id":"gynpol19ee599c907y152d_patches","readers":[],"time":1788784442000,"username":"system","writers":[]}

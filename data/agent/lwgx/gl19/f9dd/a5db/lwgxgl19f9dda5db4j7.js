@@ -7,19 +7,13 @@
 //
 // Keep it a plain template literal. Empty string = no addendum.
 //
-// LIBRARY control — headless: defines window.NB_AGENTPROMPT once (idempotent across
-// installs). Consumers list this control as a hidden data-control child
-// div and use the global from their ready.
+// LIBRARY control — headless: the api rides this control's own element
+// (zero-globals doctrine; el.api IS this constructor object). Consumers
+// mount it as a hidden data-control child div and read the element's api.
 
 var me = this;
 var ME = document.getElementById(me.UUID);
 
-me.ready = function () {
-  if (window.NB_AGENTPROMPT) return;
-  window.NB_AGENTPROMPT = (function () {
-
 const ADDENDUM = ``;
 
-    return { ADDENDUM };
-  })();
-};
+Object.assign(me, { ADDENDUM });

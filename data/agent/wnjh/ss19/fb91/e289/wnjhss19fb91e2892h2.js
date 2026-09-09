@@ -12,9 +12,13 @@ var me = this;
 var ME = document.getElementById(me.UUID);
 
 var readyP = new Promise(function (res) { me.ready = res; }).then(async () => {
-  const { viewctx } = window.NB_VIEWCTX;
-  const agent = window.NB_AGENTLOOP;
-  const { ADDENDUM } = window.NB_AGENTPROMPT;
+  // zero-globals doctrine: the libraries ride this control's own child
+  // mounts — descendants, so ready strictly before this runs (el.api IS
+  // each child's constructor object). The viewctx mount carries the
+  // page's .nb-viewctx registry class.
+  const viewctx = ME.querySelector(".nb-viewctx").api;
+  const agent = ME.querySelector('[data-control="agent:agentloop"]').api;
+  const { ADDENDUM } = ME.querySelector('[data-control="agent:agentprompt"]').api;
   const jsonP = (c2, v2) => new Promise((res2) => json(c2, v2, res2));
   const invokeP = (l2, c2, m2, a2) => new Promise((res2) => invokeCommand(l2, c2, m2, a2, res2));
   const invoke = async (l2, c2, m2, a2) => {

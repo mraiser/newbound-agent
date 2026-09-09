@@ -21,16 +21,18 @@
 // generic by-name surface; resolution failures come back as err envelopes
 // (never throws), so callers branch on status only.
 //
-// LIBRARY control — headless: defines window.NB_AGENTLOOP once (idempotent across
-// installs). Consumers list this control as a hidden data-control child
-// div and use the global from their ready.
+// LIBRARY control — headless: the api rides this control's own element
+// (zero-globals doctrine; el.api IS this constructor object). Consumers
+// mount it as a hidden data-control child div and read the element's api
+// from their ready. Dependencies are child mounts — memory rides this
+// control's own html, ready before this ready fires.
 
 var me = this;
 var ME = document.getElementById(me.UUID);
 
 me.ready = function () {
-  if (window.NB_AGENTLOOP) return;
-  const { packFor, ready: memoryReady } = window.NB_MEMORY;
+  const { packFor, indexReady: memoryReady } =
+    ME.querySelector('[data-control="agent:memory"]').api;
   const jsonP = (c2, v2) => new Promise((res2) => json(c2, v2, res2));
   const invokeP = (l2, c2, m2, a2) => new Promise((res2) => invokeCommand(l2, c2, m2, a2, res2));
   const invoke = async (l2, c2, m2, a2) => {
@@ -40,7 +42,6 @@ me.ready = function () {
   };
   const code = (m2, a2) => invokeP("dev", "code", m2, a2);
   const readFacet = (l2, c2, f2) => code("read_control_facet", { lib: l2, ctl: c2, facet: f2 });
-  window.NB_AGENTLOOP = (function () {
 
 async function agentCall(ctl, cmd, args) {
   const r = await invoke("agent", ctl, cmd, args);
@@ -437,6 +438,5 @@ async function chatTurn({ messages, tools, execTool, onRound }) {
   return "(stopped: the agent used its whole tool budget without a final answer)";
 }
 
-    return { listTools, chatLlm, describeCommand, logTurn, errorHint, MAX_ROUNDS, SYSTEM_PROMPT, corePrompt, TOOLS_PROMPT, contextBlock, clamp, toolDefs, DEFAULT_TOOLS, META_TOOL_DEFS, gateFor, schemaComplaints, searchCatalog, parseToolName, chatTurn };
-  })();
+  Object.assign(me, { listTools, chatLlm, describeCommand, logTurn, errorHint, MAX_ROUNDS, SYSTEM_PROMPT, corePrompt, TOOLS_PROMPT, contextBlock, clamp, toolDefs, DEFAULT_TOOLS, META_TOOL_DEFS, gateFor, schemaComplaints, searchCatalog, parseToolName, chatTurn });
 };
