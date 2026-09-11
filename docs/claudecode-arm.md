@@ -136,7 +136,8 @@ They also appear in the mind tab's config card.
 | `CLAUDE_CODE_PERMISSION_MODE` | *(none)* | `--permission-mode`, e.g. `bypassPermissions` for an unattended delegate. |
 | `CLAUDE_CODE_TOOLS` | *(empty = built-ins OFF)* | `default` restores the built-in toolset; or name them (`Bash,Read`). MCP tools are unaffected. |
 | `CLAUDE_CODE_CWD` | *(server's cwd)* | Working directory for the delegate. |
-| `CLAUDE_CODE_TIMEOUT` | `600` | Seconds before the whole process tree is killed and the failure reported. |
+| `CLAUDE_CODE_TIMEOUT` | `600` | Hard wall clock: seconds before the whole process tree is killed and the failure reported, however busy it is. |
+| `CLAUDE_CODE_IDLE_TIMEOUT` | `1200` | Idle clock: seconds of silence before the tree is killed. The CLI streams one JSON line per event (`--output-format stream-json`), so a turn making progress resets this on every model message and tool result. Must exceed the longest single tool call (Bash caps at 600 s), which emits nothing while it runs. |
 | `CLAUDE_CODE_ARGS` | *(none)* | Extra whitespace-split argv (no spaces inside a value). |
 | `CLAUDE_CODE_ALLOW_API_KEY` | `off` | `on` lets an inherited `ANTHROPIC_API_KEY` through (bills credits). |
 
@@ -178,10 +179,17 @@ arm with judgment is, after all, what the escalation lane is for.
 - **"returned no JSON"** — usually a login prompt or usage-limit
   notice; the error includes stderr's tail, which says which. Run
   `claude` interactively once on the box to log in.
-- **Timeouts on real agentic turns** — raise `CLAUDE_CODE_TIMEOUT`;
-  a full-agent turn editing code legitimately takes minutes. The
-  timeout path kills the whole process group, so no orphans
-  accumulate either way.
+- **Timeouts on real agentic turns** — the error says which clock
+  fired. `no answer in Ns (wall clock)` means the turn was still
+  working when `CLAUDE_CODE_TIMEOUT` ran out: raise it (the owner box
+  runs 14400), and remember that anything the delegate leaves running
+  detached survives the kill while its reply does not — long jobs
+  belong in detached processes with a status command, not inside one
+  turn. `silent for Ns after K events (idle)` means the delegate
+  stopped producing events: a hung tool call or a stalled model
+  request; raise `CLAUDE_CODE_IDLE_TIMEOUT` only if a legitimate
+  single tool call runs that long. Either path kills the whole
+  process group, so no orphans accumulate.
 - **Answers feel expensive** — check `CLAUDE_CODE_SYSTEM_MODE`; you
   are probably paying for the full Claude Code prompt on calls that
   only needed the oracle posture.

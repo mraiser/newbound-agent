@@ -129,7 +129,10 @@ if !opt(&meta, "CLAUDE_CODE_MCP", "").is_empty()
 let bin = opt(&meta, "CLAUDE_CODE_BIN", "claude");
 let mut args: Vec<String> = vec![
     "-p".to_string(),
-    "--output-format".to_string(), "json".to_string(),
+    // stream-json (which --print requires --verbose for) emits one JSON line
+    // per event as the turn runs; the idle clock below lives on those lines.
+    // The final event is the same result object --output-format json prints.
+    "--output-format".to_string(), "stream-json".to_string(), "--verbose".to_string(),
     // A bridge call is stateless; persisting every turn would litter the
     // user's /resume picker with machine traffic.
     "--no-session-persistence".to_string(),
@@ -201,37 +204,87 @@ if let Some(mut si) = child.stdin.take() {
 }   // dropped here: stdin closes, which is what makes -p start work
 
 let pid = child.id();
-let secs = opt(&meta, "CLAUDE_CODE_TIMEOUT", "600").parse::<u64>().unwrap_or(600);
-let (tx, rx) = channel();
-thread::spawn(move || { let _ = tx.send(child.wait_with_output()); });
-let out = match rx.recv_timeout(Duration::from_secs(secs)) {
-    Ok(Ok(o)) => o,
-    Ok(Err(e)) => return err_out(&format!("claude_code: reading the answer failed: {}", e)),
-    Err(_) => {
-        // Nothing else would ever reap it: an agent loop blocked forever is
-        // worse than a reported failure.
-        // A NEGATIVE pid signals the whole group (see process_group above).
-        // `--` is REQUIRED: /bin/kill is not the shell builtin and parses a
-        // bare `-1234` as options, silently leaving the tree running.
-        #[cfg(unix)]
-        let _ = Command::new("kill").arg("-9").arg("--").arg(format!("-{}", pid)).status();
-        #[cfg(not(unix))]
-        let _ = Command::new("kill").arg("-9").arg(pid.to_string()).status();
-        return err_out(&format!("claude_code: no answer in {}s, killed pid {} (raise CLAUDE_CODE_TIMEOUT)", secs, pid));
+// Two clocks. CLAUDE_CODE_TIMEOUT is the hard wall clock. CLAUDE_CODE_IDLE_TIMEOUT
+// is what actually catches a stuck delegate: with --output-format stream-json
+// the CLI emits one JSON line per event (every model message, every tool
+// call and result), so silence is the signal - a turn making progress
+// resets the idle clock on every line, and only a turn that has stopped
+// producing anything (or has run past the wall) is killed. The idle
+// default must exceed the longest single tool call the delegate can make
+// (Bash caps at 600 s), because a tool call emits nothing while it runs.
+let wall = opt(&meta, "CLAUDE_CODE_TIMEOUT", "600").parse::<u64>().unwrap_or(600);
+let idle = opt(&meta, "CLAUDE_CODE_IDLE_TIMEOUT", "1200").parse::<u64>().unwrap_or(1200);
+let stdout = child.stdout.take();
+let stderr = child.stderr.take();
+let (tx, rx) = channel::<String>();
+thread::spawn(move || {
+    if let Some(so) = stdout {
+        for line in BufReader::new(so).lines() {
+            match line { Ok(l) => { if tx.send(l).is_err() { break; } } Err(_) => break }
+        }
+    }
+});   // tx drops here: the receiver sees Disconnected exactly at stdout EOF
+// stderr drained on its own thread, or a chatty child fills the pipe and blocks.
+let err_h = thread::spawn(move || {
+    let mut s = String::new();
+    if let Some(mut se) = stderr { let _ = se.read_to_string(&mut s); }
+    s
+});
+let started = Instant::now();
+let mut events: u64 = 0;
+let mut head = String::new();         // first bytes of stdout, for the no-JSON diagnostic
+let mut result_line = String::new();  // the CLI's final {"type":"result",...} event
+let mut last_json = String::new();
+let killed: Option<String> = loop {
+    let elapsed = started.elapsed().as_secs();
+    if elapsed >= wall { break Some(format!("no answer in {}s (wall clock; raise CLAUDE_CODE_TIMEOUT)", wall)); }
+    match rx.recv_timeout(Duration::from_secs(idle.min(wall - elapsed))) {
+        Ok(l) => {
+            events += 1;
+            if head.len() < 600 { head.push_str(&l); head.push('\n'); }
+            if l.trim_start().starts_with('{') {
+                if l.contains("\"type\":\"result\"") { result_line = l.clone(); }
+                last_json = l;
+            }
+        }
+        Err(RecvTimeoutError::Timeout) => {
+            if started.elapsed().as_secs() >= wall {
+                break Some(format!("no answer in {}s (wall clock; raise CLAUDE_CODE_TIMEOUT)", wall));
+            }
+            break Some(format!("silent for {}s after {} events (idle; raise CLAUDE_CODE_IDLE_TIMEOUT)", idle, events));
+        }
+        Err(RecvTimeoutError::Disconnected) => break None,
     }
 };
-
-let body = String::from_utf8_lossy(&out.stdout).to_string();
-let errtail: String = String::from_utf8_lossy(&out.stderr).chars().rev().take(600)
+if let Some(why) = killed {
+    // Nothing else would ever reap it: an agent loop blocked forever is
+    // worse than a reported failure.
+    // A NEGATIVE pid signals the whole group (see process_group above).
+    // `--` is REQUIRED: /bin/kill is not the shell builtin and parses a
+    // bare `-1234` as options, silently leaving the tree running.
+    #[cfg(unix)]
+    let _ = Command::new("kill").arg("-9").arg("--").arg(format!("-{}", pid)).status();
+    #[cfg(not(unix))]
+    let _ = Command::new("kill").arg("-9").arg(pid.to_string()).status();
+    let _ = child.wait();
+    return err_out(&format!("claude_code: {}, killed pid {}", why, pid));
+}
+let status = child.wait();
+let errtail: String = err_h.join().unwrap_or_default().chars().rev().take(600)
     .collect::<String>().chars().rev().collect();
+// The result event carries the same fields as --output-format json's single
+// object (result, is_error, subtype, total_cost_usd, num_turns, session_id),
+// so the parse below serves both formats.
+let body = if !result_line.is_empty() { result_line } else { last_json };
 let root = match obj_from_str(&body) {
     Some(r) => r,
     None => {
-        // --output-format json failed to produce json at all: a login prompt,
-        // a usage-limit notice, or a crash. stderr is where it says which.
-        return err_out(&format!("claude_code: `{}` returned no JSON (exit {:?}). stderr: {}",
-            bin, out.status.code(),
-            if errtail.trim().is_empty() { body.chars().take(600).collect::<String>() } else { errtail }));
+        // No JSON at all: a login prompt, a usage-limit notice, or a crash.
+        // stderr is where it says which.
+        let code = match status { Ok(s) => s.code(), Err(_) => None };
+        return err_out(&format!("claude_code: `{}` returned no JSON (exit {:?}, {} lines). stderr: {}",
+            bin, code, events,
+            if errtail.trim().is_empty() { head.chars().take(600).collect::<String>() } else { errtail }));
     }
 };
 

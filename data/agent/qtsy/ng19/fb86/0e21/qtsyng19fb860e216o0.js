@@ -16,16 +16,38 @@
 // notebook grafts list this library) — no part of the dev app names
 // the memory system.
 //
-// LIBRARY control — headless: defines window.NB_MEMORY once (idempotent across
-// installs). Consumers list this control as a hidden data-control child
-// div and use the global from their ready.
+// LIBRARY control — headless: the api rides this control's own element
+// (zero-globals doctrine; el.api IS this constructor object). Consumers
+// mount it as a hidden data-control child div and read the element's api
+// from their ready. The viewctx REGISTRY is the page's one .nb-viewctx
+// mount (dev.frame's on the bench, agent.chat's on the agent app) —
+// resolved lazily below, because sibling branches build unordered.
 
 var me = this;
 var ME = document.getElementById(me.UUID);
 
 me.ready = function () {
-  if (window.NB_MEMORY) return;
-  const { viewctx } = window.NB_VIEWCTX;
+  // The page registry, resolved per call: register retries briefly (the
+  // classed element can exist before its api does), peek degrades to
+  // null. No registry on the page = no fence; the api still works.
+  const vtx = () => {
+    const el = document.querySelector(".nb-viewctx");
+    return el && el.api && el.api.register ? el.api : null;
+  };
+  const viewctx = {
+    register(key, fn) {
+      let tries = 0;
+      (function go() {
+        const v = vtx();
+        if (v) v.register(key, fn);
+        else if (++tries <= 40) setTimeout(go, 250);
+      })();
+    },
+    peek(key) {
+      const v = vtx();
+      return v ? v.peek(key) : null;
+    },
+  };
   const jsonP = (c2, v2) => new Promise((res2) => json(c2, v2, res2));
   const invokeP = (l2, c2, m2, a2) => new Promise((res2) => invokeCommand(l2, c2, m2, a2, res2));
   const code = (m2, a2) => invokeP("dev", "code", m2, a2);
@@ -38,7 +60,6 @@ me.ready = function () {
     return d2 instanceof Error ? d2 : (d2.list ?? []);
   };
   const readFacet = (l2, c2, f2) => code("read_control_facet", { lib: l2, ctl: c2, facet: f2 });
-  window.NB_MEMORY = (function () {
 
 let index = null;       // [{name, desc, tags, entries, stale}]
 let refreshing = null;  // the in-flight refresh promise, single-flight
@@ -192,6 +213,7 @@ function packFor(text, cap = 12) {
     block: "```memory:pack (modes: " + modes.join(", ") + ")\n" + shown.join("\n") + over + "\n```" };
 }
 
-    return { refresh, ready, modesFor, packFor };
-  })();
+  // `ready` stays off the api: me.ready is the lifecycle hook, and the
+  // index-built promise is a different thing — consumers await indexReady.
+  Object.assign(me, { refresh, indexReady: ready, modesFor, packFor });
 };
