@@ -1,5 +1,6 @@
 // This file is auto-generated and managed by the flowlang build script.
 use flowlang::rustcmd::Transform;
+pub mod repatch;
 pub mod install;
 pub mod stop_build;
 pub mod stage_log;
@@ -17,4 +18,5 @@ pub fn cmdinit(cmds: &mut Vec<(String, Transform, String)>) {
     cmds.push(("wkttsj1a03dddee5ek2a".to_string(), stage_log::execute, "".to_string()));
     cmds.push(("tggjti1a03dde0bb4i2c".to_string(), stop_build::execute, "".to_string()));
     cmds.push(("jnuoor1a03dde99c1l2e".to_string(), install::execute, "".to_string()));
+    cmds.push(("uxxoxp1a073004790n1".to_string(), repatch::execute, "".to_string()));
 }
