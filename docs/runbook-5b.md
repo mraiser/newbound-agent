@@ -318,7 +318,9 @@ Escalation traffic note: with this arm on, every band escalation
 if the escalation log runs hot you are spending plan allowance on
 judgment calls a vLLM box could make - the trade is yours to pick per
 box. `CLAUDE_CODE_MODEL=` / `CLAUDE_CODE_EFFORT=` tune the delegate;
-`CLAUDE_CODE_TIMEOUT=` (default 600s) bounds a stuck call.
+`CLAUDE_CODE_TIMEOUT=` (default 600s, hard wall clock) and
+`CLAUDE_CODE_IDLE_TIMEOUT=` (default 1200s of streamed-event silence)
+bound a stuck call; see claudecode-arm.md.
 
 ## Troubleshooting
 

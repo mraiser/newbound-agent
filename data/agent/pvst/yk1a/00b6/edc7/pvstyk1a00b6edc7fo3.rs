@@ -42,6 +42,7 @@ let known: &[(&str, &str, &str)] = &[
     ("CLAUDE_CODE_SYSTEM_MODE", "replace", "next frontier call"),
     ("CLAUDE_CODE_PERMISSION_MODE", "", "next frontier call"),
     ("CLAUDE_CODE_TIMEOUT", "600", "next frontier call"),
+    ("CLAUDE_CODE_IDLE_TIMEOUT", "1200", "next frontier call"),
     ("MODEL_CHECKPOINT", "stub", "next service relaunch"),
     ("MODEL_SERVICE_PORT", "8077", "next service relaunch"),
     ("MODEL_TRAIN", "on", "next service relaunch"),
