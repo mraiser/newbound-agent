@@ -58,6 +58,20 @@
   color: var(--text-dim); margin-bottom: 4px; }
 .ag-cell-body pre { background: var(--panel); border: 1px solid var(--line);
   border-radius: 8px; padding: 8px; overflow-x: auto; font-size: 12px; }
+/* long tool outputs clamp visually, never lost — .clamped caps the height
+   with a fade; clampVisually (js) adds a more/less toggle only on genuine
+   overflow. Complements the capture-store expander, which is for text that
+   was genuinely cut at the string level. */
+.ag-tool .ag-cell-body.clamped {
+  max-height: 160px; overflow: hidden;
+  -webkit-mask-image: linear-gradient(to bottom, black 55%, transparent);
+  mask-image: linear-gradient(to bottom, black 55%, transparent);
+}
+.ag-more { display: block; margin: 4px 0 0; background: none; cursor: pointer;
+  font: 10px var(--mono, ui-monospace, monospace); letter-spacing: 0.1em;
+  color: var(--accent, #f0a63c); border: 1px solid var(--line);
+  border-radius: 6px; padding: 3px 10px; }
+.ag-more:hover { background: var(--panel); }
 .ag-think { color: var(--text-faint); font-size: 12px; margin-bottom: 6px; }
 .ag-think summary { cursor: pointer; }
 
