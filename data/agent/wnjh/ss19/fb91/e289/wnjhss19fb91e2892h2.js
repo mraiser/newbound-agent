@@ -219,6 +219,39 @@ async function init(host) {
     body.className = "ag-cell-body";
     renderRich(body, entry.text ?? "");
     div.appendChild(body);
+    // clipped tool output gets an expander: the visible fragment is an exact
+    // prefix of what chat_llm captured (LLM_CAPTURE=on), so the store can
+    // return the rest. In-memory full text wins; the store is the fallback
+    // for cells reloaded from a persisted session (where full is gone).
+    if (entry.kind === "tool" && /…\[\d+ chars clipped\]\s*$/.test(entry.text ?? "")) {
+      const clip = entry.text.replace(/\n?…\[\d+ chars clipped\]\s*$/, "");
+      const more = document.createElement("button");
+      more.type = "button";
+      more.className = "ag-expand";
+      more.textContent = "▸ expand clipped output";
+      more.onclick = async () => {
+        more.disabled = true;
+        more.textContent = "expanding…";
+        let full = entry.full;
+        if (!full) {
+          const r = await invoke("agent", "msg", "expand_clipped", { fragment: clip });
+          const env = r.envelope ?? {};
+          const pay = env.data ?? env;
+          full = (env.status === "ok" && pay && pay.full) ? pay.full : null;
+          if (!full) {
+            more.textContent = "no captured full text (predates capture?)";
+            return;
+          }
+        }
+        entry.full = full;
+        entry.text = full;
+        body.textContent = "";
+        renderRich(body, full);
+        persist();
+        more.remove();
+      };
+      div.appendChild(more);
+    }
     return div;
   }
 
@@ -300,6 +333,7 @@ async function init(host) {
     kind: "tool", error: !!out.error,
     title: title + " " + agent.clamp(JSON.stringify(args ?? {}), 160),
     text: agent.clamp(out.output ?? "", 1200),
+    full: (out.output != null && out.output.length > 1200) ? out.output : null,
   });
 
   async function execTool(call) {

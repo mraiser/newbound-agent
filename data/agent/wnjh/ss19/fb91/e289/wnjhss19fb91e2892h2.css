@@ -48,6 +48,12 @@
 .ag-tool { align-self: flex-start; background: var(--panel); border: 1px solid var(--line);
   font-family: var(--mono, ui-monospace, monospace); font-size: 12px; opacity: 0.9; }
 .ag-cell.err { border: 1px solid var(--bad, #c0564f); }
+.ag-expand { display: block; margin-top: 6px; background: none; border: none;
+  border-top: 1px dashed var(--line); width: 100%; text-align: left;
+  padding: 4px 0 0; color: var(--text-dim); cursor: pointer;
+  font-family: var(--mono, ui-monospace, monospace); font-size: 11px; }
+.ag-expand:hover:not(:disabled) { color: var(--accent, #f0a63c); }
+.ag-expand:disabled { cursor: default; color: var(--text-faint); }
 .ag-cell-title { font-family: var(--mono, ui-monospace, monospace); font-size: 11px;
   color: var(--text-dim); margin-bottom: 4px; }
 .ag-cell-body pre { background: var(--panel); border: 1px solid var(--line);
