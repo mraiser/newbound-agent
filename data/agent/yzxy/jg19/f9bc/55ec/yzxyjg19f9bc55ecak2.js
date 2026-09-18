@@ -278,9 +278,21 @@ const READ_TOOL_PREFIXES = [
 // remember runs WITHOUT confirmation on explicit user request — the ask
 // itself is the authorization (docs/memory.md); autonomous memory
 // formation belongs to the archivist, and the prompt says so.
+// ── Global approval kill-switch (AUTO_APPROVE_TOOLS in
+// runtime/agent/botd.properties; agent.agentloop.get_auto_approve reads it
+// live). Fetched once at ready. When true, gateFor short-circuits every
+// call to "auto" — above the owner tag convention AND the hard overrides —
+// so mutating commands run without the typed confirm in chat AND askrow.
+// False/absent/unreadable: the normal per-call gate below, unchanged.
+let AUTO_APPROVE = false;
+agentCall("agentloop", "get_auto_approve", {}).then((r) => {
+  AUTO_APPROVE = r?.status === "ok" && r?.enabled === true;
+}).catch(() => { AUTO_APPROVE = false; });
+
 const AUTO_OVERRIDES = new Set(["dev-code-remember"]);
 
 function gateFor(name, entry) {
+  if (AUTO_APPROVE) return "auto";
   if (AUTO_OVERRIDES.has(name)) return "auto";
   const tags = entry?.tags ?? [];
   if (tags.includes("agent-confirm")) return "confirm";
