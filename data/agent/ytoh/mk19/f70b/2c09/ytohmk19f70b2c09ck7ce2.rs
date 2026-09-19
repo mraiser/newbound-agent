@@ -1047,6 +1047,64 @@ let payload = match dialect.as_str() {
     _ => {
         let mut p = DataObject::new();
         p.put_string("model", &model);
+        // Strict OpenAI-compatible servers (KIMI K3 above all) 400 with
+        // "tool_call_id  is not found" on an id their validator dislikes: a
+        // tool message with no id at all, an id that is empty or has
+        // whitespace, or a tool message no live assistant tool_call claims.
+        // The parse side already synthesizes ids for blank RETURNS; this is
+        // the send side scrubbing what the conversation REPLAYS. The repair
+        // keeps the answer: an id-less or orphan tool message becomes a plain
+        // user message; a whitespace id is trimmed; a claimed-but-whitespace
+        // id is renamed consistently on BOTH the tool message and its
+        // assistant tool_call so the pair still matches. Runs before the
+        // image pass so both rebuilt and verbatim messages get scrubbed.
+        fn clean_tool_ids(msgs: &mut Vec<DataObject>) {
+            let clean = |s: &str| s.split_whitespace().collect::<Vec<_>>().join("");
+            // Pass 1: scrub whitespace out of ids on the assistant tool_calls
+            // THEMSELVES, so `claimed` is already clean and the tool side
+            // never needs a cross-message rename (a tool message carries no
+            // tool_calls array - the id it echoes lives on the assistant).
+            let mut claimed: Vec<String> = Vec::new();
+            for m in msgs.iter_mut() {
+                if m.try_get_string("role").unwrap_or_default() != "assistant" { continue; }
+                if let Ok(tcs) = m.try_get_array("tool_calls") {
+                    for tc in tcs.objects() {
+                        let mut tc = tc.object();
+                        if let Ok(id) = tc.try_get_string("id") {
+                            let cid = clean(&id);
+                            if !cid.is_empty() {
+                                if cid != id { tc.put_string("id", &cid); }
+                                claimed.push(cid);
+                            }
+                        }
+                    }
+                }
+            }
+            // Pass 2: every tool message must echo an id a live assistant
+            // tool_call claims, exactly. A missing or blank id borrows the
+            // nth claimed id (tool_loop emits answers in the order the calls
+            // were made); a tool message no call claims becomes a plain user
+            // message - the answer is KEPT and only its tool framing dropped,
+            // rather than 400ing the turn.
+            let mut n = 0usize;
+            for m in msgs.iter_mut() {
+                if m.try_get_string("role").unwrap_or_default() != "tool" { continue; }
+                match m.try_get_string("tool_call_id") {
+                    Ok(id) if !clean(&id).is_empty() => {
+                        let cid = clean(&id);
+                        if cid != id { m.put_string("tool_call_id", &cid); }
+                        if !claimed.contains(&cid) { m.put_string("role", "user"); }
+                    }
+                    _ => {
+                        match claimed.get(n) {
+                            Some(cid) => { m.put_string("tool_call_id", cid); }
+                            None => { m.put_string("role", "user"); }
+                        }
+                    }
+                }
+                n += 1;
+            }
+        }
         // Copied, not verbatim: a message carrying `images` becomes an OpenAI
         // content-parts array (text + data-URL image_url entries). The
         // caller's array is shared, and a builder has no business mutating it.
@@ -1078,7 +1136,12 @@ let payload = match dialect.as_str() {
             n.put_array("content", parts);
             oai_msgs.push_object(n);
         }
-        p.put_array("messages", oai_msgs);
+        let mut scrub: Vec<DataObject> = Vec::new();
+        for m in oai_msgs.objects() { scrub.push(m.object()); }
+        clean_tool_ids(&mut scrub);
+        let mut cleaned = DataArray::new();
+        for m in scrub { cleaned.push_object(m); }
+        p.put_array("messages", cleaned);
         if tools.len() > 0 {
             p.put_array("tools", tools.clone());
             p.put_string("tool_choice", "auto");
