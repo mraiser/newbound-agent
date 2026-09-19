@@ -279,31 +279,33 @@ async function init(host) {
   }
 
   // The dev session's clampOutput, adapted: defer until connected so
-  // scrollHeight is real, and only add the toggle on genuine overflow.
-  function clampVisually(div, body) {
-    body.classList.add("clamped");
+  // scrollHeight is real, add the toggle only on genuine overflow, and
+  // insert it immediately after `el` so several clamps in one cell
+  // (call-title + body) keep their toggles in the right place.
+  function clampVisually(div, el) {
+    el.classList.add("clamped");
     requestAnimationFrame(() => {
-      if (!body.isConnected) return;
-      if (body.scrollHeight <= body.clientHeight + 1) {
-        body.classList.remove("clamped");   // it fits — no clamp, no toggle
+      if (!el.isConnected) return;
+      if (el.scrollHeight <= el.clientHeight + 1) {
+        el.classList.remove("clamped");   // it fits — no clamp, no toggle
         return;
       }
-      if (div.querySelector(".ag-more")) return;  // already toggled
+      if (el.nextElementSibling && el.nextElementSibling.classList.contains("ag-more")) return;
       const toggle = document.createElement("button");
       toggle.type = "button";
       toggle.className = "ag-more";
       const label = () => {
-        const cl = body.classList.contains("clamped");
+        const cl = el.classList.contains("clamped");
         toggle.textContent = cl ? "more ▾" : "less ▴";
         toggle.setAttribute("aria-expanded", String(!cl));
       };
       toggle.addEventListener("click", () => {
-        body.classList.toggle("clamped");
+        el.classList.toggle("clamped");
         label();
-        if (body.classList.contains("clamped")) div.scrollIntoView({ block: "nearest" });
+        if (el.classList.contains("clamped")) div.scrollIntoView({ block: "nearest" });
       });
       label();
-      div.appendChild(toggle);
+      el.after(toggle);
     });
   }
 
