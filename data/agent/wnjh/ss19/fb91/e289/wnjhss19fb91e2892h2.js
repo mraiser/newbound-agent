@@ -220,11 +220,12 @@ async function init(host) {
     renderRich(body, entry.text ?? "");
     div.appendChild(body);
     if (entry.kind === "tool") {
-      if (entry.clipped) {
-        // the STRING itself was cut (over the hard safety). The visible
-        // fragment is an exact prefix of what chat_llm captured
-        // (LLM_CAPTURE=on), so the store can return the rest; in-memory full
-        // wins when this same session still holds it.
+      // clipped = the new flag, OR the legacy case: a cell persisted before
+      // the CSS clamp has the truncation baked into its text (and no flag).
+      // Either way the visible fragment is an exact prefix of what chat_llm
+      // captured (LLM_CAPTURE=on), so the store can return the rest.
+      const cut = entry.clipped || /…\[\d+ chars clipped\]\s*$/.test(entry.text ?? "");
+      if (cut) {
         const clip = entry.text.replace(/\n?…\[\d+ chars clipped\]\s*$/, "");
         const more = document.createElement("button");
         more.type = "button";
