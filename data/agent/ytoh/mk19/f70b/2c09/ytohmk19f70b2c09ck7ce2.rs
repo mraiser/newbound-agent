@@ -1060,20 +1060,32 @@ let payload = match dialect.as_str() {
         // image pass so both rebuilt and verbatim messages get scrubbed.
         fn clean_tool_ids(msgs: &mut Vec<DataObject>) {
             let clean = |s: &str| s.split_whitespace().collect::<Vec<_>>().join("");
+            // Pass 1: scrub whitespace out of ids on the assistant tool_calls
+            // THEMSELVES, so `claimed` is already clean and the tool side
+            // never needs a cross-message rename (a tool message carries no
+            // tool_calls array - the id it echoes lives on the assistant).
             let mut claimed: Vec<String> = Vec::new();
-            for m in msgs.iter() {
+            for m in msgs.iter_mut() {
                 if m.try_get_string("role").unwrap_or_default() != "assistant" { continue; }
                 if let Ok(tcs) = m.try_get_array("tool_calls") {
                     for tc in tcs.objects() {
-                        let tc = tc.object();
+                        let mut tc = tc.object();
                         if let Ok(id) = tc.try_get_string("id") {
-                            if !clean(&id).is_empty() { claimed.push(id); }
+                            let cid = clean(&id);
+                            if !cid.is_empty() {
+                                if cid != id { tc.put_string("id", &cid); }
+                                claimed.push(cid);
+                            }
                         }
                     }
                 }
             }
-            let mut claimed_clean: Vec<String> = claimed.iter().map(|s| clean(s)).collect();
-            claimed_clean.dedup();
+            // Pass 2: every tool message must echo an id a live assistant
+            // tool_call claims, exactly. A missing or blank id borrows the
+            // nth claimed id (tool_loop emits answers in the order the calls
+            // were made); a tool message no call claims becomes a plain user
+            // message - the answer is KEPT and only its tool framing dropped,
+            // rather than 400ing the turn.
             let mut n = 0usize;
             for m in msgs.iter_mut() {
                 if m.try_get_string("role").unwrap_or_default() != "tool" { continue; }
@@ -1081,23 +1093,12 @@ let payload = match dialect.as_str() {
                     Ok(id) if !clean(&id).is_empty() => {
                         let cid = clean(&id);
                         if cid != id { m.put_string("tool_call_id", &cid); }
-                        if !claimed_clean.contains(&cid) { m.put_string("role", "user"); }
+                        if !claimed.contains(&cid) { m.put_string("role", "user"); }
                     }
                     _ => {
-                        if let Some(aid) = claimed.get(n) {
-                            let cid = clean(aid);
-                            if cid != *aid {
-                                let mut tcs = m.get_array("tool_calls");
-                                if tcs.len() > 0 {
-                                    let mut tc = tcs.get_object(0);
-                                    tc.put_string("id", &cid);
-                                }
-                            }
-                            m.put_string("tool_call_id", &cid);
-                        } else {
-                            // No live assistant call claims it; send the answer
-                            // as a plain user message rather than 400 the turn.
-                            m.put_string("role", "user");
+                        match claimed.get(n) {
+                            Some(cid) => { m.put_string("tool_call_id", cid); }
+                            None => { m.put_string("role", "user"); }
                         }
                     }
                 }
