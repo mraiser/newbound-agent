@@ -212,21 +212,26 @@ async function init(host) {
     if (entry.title) {
       const h = document.createElement("div");
       h.className = "ag-cell-title";
-      h.textContent = entry.title;
+      // the call is rendered separately from the result so it can be
+      // visually clamped (not hard-cut): full args in the DOM, a more/less
+      // toggle on genuine overflow. Legacy cells have no .args — their
+      // title already holds the clamped call.
+      h.textContent = entry.args != null
+        ? (entry.title + " " + entry.args)
+        : entry.title;
       div.appendChild(h);
+      if (entry.args != null) clampVisually(div, h);
     }
     const body = document.createElement("div");
     body.className = "ag-cell-body";
     renderRich(body, entry.text ?? "");
     div.appendChild(body);
     if (entry.kind === "tool") {
-      // clipped = the new flag, OR the legacy case: a cell persisted before
-      // the CSS clamp has the truncation baked into its text (and no flag).
-      // Either way the visible fragment is an exact prefix of what chat_llm
+      // clipped = the flag, OR a legacy cell whose truncation is baked into
+      // its text. The visible fragment is an exact prefix of what chat_llm
       // captured (LLM_CAPTURE=on), so the store can return the rest.
-      const cut = entry.clipped || /…\[\d+ chars clipped\]\s*$/.test(entry.text ?? "");
-      if (cut) {
-        const clip = entry.text.replace(/\n?…\[\d+ chars clipped\]\s*$/, "");
+      const isCut = () => entry.clipped || /…\[\d+ chars clipped\]\s*$/.test(entry.text ?? "");
+      if (isCut()) {
         const more = document.createElement("button");
         more.type = "button";
         more.className = "ag-expand";
@@ -234,6 +239,8 @@ async function init(host) {
         more.onclick = async () => {
           more.disabled = true;
           more.textContent = "expanding…";
+          // recompute the fragment from CURRENT text — it changes each expand
+          const clip = entry.text.replace(/\n?…\[\d+ chars clipped\]\s*$/, "");
           let full = entry.full;
           if (!full) {
             const r = await invoke("agent", "msg", "expand_clipped", { fragment: clip });
@@ -241,24 +248,30 @@ async function init(host) {
             const pay = env.data ?? env;
             full = (env.status === "ok" && pay && pay.full) ? pay.full : null;
             if (!full) {
+              more.disabled = false;
               more.textContent = "no captured full text (predates capture?)";
               return;
             }
           }
-          entry.full = full;
+          entry.full = null;                 // consumed — don't reuse a stale cache
           entry.text = full;
-          entry.clipped = false;           // now a plain visual clamp
+          entry.clipped = false;
           body.textContent = "";
           renderRich(body, full);
           persist();
-          more.remove();
-          clampVisually(div, body);        // re-clamp the now-longer cell
+          if (/…\[\d+ chars clipped\]\s*$/.test(full)) {
+            // the capture itself was cut by the model-facing 4000-char clamp,
+            // so this is all the store has. Show it and stop — don't loop.
+            more.textContent = "fully expanded (model saw only the first 4000 chars)";
+            clampVisually(div, body);
+          } else {
+            more.remove();
+            clampVisually(div, body);        // a plain visual clamp now
+          }
         };
         div.appendChild(more);
       } else {
-        // full text is present — clamp it VISUALLY like the dev session:
-        // css caps the height, a more/less toggle appears only if the
-        // content genuinely overflows. No data is lost.
+        // full text present — clamp VISUALLY like the dev session; no data lost
         clampVisually(div, body);
       }
     }
@@ -373,9 +386,11 @@ async function init(host) {
     const raw = out.output ?? "";
     const text = raw.length > TOOL_HARD_CUT
       ? agent.clamp(raw, TOOL_HARD_CUT) : raw;
+    const argsFull = JSON.stringify(args ?? {});
     return pushCell({
       kind: "tool", error: !!out.error,
-      title: title + " " + agent.clamp(JSON.stringify(args ?? {}), 160),
+      title,
+      args: argsFull,
       text,
       // full is set only when the string itself was cut (so the capture
       // store can recover it); visual overflow needs no recovery.

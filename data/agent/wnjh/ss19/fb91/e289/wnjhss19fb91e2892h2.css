@@ -55,7 +55,11 @@
 .ag-expand:hover:not(:disabled) { color: var(--accent, #f0a63c); }
 .ag-expand:disabled { cursor: default; color: var(--text-faint); }
 .ag-cell-title { font-family: var(--mono, ui-monospace, monospace); font-size: 11px;
-  color: var(--text-dim); margin-bottom: 4px; }
+  color: var(--text-dim); margin-bottom: 4px; white-space: pre-wrap;
+  overflow-wrap: anywhere; }
+.ag-cell-title.clamped { max-height: 44px; overflow: hidden;
+  -webkit-mask-image: linear-gradient(to bottom, black 45%, transparent);
+  mask-image: linear-gradient(to bottom, black 45%, transparent); }
 .ag-cell-body pre { background: var(--panel); border: 1px solid var(--line);
   border-radius: 8px; padding: 8px; overflow-x: auto; font-size: 12px; }
 /* long tool outputs clamp visually, never lost — .clamped caps the height
