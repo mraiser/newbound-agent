@@ -50,9 +50,10 @@ pub fn execute(o: DataObject) -> DataObject {
 }
 
 pub fn run_stage(stage: String) -> DataObject {
-// Run one build stage. `patch` runs synchronously (it is a text edit);
-// every heavy stage is launched detached via setsid, logging to
+// Run one build stage. `patch` and `repatch` run synchronously (text
+// edits); every heavy stage is launched detached via setsid, logging to
 // workspace/build.log, with its pid recorded in workspace/build.pid.
+// `rebuild` is the update path: repatch inline, then the build stage.
 // Refuses to start a second stage while one is still running.
 fn prop(key: &str, dflt: &str) -> String {
     (|| -> Option<String> {
@@ -65,7 +66,7 @@ fn prop(key: &str, dflt: &str) -> String {
 fn err(m: String) -> DataObject { let mut o = DataObject::new(); o.put_string("status","err"); o.put_string("msg", &m); o }
 
 let stage = stage.trim().to_string();
-let allowed = ["download","extract","patch","configure","deps","build","package","clean","all"];
+let allowed = ["download","extract","patch","repatch","configure","deps","build","rebuild","package","clean","all"];
 if !allowed.contains(&stage.as_str()) {
     return err(format!("unknown stage {:?} (allowed: {})", stage, allowed.join(", ")));
 }
@@ -77,6 +78,10 @@ let version   = prop("NOOBSCAPE_VERSION", "128.0esr");
 if stage == "patch" {
     let r = crate::agent::browser_builder::apply_patch::apply_patch();
     return r;
+}
+// repatch restores the pristine source first, so an updated block lands.
+if stage == "repatch" {
+    return crate::agent::browser_builder::repatch::repatch();
 }
 
 // The assets are the kit's source of truth: refresh the workspace copy at
@@ -103,6 +108,16 @@ if let Ok(s) = std::fs::read_to_string(&pidfile) {
     }
 }
 
+// rebuild: repatch inline (fails loud before anything is launched), then
+// launch the ordinary build stage - incremental, so minutes not hours.
+let mut repatch_msg = String::new();
+let launch = if stage == "rebuild" {
+    let r = crate::agent::browser_builder::repatch::repatch();
+    if r.get_string("status") != "ok" { return r; }
+    repatch_msg = if r.has("msg") { r.get_string("msg") } else { "repatched".to_string() };
+    "build".to_string()
+} else { stage.clone() };
+
 let logpath = format!("{}/build.log", workspace);
 let log = match File::create(&logpath) { Ok(f) => f, Err(e) => return err(format!("cannot open log {}: {}", logpath, e)) };
 let logerr = match log.try_clone() { Ok(f) => f, Err(e) => return err(format!("log clone: {}", e)) };
@@ -113,7 +128,7 @@ let logerr = match log.try_clone() { Ok(f) => f, Err(e) => return err(format!("l
 // apply_patch command — build.sh's own patch stage only applies patches/.
 // Chain it between deps and build via `newbound exec`, and gate the build
 // on the mechanism marker actually being present in the source.
-let script = if stage == "all" {
+let script = if launch == "all" {
     let exe = std::env::current_exe().map(|p| p.display().to_string()).unwrap_or_else(|_| "newbound".to_string());
     let root = std::env::current_dir().map(|p| p.display().to_string()).unwrap_or_else(|_| ".".to_string());
     let cpp = format!("{}/work/firefox-{}/docshell/base/nsDocShell.cpp", workspace, version);
@@ -124,7 +139,7 @@ let script = if stage == "all" {
 } else {
     format!(
         "cd '{ws}' && FIREFOX_VERSION='{v}' WORKDIR='{ws}/work' stdbuf -oL -eL ./build.sh {stage}; echo \"===NOOBSCAPE_STAGE_EXIT $?===\"",
-        ws = workspace, v = version, stage = stage
+        ws = workspace, v = version, stage = launch
     )
 };
 let child = Command::new("setsid").arg("bash").arg("-c").arg(&script)
@@ -137,13 +152,18 @@ let pid = child.id();
 std::thread::spawn(move || { let _ = child.wait(); });
 
 let _ = std::fs::write(&pidfile, pid.to_string());
-let _ = std::fs::write(format!("{}/build.stage", workspace), &stage);
+let _ = std::fs::write(format!("{}/build.stage", workspace), &launch);
 
 let mut o = DataObject::new();
 o.put_string("status", "ok");
-o.put_string("stage", &stage);
+o.put_string("stage", &launch);
 o.put_int("pid", pid as i64);
 o.put_string("log", &logpath);
-o.put_string("msg", &format!("stage '{}' started (pid {})", stage, pid));
+let msg = if repatch_msg.is_empty() {
+    format!("stage '{}' started (pid {})", launch, pid)
+} else {
+    format!("{}; build started (pid {})", repatch_msg, pid)
+};
+o.put_string("msg", &msg);
 o
 }
