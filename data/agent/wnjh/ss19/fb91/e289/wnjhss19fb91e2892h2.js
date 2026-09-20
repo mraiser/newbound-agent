@@ -212,14 +212,101 @@ async function init(host) {
     if (entry.title) {
       const h = document.createElement("div");
       h.className = "ag-cell-title";
-      h.textContent = entry.title;
+      // the call is rendered separately from the result so it can be
+      // visually clamped (not hard-cut): full args in the DOM, a more/less
+      // toggle on genuine overflow. Legacy cells have no .args — their
+      // title already holds the clamped call.
+      h.textContent = entry.args != null
+        ? (entry.title + " " + entry.args)
+        : entry.title;
       div.appendChild(h);
+      if (entry.args != null) clampVisually(div, h);
     }
     const body = document.createElement("div");
     body.className = "ag-cell-body";
     renderRich(body, entry.text ?? "");
     div.appendChild(body);
+    if (entry.kind === "tool") {
+      // clipped = the flag, OR a legacy cell whose truncation is baked into
+      // its text. The visible fragment is an exact prefix of what chat_llm
+      // captured (LLM_CAPTURE=on), so the store can return the rest.
+      const isCut = () => entry.clipped || /…\[\d+ chars clipped\]\s*$/.test(entry.text ?? "");
+      if (isCut()) {
+        const more = document.createElement("button");
+        more.type = "button";
+        more.className = "ag-expand";
+        more.textContent = "▸ expand full output (from capture)";
+        more.onclick = async () => {
+          more.disabled = true;
+          more.textContent = "expanding…";
+          // recompute the fragment from CURRENT text — it changes each expand
+          const clip = entry.text.replace(/\n?…\[\d+ chars clipped\]\s*$/, "");
+          let full = entry.full;
+          if (!full) {
+            const r = await invoke("agent", "msg", "expand_clipped", { fragment: clip });
+            const env = r.envelope ?? {};
+            const pay = env.data ?? env;
+            full = (env.status === "ok" && pay && pay.full) ? pay.full : null;
+            if (!full) {
+              more.disabled = false;
+              more.textContent = "no captured full text (predates capture?)";
+              return;
+            }
+          }
+          entry.full = null;                 // consumed — don't reuse a stale cache
+          entry.text = full;
+          entry.clipped = false;
+          body.textContent = "";
+          renderRich(body, full);
+          persist();
+          if (/…\[\d+ chars clipped\]\s*$/.test(full)) {
+            // the capture itself was cut by the model-facing 4000-char clamp,
+            // so this is all the store has. Show it and stop — don't loop.
+            more.textContent = "fully expanded (model saw only the first 4000 chars)";
+            clampVisually(div, body);
+          } else {
+            more.remove();
+            clampVisually(div, body);        // a plain visual clamp now
+          }
+        };
+        div.appendChild(more);
+      } else {
+        // full text present — clamp VISUALLY like the dev session; no data lost
+        clampVisually(div, body);
+      }
+    }
     return div;
+  }
+
+  // The dev session's clampOutput, adapted: defer until connected so
+  // scrollHeight is real, add the toggle only on genuine overflow, and
+  // insert it immediately after `el` so several clamps in one cell
+  // (call-title + body) keep their toggles in the right place.
+  function clampVisually(div, el) {
+    el.classList.add("clamped");
+    requestAnimationFrame(() => {
+      if (!el.isConnected) return;
+      if (el.scrollHeight <= el.clientHeight + 1) {
+        el.classList.remove("clamped");   // it fits — no clamp, no toggle
+        return;
+      }
+      if (el.nextElementSibling && el.nextElementSibling.classList.contains("ag-more")) return;
+      const toggle = document.createElement("button");
+      toggle.type = "button";
+      toggle.className = "ag-more";
+      const label = () => {
+        const cl = el.classList.contains("clamped");
+        toggle.textContent = cl ? "more ▾" : "less ▴";
+        toggle.setAttribute("aria-expanded", String(!cl));
+      };
+      toggle.addEventListener("click", () => {
+        el.classList.toggle("clamped");
+        label();
+        if (el.classList.contains("clamped")) div.scrollIntoView({ block: "nearest" });
+      });
+      label();
+      el.after(toggle);
+    });
   }
 
   /** think-folds + fenced code; everything else stays text. */
@@ -296,11 +383,23 @@ async function init(host) {
     return mcpTools;
   }
 
-  const toolCell = (title, args, out) => pushCell({
-    kind: "tool", error: !!out.error,
-    title: title + " " + agent.clamp(JSON.stringify(args ?? {}), 160),
-    text: agent.clamp(out.output ?? "", 1200),
-  });
+  const TOOL_HARD_CUT = 20000; // safety only — visual clamping is CSS's job
+  const toolCell = (title, args, out) => {
+    const raw = out.output ?? "";
+    const text = raw.length > TOOL_HARD_CUT
+      ? agent.clamp(raw, TOOL_HARD_CUT) : raw;
+    const argsFull = JSON.stringify(args ?? {});
+    return pushCell({
+      kind: "tool", error: !!out.error,
+      title,
+      args: argsFull,
+      text,
+      // full is set only when the string itself was cut (so the capture
+      // store can recover it); visual overflow needs no recovery.
+      full: (raw.length > TOOL_HARD_CUT) ? raw : null,
+      clipped: raw.length > TOOL_HARD_CUT,
+    });
+  };
 
   async function execTool(call) {
     let args = {};

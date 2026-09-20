@@ -88,7 +88,8 @@ function errorHint(msg) {
 
 // Generous: the autonomous developer workflow legitimately spends rounds
 // on compile-debug cycles.
-const MAX_ROUNDS = 10;
+// MAX_ROUNDS is declared with the other ready-fetched config above (was a
+// hard-coded const here); chatTurn reads it as the tool-loop round limit.
 
 // The system prompt lives client-side now — the cost of skipping
 // control_query, and the point: the notebook knows what the model is looking
@@ -278,9 +279,31 @@ const READ_TOOL_PREFIXES = [
 // remember runs WITHOUT confirmation on explicit user request — the ask
 // itself is the authorization (docs/memory.md); autonomous memory
 // formation belongs to the archivist, and the prompt says so.
+// ── Global approval kill-switch (AUTO_APPROVE_TOOLS in
+// runtime/agent/botd.properties; agent.agentloop.get_auto_approve reads it
+// live). Fetched once at ready. When true, gateFor short-circuits every
+// call to "auto" — above the owner tag convention AND the hard overrides —
+// so mutating commands run without the typed confirm in chat AND askrow.
+// False/absent/unreadable: the normal per-call gate below, unchanged.
+let AUTO_APPROVE = false;
+agentCall("agentloop", "get_auto_approve", {}).then((r) => {
+  AUTO_APPROVE = r?.status === "ok" && r?.enabled === true;
+}).catch(() => { AUTO_APPROVE = false; });
+
+// Per-turn tool budget (TOOL_BUDGET in runtime/agent/botd.properties;
+// agent.agentloop.get_tool_budget). Same boot-time snapshot + restart
+// cadence as AUTO_APPROVE_TOOLS. Fetched once at ready; absent/invalid the
+// server already fell back to 10, so only a positive number overrides.
+let MAX_ROUNDS = 10;
+agentCall("agentloop", "get_tool_budget", {}).then((r) => {
+  const n = Number(r?.budget);
+  if (r?.status === "ok" && Number.isFinite(n) && n > 0) MAX_ROUNDS = n;
+}).catch(() => {});
+
 const AUTO_OVERRIDES = new Set(["dev-code-remember"]);
 
 function gateFor(name, entry) {
+  if (AUTO_APPROVE) return "auto";
   if (AUTO_OVERRIDES.has(name)) return "auto";
   const tags = entry?.tags ?? [];
   if (tags.includes("agent-confirm")) return "confirm";
