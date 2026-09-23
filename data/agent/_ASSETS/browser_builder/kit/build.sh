@@ -40,43 +40,30 @@ JOBS="${JOBS:-$(nproc 2>/dev/null || echo 4)}"
 MOZ_FTP_BASE="${MOZ_FTP_BASE:-https://ftp.mozilla.org/pub/firefox/releases}"
 
 # --- mach interpreter pinning (Nix host) ----------------------------------
-# mach's venv bootstrap needs a NATIVE x86-64 CPython <= 3.11. The store's
-# 3.11 builds here are aarch64 (run under qemu binfmt) and cannot dlopen the
-# x86-64 libglean_ffi.so; the default python3 is 3.12, which mach's site.py
-# rejects. Pin MACH_MAIN_PYTHON to a native 3.10 and scrub LD_LIBRARY_PATH,
-# whose Nix-profile entries (libffi needing glibc 2.38) poison this glibc-2.37
-# interpreter. mach re-execs and builds its venv from MACH_MAIN_PYTHON.
-if [[ -z "${MACH_MAIN_PYTHON:-}" ]]; then
-    for _c in /nix/store/*-python3-3.10*/bin/python3.10 \
-              /nix/store/*-python3-3.11*/bin/python3.11 \
-              python3.10 python3.11; do
-        _r="$(command -v "$_c" 2>/dev/null || true)"; [[ -n "$_r" ]] || continue
-        # native x86-64? ELF e_machine (offset 18) must be 0x3e, and <= 3.11
-        if [[ "$(od -An -tx1 -j18 -N2 "$_r" 2>/dev/null | tr -d ' ')" == "3e00" ]] \
-           && env -u LD_LIBRARY_PATH "$_r" -c 'import sys;raise SystemExit(0 if sys.version_info[:2]<=(3,11) else 1)' 2>/dev/null; then
-            MACH_MAIN_PYTHON="$_r"; break
-        fi
-    done
-    export MACH_MAIN_PYTHON
-fi
-# The ambient Nix-profile LD_LIBRARY_PATH breaks the pinned interpreter and the
-# bootstrap toolchain alike; mach manages its own env. Clear it for the build.
+# mach's venv bootstrap needs a NATIVE x86-64 CPython <= 3.11, and mach runs
+# as `#!/usr/bin/env python3`, honoring the first python3 on PATH. This host's
+# ambient python3 is 3.12 (rejected by mach's site.py) and its store 3.11
+# builds are aarch64 under qemu binfmt (cannot dlopen the x86-64
+# libglean_ffi.so). Resolve MACH_PYTHON to a NATIVE <= 3.11 and prepend its
+# dir to PATH at every ./mach call. Override by exporting MACH_PYTHON.
+# LD_LIBRARY_PATH is scrubbed: its Nix-profile entries (libffi needing glibc
+# 2.38) poison this glibc-2.37 interpreter, and mach manages its own env.
 unset LD_LIBRARY_PATH
-
-# Firefox 128's mach refuses to run under Python 3.12+ (the ambient python3
-# here is 3.12), and its venv setup crashes on the newer interpreter. mach
-# honors the first python3 on PATH, so we pin one <= 3.11 for the mach
-# invocations below. Default: the Nix-provided 3.11; override with MACH_PYTHON.
 MACH_PYTHON="${MACH_PYTHON:-}"
 if [[ -z "${MACH_PYTHON}" ]]; then
-    if [[ -x /nix/store/qp18fwv6cmqi3n8s8ca987ldl6j7h759-python3-3.11.15/bin/python3.11 ]]; then
-        MACH_PYTHON=/nix/store/qp18fwv6cmqi3n8s8ca987ldl6j7h759-python3-3.11.15/bin/python3.11
-    else
-        for v in 3.11 3.10 3.9; do
-            if command -v "python${v}" >/dev/null 2>&1; then MACH_PYTHON="$(command -v "python${v}")"; break; fi
-        done
-        MACH_PYTHON="${MACH_PYTHON:-python3}"
-    fi
+    for _c in /nix/store/*-python3-3.11*/bin/python3.11 \
+              /nix/store/*-python3-3.10*/bin/python3.10 \
+              /nix/store/*-python3-3.9*/bin/python3.9 \
+              python3.11 python3.10 python3.9; do
+        _r="$(command -v "$_c" 2>/dev/null || true)"; [[ -n "$_r" ]] || continue
+        # native x86-64? ELF e_machine (offset 18, 2 bytes LE) must be 0x3e,
+        # and version <= 3.11 with a working ctypes (LD_LIBRARY_PATH cleared).
+        if [[ "$(od -An -tx1 -j18 -N2 "$_r" 2>/dev/null | tr -d ' ')" == "3e00" ]] \
+           && env -u LD_LIBRARY_PATH "$_r" -c 'import sys,ctypes;raise SystemExit(0 if sys.version_info[:2]<=(3,11) else 1)' 2>/dev/null; then
+            MACH_PYTHON="$_r"; break
+        fi
+    done
+    MACH_PYTHON="${MACH_PYTHON:-python3}"
 fi
 MACH_PATH_DIR="$(dirname "${MACH_PYTHON}")"
 
@@ -283,21 +270,21 @@ stage_build() {
     [[ -d "${SRC_DIR}" ]] || die "Source tree missing; run the 'extract' stage first"
     stage_configure
     log "Building Firefox with ${JOBS} jobs (grab a coffee — this takes a while)"
-    ( cd "${SRC_DIR}" && PATH="${MACH_PATH_DIR}:${PATH}" MOZCONFIG="${SRC_DIR}/mozconfig" ./mach build -j"${JOBS}" )
+    ( cd "${SRC_DIR}" && PATH="${MACH_PATH_DIR}:${PATH}" MOZCONFIG="${SRC_DIR}/mozconfig" "${MACH_PYTHON}" ./mach build -j"${JOBS}" )
     log "Build complete. Binary: ${SRC_DIR}/obj-firefox/dist/bin/firefox"
 }
 
 stage_package() {
     [[ -d "${SRC_DIR}" ]] || die "Source tree missing; build first"
     log "Packaging distributable build"
-    ( cd "${SRC_DIR}" && PATH="${MACH_PATH_DIR}:${PATH}" MOZCONFIG="${SRC_DIR}/mozconfig" ./mach package )
+    ( cd "${SRC_DIR}" && PATH="${MACH_PATH_DIR}:${PATH}" MOZCONFIG="${SRC_DIR}/mozconfig" "${MACH_PYTHON}" ./mach package )
     log "Package written under ${SRC_DIR}/obj-firefox/dist/"
 }
 
 stage_run() {
     [[ -d "${SRC_DIR}" ]] || die "Source tree missing; build first"
     log "Launching the freshly built Firefox"
-    ( cd "${SRC_DIR}" && PATH="${MACH_PATH_DIR}:${PATH}" MOZCONFIG="${SRC_DIR}/mozconfig" ./mach run )
+    ( cd "${SRC_DIR}" && PATH="${MACH_PATH_DIR}:${PATH}" MOZCONFIG="${SRC_DIR}/mozconfig" "${MACH_PYTHON}" ./mach run )
 }
 
 stage_clean() {
