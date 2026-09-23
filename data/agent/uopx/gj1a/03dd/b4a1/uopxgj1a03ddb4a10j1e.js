@@ -41,7 +41,7 @@ me.refresh = function(){
     me.mark('materialize', d.kit_present);
     me.mark('extract', d.src_extracted);
     me.mark('patched', d.patched);
-    me.mark('deps', d.built);
+    me.mark('deps', d.deps);
     me.mark('built', d.built);
     me.updateMonitor(d.build_running, d.stage, d.build_pid, d.last_exit, d.log_tail);
     if (d.build_running && !me.pollTimer) me.startPoll();
