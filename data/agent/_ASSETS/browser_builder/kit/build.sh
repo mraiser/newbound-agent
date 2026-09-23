@@ -39,6 +39,24 @@ WORKDIR="${WORKDIR:-$(pwd)/work}"
 JOBS="${JOBS:-$(nproc 2>/dev/null || echo 4)}"
 MOZ_FTP_BASE="${MOZ_FTP_BASE:-https://ftp.mozilla.org/pub/firefox/releases}"
 
+# mach's virtualenv bootstrap crashes under Python >= 3.12 (site.py subpath
+# error). Pin the interpreter mach re-execs into to the newest <= 3.11 we can
+# find; mach honors MACH_MAIN_PYTHON. Falls back to whatever is on PATH.
+if [[ -z "${MACH_MAIN_PYTHON:-}" ]]; then
+    for _p in python3.11 python3.10 python3.9 \
+              /nix/store/*-python3-3.11*/bin/python3.11 \
+              /nix/store/*-python3-3.10*/bin/python3.10 \
+              /usr/bin/python3.11 /usr/bin/python3.10 \
+              python3; do
+        for _c in $_p; do
+            if command -v "$_c" >/dev/null 2>&1 && "$_c" -c 'import sys;raise SystemExit(0 if sys.version_info[:2]<=(3,11) else 1)' 2>/dev/null; then
+                MACH_MAIN_PYTHON="$(command -v "$_c")"; break 2
+            fi
+        done
+    done
+    export MACH_MAIN_PYTHON
+fi
+
 # Firefox 128's mach refuses to run under Python 3.12+ (the ambient python3
 # here is 3.12), and its venv setup crashes on the newer interpreter. mach
 # honors the first python3 on PATH, so we pin one <= 3.11 for the mach
