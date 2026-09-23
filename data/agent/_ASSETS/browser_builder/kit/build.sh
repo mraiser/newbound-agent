@@ -39,6 +39,23 @@ WORKDIR="${WORKDIR:-$(pwd)/work}"
 JOBS="${JOBS:-$(nproc 2>/dev/null || echo 4)}"
 MOZ_FTP_BASE="${MOZ_FTP_BASE:-https://ftp.mozilla.org/pub/firefox/releases}"
 
+# Firefox 128's mach refuses to run under Python 3.12+ (the ambient python3
+# here is 3.12), and its venv setup crashes on the newer interpreter. mach
+# honors the first python3 on PATH, so we pin one <= 3.11 for the mach
+# invocations below. Default: the Nix-provided 3.11; override with MACH_PYTHON.
+MACH_PYTHON="${MACH_PYTHON:-}"
+if [[ -z "${MACH_PYTHON}" ]]; then
+    if [[ -x /nix/store/qp18fwv6cmqi3n8s8ca987ldl6j7h759-python3-3.11.15/bin/python3.11 ]]; then
+        MACH_PYTHON=/nix/store/qp18fwv6cmqi3n8s8ca987ldl6j7h759-python3-3.11.15/bin/python3.11
+    else
+        for v in 3.11 3.10 3.9; do
+            if command -v "python${v}" >/dev/null 2>&1; then MACH_PYTHON="$(command -v "python${v}")"; break; fi
+        done
+        MACH_PYTHON="${MACH_PYTHON:-python3}"
+    fi
+fi
+MACH_PATH_DIR="$(dirname "${MACH_PYTHON}")"
+
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PATCH_DIR="${REPO_ROOT}/patches"
 MOZCONFIG_SRC="${REPO_ROOT}/mozconfig"
@@ -242,21 +259,21 @@ stage_build() {
     [[ -d "${SRC_DIR}" ]] || die "Source tree missing; run the 'extract' stage first"
     stage_configure
     log "Building Firefox with ${JOBS} jobs (grab a coffee — this takes a while)"
-    ( cd "${SRC_DIR}" && MOZCONFIG="${SRC_DIR}/mozconfig" ./mach build -j"${JOBS}" )
+    ( cd "${SRC_DIR}" && PATH="${MACH_PATH_DIR}:${PATH}" MOZCONFIG="${SRC_DIR}/mozconfig" ./mach build -j"${JOBS}" )
     log "Build complete. Binary: ${SRC_DIR}/obj-firefox/dist/bin/firefox"
 }
 
 stage_package() {
     [[ -d "${SRC_DIR}" ]] || die "Source tree missing; build first"
     log "Packaging distributable build"
-    ( cd "${SRC_DIR}" && MOZCONFIG="${SRC_DIR}/mozconfig" ./mach package )
+    ( cd "${SRC_DIR}" && PATH="${MACH_PATH_DIR}:${PATH}" MOZCONFIG="${SRC_DIR}/mozconfig" ./mach package )
     log "Package written under ${SRC_DIR}/obj-firefox/dist/"
 }
 
 stage_run() {
     [[ -d "${SRC_DIR}" ]] || die "Source tree missing; build first"
     log "Launching the freshly built Firefox"
-    ( cd "${SRC_DIR}" && MOZCONFIG="${SRC_DIR}/mozconfig" ./mach run )
+    ( cd "${SRC_DIR}" && PATH="${MACH_PATH_DIR}:${PATH}" MOZCONFIG="${SRC_DIR}/mozconfig" ./mach run )
 }
 
 stage_clean() {
