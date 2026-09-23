@@ -39,23 +39,29 @@ WORKDIR="${WORKDIR:-$(pwd)/work}"
 JOBS="${JOBS:-$(nproc 2>/dev/null || echo 4)}"
 MOZ_FTP_BASE="${MOZ_FTP_BASE:-https://ftp.mozilla.org/pub/firefox/releases}"
 
-# mach's virtualenv bootstrap crashes under Python >= 3.12 (site.py subpath
-# error). Pin the interpreter mach re-execs into to the newest <= 3.11 we can
-# find; mach honors MACH_MAIN_PYTHON. Falls back to whatever is on PATH.
+# --- mach interpreter pinning (Nix host) ----------------------------------
+# mach's venv bootstrap needs a NATIVE x86-64 CPython <= 3.11. The store's
+# 3.11 builds here are aarch64 (run under qemu binfmt) and cannot dlopen the
+# x86-64 libglean_ffi.so; the default python3 is 3.12, which mach's site.py
+# rejects. Pin MACH_MAIN_PYTHON to a native 3.10 and scrub LD_LIBRARY_PATH,
+# whose Nix-profile entries (libffi needing glibc 2.38) poison this glibc-2.37
+# interpreter. mach re-execs and builds its venv from MACH_MAIN_PYTHON.
 if [[ -z "${MACH_MAIN_PYTHON:-}" ]]; then
-    for _p in python3.11 python3.10 python3.9 \
+    for _c in /nix/store/*-python3-3.10*/bin/python3.10 \
               /nix/store/*-python3-3.11*/bin/python3.11 \
-              /nix/store/*-python3-3.10*/bin/python3.10 \
-              /usr/bin/python3.11 /usr/bin/python3.10 \
-              python3; do
-        for _c in $_p; do
-            if command -v "$_c" >/dev/null 2>&1 && "$_c" -c 'import sys;raise SystemExit(0 if sys.version_info[:2]<=(3,11) else 1)' 2>/dev/null; then
-                MACH_MAIN_PYTHON="$(command -v "$_c")"; break 2
-            fi
-        done
+              python3.10 python3.11; do
+        _r="$(command -v "$_c" 2>/dev/null || true)"; [[ -n "$_r" ]] || continue
+        # native x86-64? ELF e_machine (offset 18) must be 0x3e, and <= 3.11
+        if [[ "$(od -An -tx1 -j18 -N2 "$_r" 2>/dev/null | tr -d ' ')" == "3e00" ]] \
+           && env -u LD_LIBRARY_PATH "$_r" -c 'import sys;raise SystemExit(0 if sys.version_info[:2]<=(3,11) else 1)' 2>/dev/null; then
+            MACH_MAIN_PYTHON="$_r"; break
+        fi
     done
     export MACH_MAIN_PYTHON
 fi
+# The ambient Nix-profile LD_LIBRARY_PATH breaks the pinned interpreter and the
+# bootstrap toolchain alike; mach manages its own env. Clear it for the build.
+unset LD_LIBRARY_PATH
 
 # Firefox 128's mach refuses to run under Python 3.12+ (the ambient python3
 # here is 3.12), and its venv setup crashes on the newer interpreter. mach
