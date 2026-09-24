@@ -243,6 +243,40 @@ provision_libxml2() {
     fi
 }
 
+# Configure needs rustc/cargo/rustdoc on PATH, all runnable in mach's scrubbed
+# env (no LD_LIBRARY_PATH). This box's rust lives in the Nix store, and the
+# system profile exposes cargo but NOT rustc. Build a .rustbin shim dir of
+# symlinks to NATIVE, env-clean binaries (verified with `env -i`), resolved
+# dynamically so a Nix store path change self-heals on the next deps run.
+provision_rust() {
+    local shim="${MOZBUILD}/.rustbin"
+    mkdir -p "${shim}"
+    # Candidate sources: whatever is on PATH first, then native store globs.
+    local rustc_bin="" cargo_bin="" rustdoc_bin="" c
+    for c in $(command -v rustc 2>/dev/null) /nix/store/*rustc-wrapper*/bin/rustc /nix/store/*rustc-1.*/bin/rustc; do
+        [[ -x "$c" ]] || continue
+        if env -i "$c" --version >/dev/null 2>&1; then rustc_bin="$c"; break; fi
+    done
+    for c in $(command -v cargo 2>/dev/null) /nix/store/*cargo-1.*/bin/cargo; do
+        [[ -x "$c" ]] || continue
+        # reject the Nix system-path indirection (broken outside the profile)
+        case "$(readlink -f "$c" 2>/dev/null)" in *system-path*) continue;; esac
+        if env -i "$c" --version >/dev/null 2>&1; then cargo_bin="$c"; break; fi
+    done
+    if [[ -n "${rustc_bin}" ]]; then
+        local rdir; rdir="$(dirname "${rustc_bin}")"
+        [[ -x "${rdir}/rustdoc" ]] && rustdoc_bin="${rdir}/rustdoc"
+        ln -sf "${rustc_bin}" "${shim}/rustc"
+        [[ -n "${rustdoc_bin}" ]] && ln -sf "${rustdoc_bin}" "${shim}/rustdoc"
+    fi
+    [[ -n "${cargo_bin}" ]] && ln -sf "${cargo_bin}" "${shim}/cargo"
+    if [[ -x "${shim}/rustc" && -x "${shim}/cargo" ]]; then
+        log "Rust toolchain shimmed in ${shim} (rustc: ${rustc_bin})"
+    else
+        warn "no env-clean native rustc/cargo found; configure's rust check may fail"
+    fi
+}
+
 provision_cbindgen() {
     local dest="${MOZBUILD}/cbindgen/cbindgen"
     if [[ -x "${dest}" ]] && "${dest}" --version 2>/dev/null | grep -q "${CBINDGEN_VERSION}"; then
@@ -371,6 +405,7 @@ stage_deps() {
             ;;
     esac
     provision_libxml2
+    provision_rust
     provision_cbindgen
     log "Toolchains ready (mozconfig --enable-bootstrap=no-update picks them up)"
 }
@@ -379,21 +414,21 @@ stage_build() {
     [[ -d "${SRC_DIR}" ]] || die "Source tree missing; run the 'extract' stage first"
     stage_configure
     log "Building Firefox with ${JOBS} jobs (grab a coffee — this takes a while)"
-    ( cd "${SRC_DIR}" && PATH="${MACH_PATH_DIR}:${PATH}" MOZCONFIG="${SRC_DIR}/mozconfig" "${MACH_PYTHON}" ./mach build -j"${JOBS}" )
+    ( cd "${SRC_DIR}" && PATH="${MACH_PATH_DIR}:${MOZBUILD}/.rustbin:${PATH}" MOZCONFIG="${SRC_DIR}/mozconfig" "${MACH_PYTHON}" ./mach build -j"${JOBS}" )
     log "Build complete. Binary: ${SRC_DIR}/obj-firefox/dist/bin/firefox"
 }
 
 stage_package() {
     [[ -d "${SRC_DIR}" ]] || die "Source tree missing; build first"
     log "Packaging distributable build"
-    ( cd "${SRC_DIR}" && PATH="${MACH_PATH_DIR}:${PATH}" MOZCONFIG="${SRC_DIR}/mozconfig" "${MACH_PYTHON}" ./mach package )
+    ( cd "${SRC_DIR}" && PATH="${MACH_PATH_DIR}:${MOZBUILD}/.rustbin:${PATH}" MOZCONFIG="${SRC_DIR}/mozconfig" "${MACH_PYTHON}" ./mach package )
     log "Package written under ${SRC_DIR}/obj-firefox/dist/"
 }
 
 stage_run() {
     [[ -d "${SRC_DIR}" ]] || die "Source tree missing; build first"
     log "Launching the freshly built Firefox"
-    ( cd "${SRC_DIR}" && PATH="${MACH_PATH_DIR}:${PATH}" MOZCONFIG="${SRC_DIR}/mozconfig" "${MACH_PYTHON}" ./mach run )
+    ( cd "${SRC_DIR}" && PATH="${MACH_PATH_DIR}:${MOZBUILD}/.rustbin:${PATH}" MOZCONFIG="${SRC_DIR}/mozconfig" "${MACH_PYTHON}" ./mach run )
 }
 
 stage_clean() {
