@@ -139,11 +139,15 @@ SRC_DIR="${WORKDIR}/firefox-${FIREFOX_VERSION}"
 MOZBUILD="${MOZBUILD_STATE_PATH:-${HOME}/.mozbuild}"
 
 # The staged Mozilla clang (CC, set in mozconfig) links libxml2.so.2 from the
-# compile sysroot; give the loader a search path to it. This REBUILDS (not
-# appends to) LD_LIBRARY_PATH, so the server's poisoned glibc-2.37 entry is gone
-# and only the sysroot lib dir remains.
+# compile sysroot and needs a loader search path to it. We must NOT export that
+# path script-wide: the same sysroot dir carries an OLD libcom_err.so.2 (e2fsprogs
+# era) that shadows the system krb5's libcom_err.so.3 and breaks every curl call
+# in deps/download ('error while loading shared libraries: libcom_err.so.2'). So
+# SYSROOT_LIB is kept UNEXPORTED here and injected inline ONLY at the ./mach
+# invocations, where the compiler subprocesses actually need it. curl/python/tar
+# run with the scrubbed loader path.
 SYSROOT_LIB="${MOZBUILD}/sysroot-$(uname -m)-linux-gnu/usr/lib/$(uname -m)-linux-gnu"
-if [[ -d "${SYSROOT_LIB}" ]]; then export LD_LIBRARY_PATH="${SYSROOT_LIB}"; fi
+if [[ ! -d "${SYSROOT_LIB}" ]]; then SYSROOT_LIB=""; fi
 TC_INDEX="https://firefox-ci-tc.services.mozilla.com/api/index/v1/task"
 TC_QUEUE="https://firefox-ci-tc.services.mozilla.com/api/queue/v1/task"
 
@@ -349,21 +353,21 @@ stage_build() {
     [[ -d "${SRC_DIR}" ]] || die "Source tree missing; run the 'extract' stage first"
     stage_configure
     log "Building Firefox with ${JOBS} jobs (grab a coffee — this takes a while)"
-    ( cd "${SRC_DIR}" && PATH="${MACH_PATH_DIR}:${PATH}" MOZCONFIG="${SRC_DIR}/mozconfig" "${MACH_PYTHON}" ./mach build -j"${JOBS}" )
+    ( cd "${SRC_DIR}" && PATH="${MACH_PATH_DIR}:${PATH}" MOZCONFIG="${SRC_DIR}/mozconfig" LD_LIBRARY_PATH="${SYSROOT_LIB}" "${MACH_PYTHON}" ./mach build -j"${JOBS}" )
     log "Build complete. Binary: ${SRC_DIR}/obj-firefox/dist/bin/firefox"
 }
 
 stage_package() {
     [[ -d "${SRC_DIR}" ]] || die "Source tree missing; build first"
     log "Packaging distributable build"
-    ( cd "${SRC_DIR}" && PATH="${MACH_PATH_DIR}:${PATH}" MOZCONFIG="${SRC_DIR}/mozconfig" "${MACH_PYTHON}" ./mach package )
+    ( cd "${SRC_DIR}" && PATH="${MACH_PATH_DIR}:${PATH}" MOZCONFIG="${SRC_DIR}/mozconfig" LD_LIBRARY_PATH="${SYSROOT_LIB}" "${MACH_PYTHON}" ./mach package )
     log "Package written under ${SRC_DIR}/obj-firefox/dist/"
 }
 
 stage_run() {
     [[ -d "${SRC_DIR}" ]] || die "Source tree missing; build first"
     log "Launching the freshly built Firefox"
-    ( cd "${SRC_DIR}" && PATH="${MACH_PATH_DIR}:${PATH}" MOZCONFIG="${SRC_DIR}/mozconfig" "${MACH_PYTHON}" ./mach run )
+    ( cd "${SRC_DIR}" && PATH="${MACH_PATH_DIR}:${PATH}" MOZCONFIG="${SRC_DIR}/mozconfig" LD_LIBRARY_PATH="${SYSROOT_LIB}" "${MACH_PYTHON}" ./mach run )
 }
 
 stage_clean() {
