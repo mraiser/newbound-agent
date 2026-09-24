@@ -497,21 +497,21 @@ stage_build() {
     [[ -d "${SRC_DIR}" ]] || die "Source tree missing; run the 'extract' stage first"
     stage_configure
     log "Building Firefox with ${JOBS} jobs (grab a coffee — this takes a while)"
-    ( cd "${SRC_DIR}" && PATH="${MACH_PATH_DIR}:${MOZBUILD}/.rustbin:${PATH}" MOZCONFIG="${SRC_DIR}/mozconfig" ${BINDGEN_LD_PATH:+LD_LIBRARY_PATH="${BINDGEN_LD_PATH}"} "${MACH_PYTHON}" ./mach build -j"${JOBS}" )
+    ( cd "${SRC_DIR}" && PATH="${MACH_PATH_DIR}:${MOZBUILD}/.rustbin:${PATH}" MOZCONFIG="${SRC_DIR}/mozconfig" env ${BINDGEN_LD_PATH:+LD_LIBRARY_PATH="${BINDGEN_LD_PATH}"} "${MACH_PYTHON}" ./mach build -j"${JOBS}" )
     log "Build complete. Binary: ${SRC_DIR}/obj-firefox/dist/bin/firefox"
 }
 
 stage_package() {
     [[ -d "${SRC_DIR}" ]] || die "Source tree missing; build first"
     log "Packaging distributable build"
-    ( cd "${SRC_DIR}" && PATH="${MACH_PATH_DIR}:${MOZBUILD}/.rustbin:${PATH}" MOZCONFIG="${SRC_DIR}/mozconfig" ${BINDGEN_LD_PATH:+LD_LIBRARY_PATH="${BINDGEN_LD_PATH}"} "${MACH_PYTHON}" ./mach package )
+    ( cd "${SRC_DIR}" && PATH="${MACH_PATH_DIR}:${MOZBUILD}/.rustbin:${PATH}" MOZCONFIG="${SRC_DIR}/mozconfig" env ${BINDGEN_LD_PATH:+LD_LIBRARY_PATH="${BINDGEN_LD_PATH}"} "${MACH_PYTHON}" ./mach package )
     log "Package written under ${SRC_DIR}/obj-firefox/dist/"
 }
 
 stage_run() {
     [[ -d "${SRC_DIR}" ]] || die "Source tree missing; build first"
     log "Launching the freshly built Firefox"
-    ( cd "${SRC_DIR}" && PATH="${MACH_PATH_DIR}:${MOZBUILD}/.rustbin:${PATH}" MOZCONFIG="${SRC_DIR}/mozconfig" ${BINDGEN_LD_PATH:+LD_LIBRARY_PATH="${BINDGEN_LD_PATH}"} "${MACH_PYTHON}" ./mach run )
+    ( cd "${SRC_DIR}" && PATH="${MACH_PATH_DIR}:${MOZBUILD}/.rustbin:${PATH}" MOZCONFIG="${SRC_DIR}/mozconfig" env ${BINDGEN_LD_PATH:+LD_LIBRARY_PATH="${BINDGEN_LD_PATH}"} "${MACH_PYTHON}" ./mach run )
 }
 
 stage_clean() {
