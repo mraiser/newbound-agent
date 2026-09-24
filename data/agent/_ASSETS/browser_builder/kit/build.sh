@@ -137,6 +137,24 @@ CHECKSUMS_URL="${MOZ_FTP_BASE}/${FIREFOX_VERSION}/SHA256SUMS"
 SRC_DIR="${WORKDIR}/firefox-${FIREFOX_VERSION}"
 
 MOZBUILD="${MOZBUILD_STATE_PATH:-${HOME}/.mozbuild}"
+# Search path (xz/liblzma only) for libxml2's transitive dep during bindgen's
+# CDLL(libclang). Carries no libstdc++, so it cannot poison rustc/cargo/curl.
+# Resolved dynamically every run (Nix store paths drift across system updates).
+if [[ -z "${BINDGEN_LD_PATH:-}" && -n "${MACH_PYTHON:-}" && -d "${MOZBUILD}/clang/lib" ]]; then
+    # Test-LOAD each candidate: an xz dir wins only if libclang actually CDLLs
+    # with it as the sole LD_LIBRARY_PATH (some store liblzma are 32-bit or have
+    # unmet deps of their own). This mirrors exactly what bindgen's check does.
+    for _xz in /nix/store/*xz*/lib/liblzma.so.5; do
+        [[ -f "$_xz" ]] || continue
+        _d="$(dirname "$_xz")"
+        if env -i PATH=/usr/bin:/bin LD_LIBRARY_PATH="$_d" "${MACH_PYTHON}" \
+            -c "from ctypes import CDLL; CDLL('${MOZBUILD}/clang/lib/libclang.so').clang_getAddressSpace" \
+            >/dev/null 2>&1; then
+            BINDGEN_LD_PATH="$_d"; break
+        fi
+    done
+fi
+BINDGEN_LD_PATH="${BINDGEN_LD_PATH:-}"
 
 # NOTE: the compile sysroot's usr/lib dir carries an OLD libcom_err.so.2
 # (e2fsprogs era) and a too-old libstdc++.so.6. Putting that dir on
@@ -222,25 +240,90 @@ fetch_toolchain() {  # <index-name> <dest-dir-under-~/.mozbuild>
 # LD_LIBRARY_PATH before configure, and exporting the sysroot path script-wide
 # poisons curl (its old libcom_err.so.2 shadows the system krb5's .so.3).
 # Idempotent; re-created on every deps run so a re-fetched toolchain self-heals.
+# The staged Mozilla clang suite (clang, llvm-*, libclang) is built for a generic
+# older glibc and expects its support libs beside it. On this NixOS box the loader
+# has NO default search path under mach's scrubbed env, so libclang's deps
+# (libstdc++/libgcc_s/libz) and libxml2's transitive dep (liblzma) go unfound and
+# bindgen's `CDLL(libclang)` dies with a misleading 'libclang too old'. Fix:
+#   * Symlink the needed libs into clang's $ORIGIN/../lib (its RUNPATH), resolved
+#     DYNAMICALLY from the Nix store (paths change across system updates), choosing
+#     a libstdc++ that provides GLIBCXX_3.4.22+ yet needs no newer glibc than the
+#     host's (gcc-12/13 era -- the gcc-15 builds require glibc 2.38 the mach
+#     interpreter lacks). libclang rpath then finds them env-free.
+#   * RUNPATH is NOT transitive, so libxml2's liblzma still needs a search path:
+#     we export BINDGEN_LD_PATH = the xz lib dir ONLY, and set it as LD_LIBRARY_PATH
+#     on the ./mach invocations. It carries no libstdc++, so it cannot poison
+#     rustc/cargo/curl (which use their own rpath).
+# Idempotent and self-healing: re-resolved on every deps run.
+_elf64() { readelf -h "$1" 2>/dev/null | grep -q 'Class:.*ELF64'; }
+_maxglibc() { readelf -V "$1" 2>/dev/null | grep -oE 'GLIBC_2\.[0-9]+' | sort -V | tail -1; }
+
+# Find a 64-bit libstdc++ providing GLIBCXX_3.4.22 whose glibc requirement the
+# host satisfies (reject any needing GLIBC_2.38+, which the 2.37 mach python lacks).
+_find_libstdcxx() {
+    local d rf
+    for d in /nix/store/*gcc*-lib/lib64 /nix/store/*gcc*-lib/lib; do
+        [[ -f "${d}/libstdc++.so.6" ]] || continue
+        rf="$(readlink -f "${d}/libstdc++.so.6")"
+        _elf64 "$rf" || continue
+        strings "$rf" 2>/dev/null | grep -q 'GLIBCXX_3.4.22' || continue
+        [[ "$(_maxglibc "$rf")" == "GLIBC_2.38" ]] && continue
+        echo "$rf"; return 0
+    done
+    return 1
+}
+_find_lib() { # <soname-glob> e.g. 'lib/liblzma.so.5' under /nix/store/*xz*
+    local pat="$1" c rf
+    shift
+    for c in "$@"; do
+        [[ -f "$c" ]] || continue
+        rf="$(readlink -f "$c")"
+        _elf64 "$rf" && { echo "$rf"; return 0; }
+    done
+    return 1
+}
+
 provision_libxml2() {
     local clangbin="${MOZBUILD}/clang/bin"
     local clanglib="${MOZBUILD}/clang/lib"
     local sysusr="${MOZBUILD}/sysroot-$(uname -m)-linux-gnu/usr/lib/$(uname -m)-linux-gnu"
     [[ -d "${clanglib}" ]] || return 0
-    # 1) libxml2 into clang's $ORIGIN/../lib so the whole clang suite runs env-free.
+
+    # libxml2 (clang's direct need) into clang's rpath dir.
     local real="${sysusr}/libxml2.so.2.9.1"
     if [[ -f "${real}" && ! -e "${clanglib}/libxml2.so.2" ]]; then
         ln -sf "${real}" "${clanglib}/libxml2.so.2.9.1"
         ln -sf "libxml2.so.2.9.1" "${clanglib}/libxml2.so.2"
-        log "Linked libxml2.so.2 into clang toolchain lib (env-free clang/llvm tools)"
     fi
-    # 2) A `readelf` on configure's PATH: moz.configure's readelf check looks up the
-    #    plain name `readelf` (clang_search_path includes clang/bin), and the suite's
-    #    llvm-readelf now runs env-free thanks to the libxml2 link above.
+
+    # libstdc++ + libgcc_s into clang's rpath dir (libclang direct deps).
+    local cxx; cxx="$(_find_libstdcxx || true)"
+    if [[ -n "${cxx}" && ! -e "${clanglib}/libstdc++.so.6" ]]; then
+        ln -sf "${cxx}" "${clanglib}/$(basename "${cxx}")"
+        ln -sf "$(basename "${cxx}")" "${clanglib}/libstdc++.so.6"
+        local gdir; gdir="$(dirname "${cxx}")"
+        [[ -f "${gdir}/libgcc_s.so.1" ]] && ln -sf "$(readlink -f "${gdir}/libgcc_s.so.1")" "${clanglib}/libgcc_s.so.1"
+    fi
+    # libz + liblzma into clang's rpath dir (libLLVM/libxml2 needs).
+    local lz xz
+    lz="$(_find_lib x /nix/store/*zlib*/lib/libz.so.1 || true)"
+    if [[ -n "${lz}" && ! -e "${clanglib}/libz.so.1" ]]; then
+        ln -sf "${lz}" "${clanglib}/$(basename "${lz}")"; ln -sf "$(basename "${lz}")" "${clanglib}/libz.so.1"
+    fi
+    xz="$(_find_lib x /nix/store/*xz*/lib/liblzma.so.5 || true)"
+    if [[ -n "${xz}" && ! -e "${clanglib}/liblzma.so.5" ]]; then
+        ln -sf "${xz}" "${clanglib}/$(basename "${xz}")"; ln -sf "$(basename "${xz}")" "${clanglib}/liblzma.so.5"
+    fi
+    # RUNPATH is not transitive: libxml2's liblzma needs a real search path.
+    # Export the xz dir (no libstdc++ in it) for the ./mach LD_LIBRARY_PATH.
+    if [[ -n "${xz}" ]]; then BINDGEN_LD_PATH="$(dirname "${xz}")"; fi
+
+    # A `readelf` on configure's PATH (clang_search_path includes clang/bin).
     if [[ -x "${clangbin}/llvm-readelf" && ! -e "${clangbin}/readelf" ]]; then
         ln -sf llvm-readelf "${clangbin}/readelf"
-        log "Shimmed readelf -> llvm-readelf in clang/bin (configure's readelf check)"
+        log "Shimmed readelf -> llvm-readelf in clang/bin"
     fi
+    log "Provisioned clang toolchain support libs (libxml2/libstdc++/libz/liblzma)"
 }
 
 # Configure needs rustc/cargo/rustdoc on PATH, all runnable in mach's scrubbed
@@ -414,21 +497,21 @@ stage_build() {
     [[ -d "${SRC_DIR}" ]] || die "Source tree missing; run the 'extract' stage first"
     stage_configure
     log "Building Firefox with ${JOBS} jobs (grab a coffee — this takes a while)"
-    ( cd "${SRC_DIR}" && PATH="${MACH_PATH_DIR}:${MOZBUILD}/.rustbin:${PATH}" MOZCONFIG="${SRC_DIR}/mozconfig" "${MACH_PYTHON}" ./mach build -j"${JOBS}" )
+    ( cd "${SRC_DIR}" && PATH="${MACH_PATH_DIR}:${MOZBUILD}/.rustbin:${PATH}" MOZCONFIG="${SRC_DIR}/mozconfig" ${BINDGEN_LD_PATH:+LD_LIBRARY_PATH="${BINDGEN_LD_PATH}"} "${MACH_PYTHON}" ./mach build -j"${JOBS}" )
     log "Build complete. Binary: ${SRC_DIR}/obj-firefox/dist/bin/firefox"
 }
 
 stage_package() {
     [[ -d "${SRC_DIR}" ]] || die "Source tree missing; build first"
     log "Packaging distributable build"
-    ( cd "${SRC_DIR}" && PATH="${MACH_PATH_DIR}:${MOZBUILD}/.rustbin:${PATH}" MOZCONFIG="${SRC_DIR}/mozconfig" "${MACH_PYTHON}" ./mach package )
+    ( cd "${SRC_DIR}" && PATH="${MACH_PATH_DIR}:${MOZBUILD}/.rustbin:${PATH}" MOZCONFIG="${SRC_DIR}/mozconfig" ${BINDGEN_LD_PATH:+LD_LIBRARY_PATH="${BINDGEN_LD_PATH}"} "${MACH_PYTHON}" ./mach package )
     log "Package written under ${SRC_DIR}/obj-firefox/dist/"
 }
 
 stage_run() {
     [[ -d "${SRC_DIR}" ]] || die "Source tree missing; build first"
     log "Launching the freshly built Firefox"
-    ( cd "${SRC_DIR}" && PATH="${MACH_PATH_DIR}:${MOZBUILD}/.rustbin:${PATH}" MOZCONFIG="${SRC_DIR}/mozconfig" "${MACH_PYTHON}" ./mach run )
+    ( cd "${SRC_DIR}" && PATH="${MACH_PATH_DIR}:${MOZBUILD}/.rustbin:${PATH}" MOZCONFIG="${SRC_DIR}/mozconfig" ${BINDGEN_LD_PATH:+LD_LIBRARY_PATH="${BINDGEN_LD_PATH}"} "${MACH_PYTHON}" ./mach run )
 }
 
 stage_clean() {
