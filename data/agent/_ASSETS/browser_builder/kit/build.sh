@@ -226,14 +226,23 @@ fetch_toolchain() {  # <index-name> <dest-dir-under-~/.mozbuild>
 # poisons curl (its old libcom_err.so.2 shadows the system krb5's .so.3).
 # Idempotent; re-created on every deps run so a re-fetched toolchain self-heals.
 provision_libxml2() {
+    local clangbin="${MOZBUILD}/clang/bin"
     local clanglib="${MOZBUILD}/clang/lib"
     local sysusr="${MOZBUILD}/sysroot-$(uname -m)-linux-gnu/usr/lib/$(uname -m)-linux-gnu"
     [[ -d "${clanglib}" ]] || return 0
+    # 1) libxml2 into clang's $ORIGIN/../lib so the whole clang suite runs env-free.
     local real="${sysusr}/libxml2.so.2.9.1"
     if [[ -f "${real}" && ! -e "${clanglib}/libxml2.so.2" ]]; then
         ln -sf "${real}" "${clanglib}/libxml2.so.2.9.1"
         ln -sf "libxml2.so.2.9.1" "${clanglib}/libxml2.so.2"
         log "Linked libxml2.so.2 into clang toolchain lib (env-free clang/llvm tools)"
+    fi
+    # 2) A `readelf` on configure's PATH: moz.configure's readelf check looks up the
+    #    plain name `readelf` (clang_search_path includes clang/bin), and the suite's
+    #    llvm-readelf now runs env-free thanks to the libxml2 link above.
+    if [[ -x "${clangbin}/llvm-readelf" && ! -e "${clangbin}/readelf" ]]; then
+        ln -sf llvm-readelf "${clangbin}/readelf"
+        log "Shimmed readelf -> llvm-readelf in clang/bin (configure's readelf check)"
     fi
 }
 
