@@ -45,6 +45,14 @@ for _td in /nix/store/*-coreutils-*/bin /usr/bin /bin /usr/local/bin; do
 done
 export PATH
 
+# Strip loader injection inherited from the launcher. `stdbuf -oL -eL` wraps
+# this script and injects LD_PRELOAD=.../libstdbuf.so, and the server may add a
+# glibc-2.37 LD_LIBRARY_PATH. Left set, BOTH leak into the interpreter probes
+# below (and into mach): the glibc-2.38 libstdbuf.so fails to load against
+# glibc-2.37 and EVERY candidate is wrongly rejected. Clearing them here makes
+# the script's environment self-contained; mach manages its own loader env.
+unset LD_PRELOAD LD_LIBRARY_PATH
+
 # The server's environment is COMPLETELY empty — no HOME either — and `set -u`
 # makes ${HOME} at MOZBUILD below a fatal "unbound variable". Seed HOME from the
 # passwd entry when absent so the script never depends on inherited state.
@@ -94,13 +102,14 @@ if [[ -z "${MACH_PYTHON}" ]]; then
               /nix/store/*-python3-3.9*/bin/python3.9 \
               python3.11 python3.10 python3.9; do
         _r="$(command -v "$_c" 2>/dev/null || true)"; [[ -n "$_r" ]] || continue
-        # native x86-64? Read the ELF e_machine (offset 18, 2 bytes LE = 0x3e)
-        # in PURE BASH — no od/tr/env subprocess, so the server's glibc-2.37
-        # LD_LIBRARY_PATH (which poisons coreutils-9.11, needing 2.38) can't
-        # break the check. Then version <= 3.11 with a working ctypes.
-        _em="" ; IFS= read -r -d '' -n 2 _em < <(tail -c +19 "$_r" 2>/dev/null) || true
-        if [[ "$_em" == $'>\0' ]] \
-           && LD_LIBRARY_PATH= "$_r" -c 'import sys,ctypes;raise SystemExit(0 if sys.version_info[:2]<=(3,11) else 1)' 2>/dev/null; then
+        # Ask the interpreter ITSELF: native arch AND version <= 3.11 AND working
+        # ctypes. This single probe rejects the aarch64 3.11 builds (they fail to
+        # execute natively / report wrong platform) and the ambient 3.12, and it
+        # spawns nothing else — LD_LIBRARY_PATH is emptied inline so the server's
+        # glibc-2.37 can't poison a 2.38-needing interpreter. (The earlier
+        # pure-bash ELF byte-read returned EMPTY under `stdbuf`/setsid, wrongly
+        # rejecting every candidate — the interpreter probe has no such fragility.)
+        if LD_LIBRARY_PATH= "$_r" -c 'import sys,ctypes,platform;raise SystemExit(0 if (sys.version_info[:2]<=(3,11) and platform.machine()=="x86_64") else 1)' 2>/dev/null; then
             MACH_PYTHON="$_r"; break
         fi
     done
