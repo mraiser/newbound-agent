@@ -45,6 +45,15 @@ for _td in /nix/store/*-coreutils-*/bin /usr/bin /bin /usr/local/bin; do
 done
 export PATH
 
+# The server's environment is COMPLETELY empty — no HOME either — and `set -u`
+# makes ${HOME} at MOZBUILD below a fatal "unbound variable". Seed HOME from the
+# passwd entry when absent so the script never depends on inherited state.
+if [[ -z "${HOME:-}" ]]; then
+    HOME="$(getent passwd "$(id -u)" 2>/dev/null | cut -d: -f6)"
+    [[ -n "${HOME}" ]] || HOME="/tmp"
+    export HOME
+fi
+
 # --------------------------------------------------------------------------
 # Configuration
 # --------------------------------------------------------------------------
