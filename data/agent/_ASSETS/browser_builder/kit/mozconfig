@@ -26,6 +26,23 @@ CC="$HOME/.mozbuild/clang/bin/clang"
 CXX="$HOME/.mozbuild/clang/bin/clang++"
 export CC CXX
 
+# The staged clang dir carries the full LLVM toolchain (llvm-as, lld, llvm-ar,
+# llvm-nm, llvm-ranlib, llvm-objcopy, llvm-strip). Configure looks each tool up
+# by bare name, so put it on PATH AND name them explicitly (the build env is
+# stripped; nothing else provides them). Use the LLVM integrated assembler and
+# lld to match the clang-19 toolchain.
+CLANG_BIN="$HOME/.mozbuild/clang/bin"
+PATH="$CLANG_BIN:$PATH"
+AS="$CLANG_BIN/clang"
+AS_IS_LLVM=1
+LDFLAGS="-fuse-ld=lld"
+AR="$CLANG_BIN/llvm-ar"
+NM="$CLANG_BIN/llvm-nm"
+RANLIB="$CLANG_BIN/llvm-ranlib"
+OBJCOPY="$CLANG_BIN/llvm-objcopy"
+STRIP="$CLANG_BIN/llvm-strip"
+export PATH AS AS_IS_LLVM LDFLAGS AR NM RANLIB OBJCOPY STRIP
+
 # Release-style build: optimized, no debug assertions.
 ac_add_options --enable-optimize
 ac_add_options --disable-debug
