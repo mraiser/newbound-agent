@@ -40,7 +40,7 @@ set -euo pipefail
 # `od` e_machine check then fails for EVERY candidate). Prepend a minimal,
 # always-present tool dir (Nix coreutils) plus the conventional locations so
 # the script is self-sufficient regardless of the inherited environment.
-for _td in /nix/store/*-coreutils-*/bin /usr/bin /bin /usr/local/bin; do
+for _td in /run/current-system/sw/bin /nix/store/*-coreutils-*/bin /usr/bin /bin /usr/local/bin; do
     [[ -d "$_td" ]] && PATH="${_td}${PATH:+:${PATH}}"
 done
 export PATH
@@ -309,10 +309,19 @@ stage_deps() {
     local arch
     arch="$(uname -m)"
     log "Fetching prebuilt toolchains for ${arch} into ${MOZBUILD}"
+    # fetch_toolchain parses JSON with `python3`, but the sanitized PATH above
+    # has no python3 (NixOS sw profile ships none). Expose the already-resolved
+    # NATIVE MACH_PYTHON as `python3` for this stage, so the cache lookups run
+    # under the same interpreter mach itself uses.
+    local _pybin="${MOZBUILD}/.pybin"
+    mkdir -p "${_pybin}"
+    ln -sf "${MACH_PYTHON}" "${_pybin}/python3"
+    PATH="${_pybin}:${PATH}"
     case "${arch}" in
         aarch64|arm64)
             fetch_toolchain "linux64-aarch64-clang-19"   "clang"
             fetch_toolchain "linux64-aarch64-node-22"    "node"
+            fetch_toolchain "linux64-aarch64-pkgconf"    "pkgconf"
             fetch_toolchain "linux64-aarch64-pkgconf"    "pkgconf"
             fetch_toolchain "sysroot-aarch64-linux-gnu"  "sysroot-aarch64-linux-gnu"
             [[ -d "${MOZBUILD}/sysroot-aarch64-linux-gnu/usr/include/gtk-3.0" ]] \
@@ -322,6 +331,7 @@ stage_deps() {
             fetch_toolchain "linux64-clang-19"           "clang"
             fetch_toolchain "linux64-node-22"            "node"
             fetch_toolchain "linux64-nasm"               "nasm"
+            fetch_toolchain "linux64-pkgconf"            "pkgconf"
             fetch_toolchain "linux64-pkgconf"            "pkgconf"
             fetch_toolchain "sysroot-x86_64-linux-gnu"   "sysroot-x86_64-linux-gnu"
             [[ -d "${MOZBUILD}/sysroot-x86_64-linux-gnu/usr/include/gtk-3.0" ]] \
