@@ -32,6 +32,20 @@
 set -euo pipefail
 
 # --------------------------------------------------------------------------
+# Guaranteed tool PATH
+# --------------------------------------------------------------------------
+# The newbound server process runs with an EMPTY PATH, and run_stage spawns
+# this script with no env_clear, so `od`/`env`/`dirname`/`uname` may not be
+# findable — which silently breaks the mach interpreter resolver below (its
+# `od` e_machine check then fails for EVERY candidate). Prepend a minimal,
+# always-present tool dir (Nix coreutils) plus the conventional locations so
+# the script is self-sufficient regardless of the inherited environment.
+for _td in /nix/store/*-coreutils-*/bin /usr/bin /bin /usr/local/bin; do
+    [[ -d "$_td" ]] && PATH="${_td}${PATH:+:${PATH}}"
+done
+export PATH
+
+# --------------------------------------------------------------------------
 # Configuration
 # --------------------------------------------------------------------------
 FIREFOX_VERSION="${FIREFOX_VERSION:-128.0esr}"
@@ -61,10 +75,13 @@ if [[ -z "${MACH_PYTHON}" ]]; then
               /nix/store/*-python3-3.9*/bin/python3.9 \
               python3.11 python3.10 python3.9; do
         _r="$(command -v "$_c" 2>/dev/null || true)"; [[ -n "$_r" ]] || continue
-        # native x86-64? ELF e_machine (offset 18, 2 bytes LE) must be 0x3e,
-        # and version <= 3.11 with a working ctypes (LD_LIBRARY_PATH cleared).
-        if [[ "$(od -An -tx1 -j18 -N2 "$_r" 2>/dev/null | tr -d ' ')" == "3e00" ]] \
-           && env -u LD_LIBRARY_PATH "$_r" -c 'import sys,ctypes;raise SystemExit(0 if sys.version_info[:2]<=(3,11) else 1)' 2>/dev/null; then
+        # native x86-64? Read the ELF e_machine (offset 18, 2 bytes LE = 0x3e)
+        # in PURE BASH — no od/tr/env subprocess, so the server's glibc-2.37
+        # LD_LIBRARY_PATH (which poisons coreutils-9.11, needing 2.38) can't
+        # break the check. Then version <= 3.11 with a working ctypes.
+        _em="" ; IFS= read -r -d '' -n 2 _em < <(tail -c +19 "$_r" 2>/dev/null) || true
+        if [[ "$_em" == $'>\0' ]] \
+           && LD_LIBRARY_PATH= "$_r" -c 'import sys,ctypes;raise SystemExit(0 if sys.version_info[:2]<=(3,11) else 1)' 2>/dev/null; then
             MACH_PYTHON="$_r"; break
         fi
     done
