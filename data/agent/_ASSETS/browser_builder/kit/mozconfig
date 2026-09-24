@@ -17,6 +17,15 @@ mk_add_options MOZ_OBJDIR=@TOPSRCDIR@/obj-firefox
 # digest lookup requires a real mozilla-central checkout.
 ac_add_options --enable-bootstrap=no-update
 
+# Point configure at the toolchains stage_deps staged under ~/.mozbuild. The
+# no-update bootstrap only *enables* these paths to be read; it does not set
+# CC/CXX, and the build runs with a stripped environment (no compiler on PATH),
+# so without these explicit exports configure aborts with
+# "Cannot find the target C compiler". $HOME/.mozbuild is where deps put them.
+CC="$HOME/.mozbuild/clang/bin/clang"
+CXX="$HOME/.mozbuild/clang/bin/clang++"
+export CC CXX
+
 # Release-style build: optimized, no debug assertions.
 ac_add_options --enable-optimize
 ac_add_options --disable-debug
