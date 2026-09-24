@@ -51,7 +51,12 @@ MOZ_FTP_BASE="${MOZ_FTP_BASE:-https://ftp.mozilla.org/pub/firefox/releases}"
 unset LD_LIBRARY_PATH
 MACH_PYTHON="${MACH_PYTHON:-}"
 if [[ -z "${MACH_PYTHON}" ]]; then
-    for _c in /nix/store/*-python3-3.11*/bin/python3.11 \
+    # Pin the known-good NATIVE x86-64 3.10 FIRST: this host's only native
+    # <=3.11. Its store 3.11 builds are aarch64 (e_machine b700) under qemu
+    # binfmt and are correctly rejected by the od check below. Then widen the
+    # search; a 3.11 beats 3.10 when a native one exists.
+    for _c in /nix/store/a5k7x5mn7i7rcji4n99mwiqhmgjdzxmk-python3-3.10.12/bin/python3.10 \
+              /nix/store/*-python3-3.11*/bin/python3.11 \
               /nix/store/*-python3-3.10*/bin/python3.10 \
               /nix/store/*-python3-3.9*/bin/python3.9 \
               python3.11 python3.10 python3.9; do
@@ -63,7 +68,14 @@ if [[ -z "${MACH_PYTHON}" ]]; then
             MACH_PYTHON="$_r"; break
         fi
     done
-    MACH_PYTHON="${MACH_PYTHON:-python3}"
+    # NEVER fall back to bare `python3`: on this host that is the ambient
+    # 3.12, which mach rejects with the misleading 'not in the subpath' crash.
+    if [[ -z "${MACH_PYTHON}" ]]; then
+        echo "build.sh: no NATIVE x86-64 CPython <= 3.11 found for mach." >&2
+        echo "  The ambient python3 is $(python3 --version 2>&1) (too new);" >&2
+        echo "  install a native python3.11/3.10 or export MACH_PYTHON=/path/to/python." >&2
+        exit 1
+    fi
 fi
 MACH_PATH_DIR="$(dirname "${MACH_PYTHON}")"
 
