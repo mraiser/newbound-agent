@@ -49,9 +49,19 @@ export PATH
 # makes ${HOME} at MOZBUILD below a fatal "unbound variable". Seed HOME from the
 # passwd entry when absent so the script never depends on inherited state.
 if [[ -z "${HOME:-}" ]]; then
-    HOME="$(getent passwd "$(id -u)" 2>/dev/null | cut -d: -f6)"
-    [[ -n "${HOME}" ]] || HOME="/tmp"
+    # Pure-bash uid + /etc/passwd lookup — NO subprocess (id/getent/cut), so the
+    # glibc-2.37 LD_LIBRARY_PATH that stdbuf's LD_PRELOAD re-injects can't break
+    # the lookup. $UID is a bash builtin; /etc/passwd fields are colon-separated
+    # with the home dir in field 6.
+    HOME="/tmp"
+    if [[ -n "${UID:-}" && -r /etc/passwd ]]; then
+        while IFS= read -r _line || [[ -n "${_line}" ]]; do
+            IFS=':' read -r -a _f <<< "${_line}"
+            if [[ "${_f[2]:-}" == "${UID}" ]]; then HOME="${_f[5]:-/tmp}"; break; fi
+        done < /etc/passwd
+    fi
     export HOME
+    unset _line _f
 fi
 
 # --------------------------------------------------------------------------
