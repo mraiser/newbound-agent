@@ -218,6 +218,25 @@ fetch_toolchain() {  # <index-name> <dest-dir-under-~/.mozbuild>
 # pinned version with the box's own cargo, into the exact path configure's
 # bootstrap search reads (~/.mozbuild/cbindgen/cbindgen). Version-gated so a
 # wrong binary (e.g. an earlier fetched .latest) is replaced, not trusted.
+# The staged Mozilla clang suite (clang, llvm-readelf, ...) links libxml2.so.2,
+# which ships in the compile sysroot, NOT in the clang toolchain. The binaries
+# have RUNPATH $ORIGIN/../lib, so a symlink there lets them run with NO
+# LD_LIBRARY_PATH at all. This is the env-independent fix: mach scrubs
+# LD_LIBRARY_PATH before configure, and exporting the sysroot path script-wide
+# poisons curl (its old libcom_err.so.2 shadows the system krb5's .so.3).
+# Idempotent; re-created on every deps run so a re-fetched toolchain self-heals.
+provision_libxml2() {
+    local clanglib="${MOZBUILD}/clang/lib"
+    local sysusr="${MOZBUILD}/sysroot-$(uname -m)-linux-gnu/usr/lib/$(uname -m)-linux-gnu"
+    [[ -d "${clanglib}" ]] || return 0
+    local real="${sysusr}/libxml2.so.2.9.1"
+    if [[ -f "${real}" && ! -e "${clanglib}/libxml2.so.2" ]]; then
+        ln -sf "${real}" "${clanglib}/libxml2.so.2.9.1"
+        ln -sf "libxml2.so.2.9.1" "${clanglib}/libxml2.so.2"
+        log "Linked libxml2.so.2 into clang toolchain lib (env-free clang/llvm tools)"
+    fi
+}
+
 provision_cbindgen() {
     local dest="${MOZBUILD}/cbindgen/cbindgen"
     if [[ -x "${dest}" ]] && "${dest}" --version 2>/dev/null | grep -q "${CBINDGEN_VERSION}"; then
@@ -345,6 +364,7 @@ stage_deps() {
             die "No toolchain mapping for ${arch}"
             ;;
     esac
+    provision_libxml2
     provision_cbindgen
     log "Toolchains ready (mozconfig --enable-bootstrap=no-update picks them up)"
 }
