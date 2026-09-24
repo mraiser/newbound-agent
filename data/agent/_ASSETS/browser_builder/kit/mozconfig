@@ -54,9 +54,13 @@ ac_add_options --disable-debug
 # Speed up rebuilds if sccache is installed (optional).
 # ac_add_options --with-ccache=sccache
 
-# Reduce noise / footprint for a headless build environment (optional):
-# ac_add_options --disable-crashreporter
-# ac_add_options --disable-updater
+# Reduce noise / footprint for a headless build environment. The crashreporter
+# is REQUIRED to be disabled for a tarball build: with it enabled, configure
+# bootstraps dump_syms via `mach artifact toolchain`, which needs a VCS checkout
+# with a resolvable revision ('No such remote origin') and fails. An automation
+# browser has no use for the crashreporter (or the updater) anyway.
+ac_add_options --disable-crashreporter
+ac_add_options --disable-updater
 
 # No WASI sysroot on this box: build third-party libs natively instead of
 # wasm-sandboxing them (configure's own suggested fallback).
