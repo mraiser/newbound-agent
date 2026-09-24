@@ -41,7 +41,11 @@ NM="$CLANG_BIN/llvm-nm"
 RANLIB="$CLANG_BIN/llvm-ranlib"
 OBJCOPY="$CLANG_BIN/llvm-objcopy"
 STRIP="$CLANG_BIN/llvm-strip"
-export PATH AS AS_IS_LLVM LDFLAGS AR NM RANLIB OBJCOPY STRIP
+# Point DUMP_SYMS at the no-op stub in ~/.mozbuild/.hostbin (build.sh provisions
+# it). An explicit DUMP_SYMS makes moz.configure SKIP the `mach artifact
+# toolchain` bootstrap, which fails on a tarball (no VCS revision to resolve).
+DUMP_SYMS="$HOME/.mozbuild/.hostbin/dump_syms"
+export PATH AS AS_IS_LLVM LDFLAGS AR NM RANLIB OBJCOPY STRIP DUMP_SYMS
 
 # Release-style build: optimized, no debug assertions.
 ac_add_options --enable-optimize

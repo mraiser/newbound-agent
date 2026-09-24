@@ -379,6 +379,15 @@ provision_hosttools() {
             fi
         done
     done
+    # A no-op dump_syms: this tarball build generates no Breakpad symbols
+    # (crashreporter disabled), but moz.configure's DUMP_SYMS check would
+    # otherwise trigger a VCS-dependent `mach artifact toolchain` fetch that
+    # fails on a tarball ('No such remote origin'). An explicit program on PATH
+    # (plus DUMP_SYMS exported in mozconfig) makes configure skip the bootstrap.
+    if [[ ! -e "${shim}/dump_syms" ]]; then
+        printf '#!/bin/sh\n# no-op dump_syms stub (tarball build, no Breakpad symbols)\nexit 0\n' > "${shim}/dump_syms"
+        chmod +x "${shim}/dump_syms"
+    fi
     log "Host tools shimmed in ${shim} ($(ls "${shim}" | tr '\n' ' '))"
 }
 
