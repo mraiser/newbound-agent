@@ -360,6 +360,28 @@ provision_rust() {
     fi
 }
 
+# Configure looks up assorted host tools BY NAME on PATH (unzip, zip, m4, awk,
+# tar, ...). On this NixOS box they live in the store, not on the sanitized PATH.
+# Build a .hostbin shim of symlinks to native, env-clean binaries, resolved
+# dynamically. Only tools that resolve are linked; configure's alternatives
+# (m4|gm4, gawk|mawk|nawk) are covered by the one real binary we find.
+provision_hosttools() {
+    local shim="${MOZBUILD}/.hostbin"
+    mkdir -p "${shim}"
+    local t c
+    for t in unzip zip m4 gawk awk tar gzip bzip2 xz; do
+        [[ -e "${shim}/${t}" ]] && continue
+        for c in $(command -v "${t}" 2>/dev/null) /nix/store/*${t}*/bin/${t}; do
+            [[ -x "$c" ]] || continue
+            case "$(readlink -f "$c" 2>/dev/null)" in *system-path*) continue;; esac
+            if env -i "$c" --version >/dev/null 2>&1 || env -i "$c" --help >/dev/null 2>&1; then
+                ln -sf "$c" "${shim}/${t}"; break
+            fi
+        done
+    done
+    log "Host tools shimmed in ${shim} ($(ls "${shim}" | tr '\n' ' '))"
+}
+
 provision_cbindgen() {
     local dest="${MOZBUILD}/cbindgen/cbindgen"
     if [[ -x "${dest}" ]] && "${dest}" --version 2>/dev/null | grep -q "${CBINDGEN_VERSION}"; then
@@ -489,6 +511,7 @@ stage_deps() {
     esac
     provision_libxml2
     provision_rust
+    provision_hosttools
     provision_cbindgen
     log "Toolchains ready (mozconfig --enable-bootstrap=no-update picks them up)"
 }
@@ -497,21 +520,21 @@ stage_build() {
     [[ -d "${SRC_DIR}" ]] || die "Source tree missing; run the 'extract' stage first"
     stage_configure
     log "Building Firefox with ${JOBS} jobs (grab a coffee — this takes a while)"
-    ( cd "${SRC_DIR}" && PATH="${MACH_PATH_DIR}:${MOZBUILD}/.rustbin:${PATH}" MOZCONFIG="${SRC_DIR}/mozconfig" env ${BINDGEN_LD_PATH:+LD_LIBRARY_PATH="${BINDGEN_LD_PATH}"} "${MACH_PYTHON}" ./mach build -j"${JOBS}" )
+    ( cd "${SRC_DIR}" && PATH="${MACH_PATH_DIR}:${MOZBUILD}/.rustbin:${MOZBUILD}/.hostbin:${PATH}" MOZCONFIG="${SRC_DIR}/mozconfig" env ${BINDGEN_LD_PATH:+LD_LIBRARY_PATH="${BINDGEN_LD_PATH}"} "${MACH_PYTHON}" ./mach build -j"${JOBS}" )
     log "Build complete. Binary: ${SRC_DIR}/obj-firefox/dist/bin/firefox"
 }
 
 stage_package() {
     [[ -d "${SRC_DIR}" ]] || die "Source tree missing; build first"
     log "Packaging distributable build"
-    ( cd "${SRC_DIR}" && PATH="${MACH_PATH_DIR}:${MOZBUILD}/.rustbin:${PATH}" MOZCONFIG="${SRC_DIR}/mozconfig" env ${BINDGEN_LD_PATH:+LD_LIBRARY_PATH="${BINDGEN_LD_PATH}"} "${MACH_PYTHON}" ./mach package )
+    ( cd "${SRC_DIR}" && PATH="${MACH_PATH_DIR}:${MOZBUILD}/.rustbin:${MOZBUILD}/.hostbin:${PATH}" MOZCONFIG="${SRC_DIR}/mozconfig" env ${BINDGEN_LD_PATH:+LD_LIBRARY_PATH="${BINDGEN_LD_PATH}"} "${MACH_PYTHON}" ./mach package )
     log "Package written under ${SRC_DIR}/obj-firefox/dist/"
 }
 
 stage_run() {
     [[ -d "${SRC_DIR}" ]] || die "Source tree missing; build first"
     log "Launching the freshly built Firefox"
-    ( cd "${SRC_DIR}" && PATH="${MACH_PATH_DIR}:${MOZBUILD}/.rustbin:${PATH}" MOZCONFIG="${SRC_DIR}/mozconfig" env ${BINDGEN_LD_PATH:+LD_LIBRARY_PATH="${BINDGEN_LD_PATH}"} "${MACH_PYTHON}" ./mach run )
+    ( cd "${SRC_DIR}" && PATH="${MACH_PATH_DIR}:${MOZBUILD}/.rustbin:${MOZBUILD}/.hostbin:${PATH}" MOZCONFIG="${SRC_DIR}/mozconfig" env ${BINDGEN_LD_PATH:+LD_LIBRARY_PATH="${BINDGEN_LD_PATH}"} "${MACH_PYTHON}" ./mach run )
 }
 
 stage_clean() {
