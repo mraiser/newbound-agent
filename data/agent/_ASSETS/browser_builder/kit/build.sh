@@ -369,7 +369,7 @@ provision_hosttools() {
     local shim="${MOZBUILD}/.hostbin"
     mkdir -p "${shim}"
     local t c
-    for t in unzip zip m4 gawk awk tar gzip bzip2 xz; do
+    for t in unzip zip m4 gawk awk tar gzip bzip2 xz make gmake; do
         [[ -e "${shim}/${t}" ]] && continue
         for c in $(command -v "${t}" 2>/dev/null) /nix/store/*${t}*/bin/${t}; do
             [[ -x "$c" ]] || continue
