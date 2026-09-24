@@ -45,13 +45,16 @@ for _td in /nix/store/*-coreutils-*/bin /usr/bin /bin /usr/local/bin; do
 done
 export PATH
 
-# Strip loader injection inherited from the launcher. `stdbuf -oL -eL` wraps
-# this script and injects LD_PRELOAD=.../libstdbuf.so, and the server may add a
-# glibc-2.37 LD_LIBRARY_PATH. Left set, BOTH leak into the interpreter probes
-# below (and into mach): the glibc-2.38 libstdbuf.so fails to load against
-# glibc-2.37 and EVERY candidate is wrongly rejected. Clearing them here makes
-# the script's environment self-contained; mach manages its own loader env.
-unset LD_PRELOAD LD_LIBRARY_PATH
+# Strip loader INJECTION inherited from the launcher. `stdbuf -oL -eL` wraps
+# this script and injects LD_PRELOAD=.../libstdbuf.so; left set it leaks into the
+# interpreter probes below (and into mach): the glibc-2.38 libstdbuf.so fails to
+# load against the server's glibc-2.37 LD_LIBRARY_PATH and EVERY candidate is
+# wrongly rejected. LD_PRELOAD must go entirely. LD_LIBRARY_PATH is NOT unset —
+# the staged Mozilla clang (CC, below) links libxml2.so.2 from the compile
+# sysroot and needs a search path for it; instead we REBUILD it to just the
+# sysroot's lib dir, dropping the server's poisoned glibc-2.37 entry.
+unset LD_PRELOAD
+unset LD_LIBRARY_PATH
 
 # The server's environment is COMPLETELY empty — no HOME either — and `set -u`
 # makes ${HOME} at MOZBUILD below a fatal "unbound variable". Seed HOME from the
@@ -134,6 +137,13 @@ CHECKSUMS_URL="${MOZ_FTP_BASE}/${FIREFOX_VERSION}/SHA256SUMS"
 SRC_DIR="${WORKDIR}/firefox-${FIREFOX_VERSION}"
 
 MOZBUILD="${MOZBUILD_STATE_PATH:-${HOME}/.mozbuild}"
+
+# The staged Mozilla clang (CC, set in mozconfig) links libxml2.so.2 from the
+# compile sysroot; give the loader a search path to it. This REBUILDS (not
+# appends to) LD_LIBRARY_PATH, so the server's poisoned glibc-2.37 entry is gone
+# and only the sysroot lib dir remains.
+SYSROOT_LIB="${MOZBUILD}/sysroot-$(uname -m)-linux-gnu/usr/lib/$(uname -m)-linux-gnu"
+if [[ -d "${SYSROOT_LIB}" ]]; then export LD_LIBRARY_PATH="${SYSROOT_LIB}"; fi
 TC_INDEX="https://firefox-ci-tc.services.mozilla.com/api/index/v1/task"
 TC_QUEUE="https://firefox-ci-tc.services.mozilla.com/api/queue/v1/task"
 
