@@ -2296,6 +2296,12 @@ pub mod fillmore {
             ::flowlang::rustcmd::RustCmd::new("hpovqp19c92292802o2da").execute(d).expect("Rust command execution failed").get_object("a")
         }
 
+        pub fn lora_to_mhm(job: DataObject) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_object("job", job);
+            ::flowlang::rustcmd::RustCmd::new("tnppoo1a0a9d501f7j1").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
     }
 }
 
@@ -3971,6 +3977,33 @@ pub mod gudrun {
         use ::ndata::data::Data;
 
     }
+    pub mod lora_to_mhm {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+        pub fn submit(job: DataObject, nn_sessionid: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_object("job", job);
+            d.put_string("nn_sessionid", &nn_sessionid);
+            ::flowlang::rustcmd::RustCmd::new("horxtz1a0a9d4f19en1").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn load_lora_tags(storeid: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("storeid", &storeid);
+            ::flowlang::rustcmd::RustCmd::new("simokj1a0a9d4fa42t1").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+    }
+    pub mod select_lora {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+    }
 }
 
 pub mod kb {
@@ -5070,6 +5103,8 @@ pub struct old_gudrun_topnav {}
 pub struct old_gudrun_train {}
 pub struct old_gudrun_video_to_lora {}
 pub struct old_gudrun_select_fileupload {}
+pub struct old_gudrun_lora_to_mhm {}
+pub struct old_gudrun_select_lora {}
 pub struct old_kb_platform_api {}
 pub struct old_kb_workflow {}
 pub struct old_kb_frontend {}
@@ -5257,6 +5292,8 @@ pub struct old_gudrun {
     pub train: old_gudrun_train,
     pub video_to_lora: old_gudrun_video_to_lora,
     pub select_fileupload: old_gudrun_select_fileupload,
+    pub lora_to_mhm: old_gudrun_lora_to_mhm,
+    pub select_lora: old_gudrun_select_lora,
 }
 pub struct old_kb {
     pub platform_api: old_kb_platform_api,
@@ -5484,6 +5521,8 @@ pub const fn new() -> api {
             train: old_gudrun_train {},
             video_to_lora: old_gudrun_video_to_lora {},
             select_fileupload: old_gudrun_select_fileupload {},
+            lora_to_mhm: old_gudrun_lora_to_mhm {},
+            select_lora: old_gudrun_select_lora {},
         },
         kb: old_kb {
             platform_api: old_kb_platform_api {},
@@ -6580,6 +6619,10 @@ impl old_fillmore_jobs {
     pub fn oneshot(&self, job: DataObject) -> DataObject {
         self::fillmore::jobs::oneshot(job)
     }
+    #[deprecated(note = "use api::fillmore::jobs::lora_to_mhm instead")]
+    pub fn lora_to_mhm(&self, job: DataObject) -> DataObject {
+        self::fillmore::jobs::lora_to_mhm(job)
+    }
 }
 impl old_genmore_common {
     #[deprecated(note = "use api::genmore::common::add_info_to_png instead")]
@@ -7411,6 +7454,16 @@ impl old_gudrun_tokens {
     #[deprecated(note = "use api::gudrun::tokens::my_tipjar_id instead")]
     pub fn my_tipjar_id(&self, nn_sessionid: String) -> String {
         self::gudrun::tokens::my_tipjar_id(nn_sessionid)
+    }
+}
+impl old_gudrun_lora_to_mhm {
+    #[deprecated(note = "use api::gudrun::lora_to_mhm::submit instead")]
+    pub fn submit(&self, job: DataObject, nn_sessionid: String) -> DataObject {
+        self::gudrun::lora_to_mhm::submit(job, nn_sessionid)
+    }
+    #[deprecated(note = "use api::gudrun::lora_to_mhm::load_lora_tags instead")]
+    pub fn load_lora_tags(&self, storeid: String) -> DataObject {
+        self::gudrun::lora_to_mhm::load_lora_tags(storeid)
     }
 }
 impl old_minifig_minifig {
