@@ -313,6 +313,7 @@ stage_deps() {
         aarch64|arm64)
             fetch_toolchain "linux64-aarch64-clang-19"   "clang"
             fetch_toolchain "linux64-aarch64-node-22"    "node"
+            fetch_toolchain "linux64-aarch64-pkgconf"    "pkgconf"
             fetch_toolchain "sysroot-aarch64-linux-gnu"  "sysroot-aarch64-linux-gnu"
             [[ -d "${MOZBUILD}/sysroot-aarch64-linux-gnu/usr/include/gtk-3.0" ]] \
                 || die "sysroot lacks gtk-3.0 headers; configure cannot build a desktop browser against it"
@@ -321,6 +322,7 @@ stage_deps() {
             fetch_toolchain "linux64-clang-19"           "clang"
             fetch_toolchain "linux64-node-22"            "node"
             fetch_toolchain "linux64-nasm"               "nasm"
+            fetch_toolchain "linux64-pkgconf"            "pkgconf"
             fetch_toolchain "sysroot-x86_64-linux-gnu"   "sysroot-x86_64-linux-gnu"
             [[ -d "${MOZBUILD}/sysroot-x86_64-linux-gnu/usr/include/gtk-3.0" ]] \
                 || die "sysroot lacks gtk-3.0 headers; configure cannot build a desktop browser against it"
