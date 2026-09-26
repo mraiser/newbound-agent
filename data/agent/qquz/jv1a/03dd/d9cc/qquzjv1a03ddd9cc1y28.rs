@@ -90,7 +90,23 @@ let script = if launch == "all" {
         ws = workspace, v = version, stage = launch
     )
 };
+// The newbound server runs with an EMPTY environment (no PATH at all), and we
+// don't env_clear here — so the child inherits that empty env and the bare
+// `stdbuf` in the script line fails with "command not found" before build.sh's
+// own PATH bootstrap can run. Guarantee a minimal tool PATH (Nix coreutils,
+// which carries stdbuf, plus the conventional dirs) for the spawn. build.sh
+// re-prepends these itself too; this only seeds the outer `bash -c` resolution.
+let mut seed_path = String::new();
+for e in std::fs::read_dir("/nix/store").into_iter().flatten().flatten() {
+    let name = e.file_name().to_string_lossy().to_string();
+    if name.contains("coreutils") {
+        let bin = format!("{}/bin", e.path().display());
+        if Path::new(&bin).is_dir() { seed_path = format!("{}:{}", bin, seed_path); }
+    }
+}
+let tool_path = format!("{}/usr/bin:/bin:/usr/local/bin:/run/current-system/sw/bin", seed_path);
 let child = Command::new("setsid").arg("bash").arg("-c").arg(&script)
+    .env("PATH", &tool_path)
     .stdin(Stdio::null()).stdout(Stdio::from(log)).stderr(Stdio::from(logerr))
     .spawn();
 let mut child = match child { Ok(c) => c, Err(e) => return err(format!("spawn failed: {}", e)) };
