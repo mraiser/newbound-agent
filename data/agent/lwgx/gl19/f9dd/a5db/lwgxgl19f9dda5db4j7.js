@@ -14,6 +14,6 @@
 var me = this;
 var ME = document.getElementById(me.UUID);
 
-const ADDENDUM = `Never try to scan the whole hard drive-- there are millions of files and many of them are attached via the network over slow connections.`;
+const ADDENDUM = `Never try to scan the whole filesystem-- there are millions of files and many of them are attached via the network over slow connections.`;
 
 Object.assign(me, { ADDENDUM });
