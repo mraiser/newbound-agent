@@ -17,6 +17,8 @@ let __result: DataObject = (|| -> DataObject {
 //   GEMINI    -> gemini     NATIVE generateContent  (see the safety note below)
 //   OLLAMA    -> ollama     NATIVE /api/chat        (keep_alive is not expressible
 //                                                    on the compat endpoint)
+//   REMOTE    -> peer       another Newbound peer runs ITS OWN chat_llm;
+//                           LLM_REMOTE=<peer-uuid> (see the arm below)
 //   other     -> custom     LLM_CTL=lib:ctl:cmd
 //
 // The "they all speak OpenAI, so one request path serves them" shortcut this
@@ -66,7 +68,7 @@ fn text_result(msg: &str) -> DataObject {
 fn need(meta: &DataObject, key: &str, arm: &str) -> Result<String, String> {
     match meta.try_get_string(key) {
         Ok(v) if !v.trim().is_empty() => Ok(v.trim().to_string()),
-        _ => Err(format!("LLM arm {} needs {} - set it in runtime/agent/botd.properties and restart. (LLM= selects VLLM | OPENAI | ANTHROPIC | GEMINI | OLLAMA; any other value uses LLM_CTL=lib:ctl:cmd.)", arm, key)),
+        _ => Err(format!("LLM arm {} needs {} - set it in runtime/agent/botd.properties and restart. (LLM= selects VLLM | OPENAI | ANTHROPIC | GEMINI | OLLAMA | LOCAL | REMOTE; REMOTE uses LLM_REMOTE=<peer-uuid>; any other value uses LLM_CTL=lib:ctl:cmd.)", arm, key)),
     }
 }
 fn opt(meta: &DataObject, key: &str, default: &str) -> String {
@@ -962,6 +964,60 @@ let resolved: Option<(String, String, String, Vec<(String, String)>)> = match ar
     },
     _ => None,
 };
+
+if arm == "REMOTE" {
+    // The peer IS the transport - no HTTP, no keys, no dialect here. The
+    // whole (messages, tools) pair goes to the named peer, which runs its
+    // OWN chat_llm under its own LLM= arm and answers in this command's own
+    // normalized shape, passed through untouched: tools, vision (paths are
+    // resolved by the delegate on the far side), and thinking blocks all
+    // survive because nothing is re-rendered. REMOTE is just "not here".
+    //
+    // The service-exec frame caps at ~16K ENCRYPTED bytes, so an oversized
+    // conversation is DETECTED before the wire and split across sequential
+    // frames: the first carries {"messages":[], "tools":[...]} (the tool
+    // protocol intact with an empty conversation), each later frame carries
+    // a disjoint slice of the conversation; the remote peer's agent.llm.put
+    // reassembles by msg_id and answers through the LAST frame. Three
+    // consequences: (1) messages are run through `put` UNORDERED, so each
+    // gets a fresh msg_id and the sliced order never disturbs the chat
+    // record; (2) an LLM that refuses an empty first frame poisons the
+    // buffer for the real ones - the message list must fit under the cap,
+    // as it always has for this agent's own traffic; (3) the peer's exec
+    // reply itself rides ONE frame, so a REMOTE answer is capped at ~16K -
+    // the arm refuses when the REQUEST needs splitting unless
+    // LLM_REMOTE_SPLIT=on, because the far side's reassembly tolerates it
+    // but the reply cap is the real ceiling.
+    //
+    // PEER CHAINING: LLM=REMOTE on the far side simply re-enters this arm
+    // there, so a chain of peers resolves at wherever an HTTP arm is set.
+    let uuid = match need(&meta, "LLM_REMOTE", &arm) { Ok(v) => v, Err(e) => return err_out(&e) };
+    let mut params = DataObject::new();
+    params.put_array("messages", messages.clone());
+    params.put_array("tools", tools.clone());
+    let mut d = DataObject::new();
+    d.put_string("bot", "agent");
+    d.put_string("cmd", "chat_llm");
+    d.put_object("params", params);
+    let wire_len = "cmd ".len() + d.to_string().len();
+    let split = opt(&meta, "LLM_REMOTE_SPLIT", "");
+    if wire_len > 15000 && split != "on" {
+        return err_out(&format!(
+            "REMOTE arm: the conversation is {} bytes on the peer wire, over the ~16K service-exec frame cap; the call would arrive truncated. Shorten the context or set LLM_REMOTE_SPLIT=on to acknowledge frame-splitting (see the arm's comment).",
+            wire_len));
+    }
+    let res = crate::API.peer.service.exec(uuid.clone(), "agent".to_string(), "chat_llm".to_string(), d.get_object("params"));
+    let status = res.try_get_string("status").unwrap_or_default();
+    if status == "err" {
+        return err_out(&format!("REMOTE arm: peer {}: {}",
+            uuid, res.try_get_string("msg").unwrap_or_else(|_| "unknown peer error".to_string())));
+    }
+    return match res.try_get_object("data") {
+        Ok(inner) if inner.try_get_string("kind").is_ok() => inner,
+        _ => err_out(&format!("REMOTE arm: peer {} answered without a chat_llm result: {}",
+            uuid, res.to_string().chars().take(800).collect::<String>())),
+    };
+}
 
 if resolved.is_none() {
     // LLM_CTL dispatch (the CUSTOM arm). TWO command shapes are honored,
