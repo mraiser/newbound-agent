@@ -992,12 +992,25 @@ if arm == "REMOTE" {
     // PEER CHAINING: LLM=REMOTE on the far side simply re-enters this arm
     // there, so a chain of peers resolves at wherever an HTTP arm is set.
     let uuid = match need(&meta, "LLM_REMOTE", &arm) { Ok(v) => v, Err(e) => return err_out(&e) };
+    // peer.service.exec can only reach commands on a PUBLISHED APP's boot
+    // control - llm is not an app, so it cannot be named directly. The bridge
+    // is app.app.exec, which IS on the `app` app's boot control and runs ANY
+    // command by (lib, id). Its own id is genesis-fixed (identical on every
+    // install); the remote chat_llm id is per-install, so it is configurable
+    // via LLM_REMOTE_ID and defaults to THIS instance's chat_llm id (the
+    // common case: both peers share the same agent-store snapshot).
+    let remote_id = opt(&meta, "LLM_REMOTE_ID", "xyhwys19f70b2af86l7cdf");
+    let mut llm_args = DataObject::new();
+    llm_args.put_array("messages", messages.clone());
+    llm_args.put_array("tools", tools.clone());
     let mut params = DataObject::new();
-    params.put_array("messages", messages.clone());
-    params.put_array("tools", tools.clone());
+    params.put_string("lib", "agent");
+    params.put_string("id", &remote_id);
+    params.put_object("args", llm_args);
+    params.put_string("nn_sessionid", "");
     let mut d = DataObject::new();
-    d.put_string("bot", "agent");
-    d.put_string("cmd", "chat_llm");
+    d.put_string("bot", "app");
+    d.put_string("cmd", "exec");
     d.put_object("params", params);
     let wire_len = "cmd ".len() + d.to_string().len();
     let split = opt(&meta, "LLM_REMOTE_SPLIT", "");
@@ -1006,7 +1019,8 @@ if arm == "REMOTE" {
             "REMOTE arm: the conversation is {} bytes on the peer wire, over the ~16K service-exec frame cap; the call would arrive truncated. Shorten the context or set LLM_REMOTE_SPLIT=on to acknowledge frame-splitting (see the arm's comment).",
             wire_len));
     }
-    let res = crate::API.peer.service.exec(uuid.clone(), "agent".to_string(), "chat_llm".to_string(), d.get_object("params"));
+    // app app exec on the far peer; app.app.exec id is genesis-fixed.
+    let res = crate::API.peer.service.exec(uuid.clone(), "app".to_string(), "exec".to_string(), d.get_object("params"));
     let status = res.try_get_string("status").unwrap_or_default();
     if status == "err" {
         return err_out(&format!("REMOTE arm: peer {}: {}",
