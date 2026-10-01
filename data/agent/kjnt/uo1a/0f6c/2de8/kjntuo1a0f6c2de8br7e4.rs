@@ -1,0 +1,103 @@
+// The session index owns two things the generic store-writer (app.write)
+// can't: the per-user index FILE, and the server-side binding of an index
+// row to the session's username. The session records themselves are read
+// and written through the platform's gated paths (app.read / app.write),
+// which already tie them to the user via check_auth; this command never
+// touches them.
+fn err(msg: &str) -> DataObject {
+    let mut o = DataObject::new();
+    o.put_string("status", "err");
+    o.put_string("msg", msg);
+    o
+}
+fn ok_list(list: DataArray) -> DataObject {
+    let mut o = DataObject::new();
+    o.put_string("status", "ok");
+    o.put_array("list", list);
+    o
+}
+
+// who is asking — the session's user, server-side. The framework always
+// resolves a user; no logged-in account means the literal `anonymous` user.
+let system = DataStore::globals().get_object("system");
+let sessions = system.get_object("sessions");
+if !sessions.has(&nn_sessionid) { return err("no session for nn_sessionid"); }
+let user = sessions.get_object(&nn_sessionid).get_object("user");
+let username = if user.has("username") { user.get_string("username") }
+               else if user.has("id") { user.get_string("id") }
+               else { "anonymous".to_string() };
+let username = if username.trim().is_empty() { "anonymous".to_string() } else { username };
+
+// the index file: runtime/agent/chat/<sanitized-username>.jsonl, beside the
+// other user-files (msg.put's index.jsonl, uploads). Sanitize defensively —
+// a username becomes a filename.
+let safe: String = username.chars()
+    .map(|c| if c.is_ascii_alphanumeric() || c=='-' || c=='_' || c=='.' { c } else { '_' })
+    .collect();
+let store = DataStore::new();
+let base = match store.root.canonicalize().ok().and_then(|r| r.parent().map(|p| p.to_path_buf())) {
+    Some(b) => b,
+    None => return err("cannot resolve the runtime root"),
+};
+let dir = base.join("runtime").join("agent").join("chat");
+let file = dir.join(format!("{}.jsonl", safe));
+
+// fold the append-only rows into current sessions: latest row per id wins,
+// a {deleted:true} row removes the id. Order, not truth — the session
+// records in the store are truth; this file is rebuilt meaning, never data.
+let fold = || -> DataArray {
+    let mut order: Vec<String> = Vec::new();            // first-seen order, for stability
+    let mut latest: Vec<(String, DataObject)> = Vec::new();
+    if let Ok(text) = std::fs::read_to_string(&file) {
+        for line in text.lines() {
+            let line = line.trim();
+            if line.is_empty() { continue; }
+            let row = match DataObject::try_from_string(line) {
+                Ok(r) => r, Err(_) => continue,
+            };
+            if !row.has("id") { continue; }
+            let id = row.get_string("id");
+            if let Some(pos) = latest.iter().position(|(i, _)| *i == id) {
+                latest[pos].1 = row;                     // newer row replaces
+            } else {
+                order.push(id.clone());
+                latest.push((id, row));
+            }
+        }
+    }
+    let mut out = DataArray::new();
+    for (id, row) in latest {
+        if row.has("deleted") && row.get_boolean("deleted") { continue; }
+        let mut e = DataObject::new();
+        e.put_string("id", &id);
+        e.put_string("title", if row.has("title") { &row.get_string("title") } else { "untitled session" });
+        e.put_int("time", if row.has("time") { row.get_int("time") } else { 0 });
+        out.push_object(e);
+    }
+    // newest first, by the row's recorded time
+    let mut v: Vec<DataObject> = out.objects().map(|d| d.object()).collect();
+    v.sort_by(|a, b| b.get_int("time").cmp(&a.get_int("time")));
+    let mut out2 = DataArray::new();
+    for o in v { out2.push_object(o); }
+    out2
+};
+
+let op_l = op.trim().to_lowercase();
+if op_l == "list" {
+    return ok_list(fold());
+}
+if op_l == "delete" {
+    let id = id.trim();
+    if id.is_empty() { return err("id is required for delete"); }
+    if std::fs::create_dir_all(&dir).is_err() { return err("cannot create the index dir"); }
+    use std::io::Write;
+    let mut row = DataObject::new();
+    row.put_string("id", id);
+    row.put_int("time", time());
+    row.put_boolean("deleted", true);
+    if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(&file) {
+        let _ = writeln!(f, "{}", row.to_string().replace('\n', " "));
+    }
+    return ok_list(fold());
+}
+err("op must be list | delete")
