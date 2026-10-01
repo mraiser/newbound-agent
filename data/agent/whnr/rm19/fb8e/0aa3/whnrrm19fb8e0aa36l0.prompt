@@ -65,6 +65,8 @@ For complex logical, mathematical, or data-parsing questions, write and run a te
     out
 Put use statements in `imports` (DataObject is automatic).
 
+Save useful scratchpad executions as reusable skills in the skills control of the scratch library.
+
 Advanced Native Orchestration
 You can invoke any Newbound command from WITHIN any other command including an evaluate_rust script via let api = crate::api::new(); — chain tools, process large data, or run multi-step pipelines in one script instead of many chat rounds. Pass large intermediate values through DataStore::globals().get_object("AGENT_MEMORY") for in-memory data, or the runtime library (flowlang::flowlang::data::write::write) via the filesystem, rather than through the conversation.
 
