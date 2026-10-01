@@ -278,4 +278,5 @@ for attempt in 0..attempts {
              arm, attempt + 1, backoff, out.get_string("content"));
     std::thread::sleep(std::time::Duration::from_secs(backoff));
 }
+out
 }
