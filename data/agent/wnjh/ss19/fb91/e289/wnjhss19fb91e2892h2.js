@@ -102,71 +102,40 @@ async function init(host) {
   let messages = [];       // the raw conversation (openai shapes), persisted
   let transcript = [];     // rendered cells {kind, title?, text, error?}
 
-  // ── sessions: many conversations, each its own localStorage record ───
-  const SESS_INDEX = "agent.chat.sessions.v1";  // [{id, title, time}], newest first
-  const sessKey = (id) => "agent.chat.s." + id;
-  const loadIndex = () => {
-    try {
-      const ix = JSON.parse(localStorage.getItem(SESS_INDEX) ?? "[]");
-      return Array.isArray(ix) ? ix : [];
-    } catch { return []; }
-  };
-  const saveIndex = (ix) => {
-    try { localStorage.setItem(SESS_INDEX, JSON.stringify(ix)); } catch { /* fine */ }
-  };
+  // ── sessions: many conversations, each a store record tied to the user ──
+  // Records live in the runtime lib (admin-only by default) and are written
+  // through the platform's gated app.write; the sidebar list + delete ride
+  // agent.chat.session_index (the per-user index), and openSession rides the
+  // owner-checking agent.chat.session_open. Ids are minted server-side with
+  // leading entropy, so the store's filename sharding is preserved.
+  const userName = (u) => (u && (u.username || u.id || u.displayname)) || "anonymous";
   function sessTitle(msgs) {
     const first = (msgs ?? []).find((m) =>
       m.role === "user" && !String(m.content ?? "").startsWith("[CONTEXT]"));
     const t = String(first?.content ?? "").replace(/\s+/g, " ").trim();
     return t ? t.slice(0, 48) : "untitled session";
   }
-  // one-time migration: the single-session store becomes the first entry
-  try {
-    const legacy = JSON.parse(localStorage.getItem(STORE_KEY) ?? "null");
-    if (legacy && Array.isArray(legacy.messages) && legacy.messages.length) {
-      const id = Date.now().toString(36);
-      localStorage.setItem(sessKey(id), JSON.stringify(legacy));
-      saveIndex([{ id, title: sessTitle(legacy.messages), time: Date.now() },
-        ...loadIndex()]);
-    }
-    localStorage.removeItem(STORE_KEY);
-  } catch { /* fresh */ }
-  // one-time repair: retitle sessions whose title was minted from the
-  // injected [CONTEXT] preamble before sessTitle learned to skip it
-  try {
-    const ix = loadIndex();
-    let dirty = false;
-    for (const s of ix) {
-      if (!String(s.title ?? "").startsWith("[CONTEXT]")) continue;
-      const rec = JSON.parse(localStorage.getItem(sessKey(s.id)) ?? "null");
-      if (rec && Array.isArray(rec.messages)) { s.title = sessTitle(rec.messages); dirty = true; }
-    }
-    if (dirty) saveIndex(ix);
-  } catch { /* fine */ }
-  let sessId = null;        // minted at the first persisted message
-  const persist = () => {
+  let sessId = null;        // minted server-side on the first save
+  const persist = async () => {
     if (!messages.length) return;   // empty sessions are never saved
-    if (!sessId) sessId = Date.now().toString(36);
-    try {
-      localStorage.setItem(sessKey(sessId), JSON.stringify({
-        messages: messages.slice(-60), transcript: transcript.slice(-120) }));
-    } catch { /* storage full — the chat still works */ }
-    const ix = loadIndex().filter((s) => s.id !== sessId);
-    ix.unshift({ id: sessId, title: sessTitle(messages), time: Date.now() });
-    saveIndex(ix);
-    renderSessions();
+    const me2 = (await userP()) ?? {};
+    const w = await jsonP("../app/write", "lib=runtime&id=" + encodeURIComponent(sessId ?? "null") +
+      "&readers=[]&writers=[]&data=" + encodeURIComponent(JSON.stringify({
+        username: userName(me2), title: sessTitle(messages), time: Date.now(),
+        messages, transcript })));
+    if (w.status === "ok" && w.id) sessId = w.id;
+    await renderSessions();
   };
-  function openSession(id) {
-    let rec = null;
-    try { rec = JSON.parse(localStorage.getItem(sessKey(id)) ?? "null"); }
-    catch { /* unreadable — opens empty */ }
+  async function openSession(id) {
+    const r = await invokeP("agent", "chat", "session_open", { id });
+    const rec = (r.status === "ok" && r.data && r.data.data) ? r.data.data : null;
     sessId = id;
     messages = (rec && Array.isArray(rec.messages)) ? rec.messages : [];
     transcript = (rec && Array.isArray(rec.transcript)) ? rec.transcript : [];
     thread.replaceChildren();
     for (const entry of transcript) thread.appendChild(cellEl(entry));
     thread.scrollTop = thread.scrollHeight;
-    renderSessions();
+    await renderSessions();
   }
   function newSession() {
     sessId = null;
@@ -176,8 +145,9 @@ async function init(host) {
     renderSessions();
   }
   const sessListEl = host.querySelector(".ag-sess-list");
-  function renderSessions() {
-    const ix = loadIndex();
+  async function renderSessions() {
+    const r = await invokeP("agent", "chat", "session_index", { op: "list", id: "" });
+    const ix = (r.status === "ok" && r.data && r.data.list) ? r.data.list : [];
     sessListEl.replaceChildren();
     for (const s of ix) {
       const row = document.createElement("div");
@@ -190,16 +160,15 @@ async function init(host) {
       const del = document.createElement("button");
       del.className = "ag-sess-del";
       del.textContent = "✕";
-      del.title = "forget this session (this browser only)";
-      del.addEventListener("click", () => {
+      del.title = "forget this session";
+      del.addEventListener("click", async () => {
         if (del.textContent !== "sure?") {
           del.textContent = "sure?";
           setTimeout(() => { del.textContent = "✕"; }, 2500);
           return;
         }
-        try { localStorage.removeItem(sessKey(s.id)); } catch { /* fine */ }
-        saveIndex(loadIndex().filter((x) => x.id !== s.id));
-        if (s.id === sessId) newSession(); else renderSessions();
+        await invokeP("agent", "chat", "session_index", { op: "delete", id: s.id });
+        if (s.id === sessId) newSession(); else await renderSessions();
       });
       row.append(open, del);
       sessListEl.appendChild(row);
@@ -344,7 +313,9 @@ async function init(host) {
     persist();
     return entry;
   }
-  { const ix = loadIndex(); ix.length ? openSession(ix[0].id) : renderSessions(); }
+  { const r = await invokeP("agent", "chat", "session_index", { op: "list", id: "" });
+    const ix = (r.status === "ok" && r.data && r.data.list) ? r.data.list : [];
+    ix.length ? await openSession(ix[0].id) : await renderSessions(); }
 
   // new session — the current one stays in the sidebar; nothing is lost.
   host.querySelector(".ag-newsession").addEventListener("click", newSession);
