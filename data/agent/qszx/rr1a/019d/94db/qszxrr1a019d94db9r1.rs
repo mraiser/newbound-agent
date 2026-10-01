@@ -36,15 +36,17 @@ fn ctl_id(store: &DataStore, lib: &str, name: &str) -> String {
 }
 
 let purpose_t = purpose.trim().to_lowercase();
-// profile -> (claims, code, room, session, system) weights; a weight of
-// zero drops the section outright. These are the H2 proposal pending
-// owner call 2 - tune per profile in one place.
-let weights: (f64, f64, f64, f64, f64) = match purpose_t.as_str() {
-    "chat"       => (0.45, 0.00, 0.20, 0.25, 0.10),
-    "escalation" => (0.60, 0.30, 0.00, 0.00, 0.10),
-    "rumination" => (0.50, 0.30, 0.10, 0.00, 0.10),
-    "coding"     => (0.35, 0.55, 0.00, 0.00, 0.10),
-    "briefing"   => (0.30, 0.00, 0.25, 0.20, 0.25),
+// profile -> (claims, code, room, session, system, chat) weights; a weight
+// of zero drops the section outright. `chat` is the venue-labeled conversation
+// stream (msg.capture): user/assistant text plus one-line tool glue, never the
+// raw llm firehose. These are the H2 proposal pending owner call 2 - tune per
+// profile in one place.
+let weights: (f64, f64, f64, f64, f64, f64) = match purpose_t.as_str() {
+    "chat"       => (0.40, 0.00, 0.15, 0.20, 0.10, 0.15),
+    "escalation" => (0.60, 0.30, 0.00, 0.00, 0.10, 0.00),
+    "rumination" => (0.50, 0.30, 0.10, 0.00, 0.10, 0.00),
+    "coding"     => (0.35, 0.55, 0.00, 0.00, 0.10, 0.00),
+    "briefing"   => (0.30, 0.00, 0.20, 0.20, 0.20, 0.10),
     _ => { return err(format!("unknown purpose '{}' - profiles: chat | escalation | rumination | coding | briefing", purpose)); }
 };
 if budget <= 0 { return err("budget must be > 0 (a token ceiling)".to_string()); }
@@ -137,6 +139,38 @@ if weights.2 > 0.0 {
     }
     src_tokens.put_int("room", (part.chars().count() / 4) as i64);
     if !part.is_empty() { sections.push(format!("## Room (recent speech)\n{}", part)); }
+}
+
+// ── chat: the venue-labeled conversation stream (msg.capture) ─────────
+// user/assistant text in full, tool rows as the one-line glue capture
+// wrote. newest matter most. This is the conversational-continuity
+// source - distinct from `room` (ambient speech) and from the raw llm
+// firehose, which is never read here.
+if weights.5 > 0.0 {
+    let cap_chars = (budget_chars * weights.5) as usize;
+    let r = recent("chat".to_string(), 40);
+    let mut part = String::new();
+    if r.has("messages") {
+        let list = r.get_array("messages");
+        let mut i = list.len() as i64 - 1;
+        while i >= 0 {
+            if let Ok(m) = list.try_get_object(i as usize) {
+                let role = if m.has("role") { m.get_string("role") } else { String::new() };
+                let who = if m.has("entity") && !m.get_string("entity").is_empty() {
+                    format!(" {}", m.get_string("entity")) } else { String::new() };
+                let t = if m.has("t") { m.get_int("t") } else { 0 };
+                // glue rows are already a single clipped line; text rows clip wider
+                let width = if role == "tool" { 160 } else { 400 };
+                let line = format!("[{} {}{}] {}\n", role, hhmm(t), who,
+                    clip(&m.get_string("content"), width));
+                if part.chars().count() + line.chars().count() > cap_chars { break; }
+                part.insert_str(0, &line);
+            }
+            i -= 1;
+        }
+    }
+    src_tokens.put_int("chat", (part.chars().count() / 4) as i64);
+    if !part.is_empty() { sections.push(format!("## Chat (recent conversation)\n{}", part)); }
 }
 
 // ── session: the archivist's transient turn queue ────────────────────

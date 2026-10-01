@@ -379,8 +379,17 @@ function parseToolName(name) {
  * commands behind the typed confirm, runs it, and resolves the tool-result
  * CONTENT string (or a denial note). Returns the final text.
  */
-async function chatTurn({ messages, tools, execTool, onRound }) {
+async function chatTurn({ messages, tools, execTool, onRound, venue = "", entity = "" }) {
   const seen = new Map();   // result text -> tool name, for the context guard
+  // Capture boundary (harvest H1c): the venue's own array is snapshotted at
+  // entry so the realized turn (user ask + tool exchanges + assistant reply)
+  // can be recorded to the message store at completion. Opt-in by VENUE:
+  // the caller passes { venue } to label the stream (chat | agent-app); when
+  // absent, nothing is captured — every arm also drives chat_llm, and an
+  // ambient hook would flood the conversation with background traffic. Full
+  // fidelity stays in the session store; msg keeps the realized conversation
+  // with tool exchanges folded to one-line glue.
+  const turnStart = messages.length;
   // Recall layer 4: the mode-keyed pack for THIS ask, APPENDED to the one
   // system message on every provider call but never written into the
   // venue's own messages array — the conversation the venue keeps must
@@ -424,6 +433,8 @@ async function chatTurn({ messages, tools, execTool, onRound }) {
     if (d.status === "err") throw new Error(d.msg ?? "chat_llm failed");
     if (d.kind === "error") throw new Error(d.content ?? "chat_llm failed");
     if (d.kind !== "tool_calls") {
+      if (venue) invoke("agent", "msg", "capture",
+        { venue, entity, provenance: "chatTurn", messages: messages.slice(turnStart) }).catch(() => {});
       return d.content ?? "";
     }
     messages.push(d.assistant_message);
@@ -454,6 +465,8 @@ async function chatTurn({ messages, tools, execTool, onRound }) {
       const d = r.data ?? {};
       if (d.status !== "err" && d.kind !== "error" && d.kind !== "tool_calls"
           && (d.content ?? "").trim()) {
+        if (venue) invoke("agent", "msg", "capture",
+          { venue, entity, provenance: "chatTurn", messages: messages.slice(turnStart) }).catch(() => {});
         return d.content;
       }
     }
