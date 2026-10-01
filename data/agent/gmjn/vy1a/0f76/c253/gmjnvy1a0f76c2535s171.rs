@@ -1,5 +1,5 @@
-pub fn build_ollama_payload(messages: &DataArray, tools: &DataArray, model: &str,
-                        temperature: f64, max_tokens: i64, keep_alive: &str) -> DataObject {
+//pub fn build_ollama_payload(messages: &DataArray, tools: &DataArray, model: &str,
+//                        temperature: f64, max_tokens: i64, keep_alive: &str) -> DataObject {
     let mut payload = DataObject::new();
     payload.put_string("model", model);
 
@@ -194,6 +194,3 @@ pub fn run(messages:&DataArray, tools:&DataArray, meta:&DataObject, arm:&str,
     let payload = build_ollama_payload(messages, tools, model, temperature, max_tokens,
                                      &opt(meta, "OLLAMA_KEEP_ALIVE", "0"));
     dispatch(messages, tools, arm, "ollama", url, payload, headers, parse_ollama)
-}
-
-err_out("llm_ollama is the Ollama arm, called by chat_llm - call agent.llm.chat_llm")

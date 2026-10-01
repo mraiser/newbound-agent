@@ -1,5 +1,3 @@
-fn build_openai_payload(messages:&DataArray, tools:&DataArray, model:&str,
-                        temperature:f64, max_tokens:i64, arm:&str) -> DataObject {
     let mut p = DataObject::new();
         p.put_string("model", &model);
         // Strict OpenAI-compatible servers (KIMI K3 above all) 400 with
@@ -267,6 +265,3 @@ pub fn run(messages:&DataArray, tools:&DataArray, meta:&DataObject, arm:&str,
     let max_tokens = opt(meta, "LLM_MAX_TOKENS", "8192").parse::<i64>().unwrap_or(8192);
     let payload = build_openai_payload(messages, tools, model, temperature, max_tokens, arm);
     dispatch(messages, tools, arm, "openai", url, payload, headers, parse_openai)
-}
-
-err_out("llm_openai is the OpenAI-dialect arm, called by chat_llm - call agent.llm.chat_llm")
