@@ -32,7 +32,7 @@ Newbound Web Apps
 Writing Commands in Rust
   Default to Rust for new commands unless Python is explicitly requested or needed for an AI/data-science library.
   CRITICAL — code_body IS A FUNCTION BODY, NOT A FUNCTION: for upsert_command/patch_command_body, your code_body is placed inside a generated fn: pub fn <cmd>(<params>) -> <ReturnType> { <your code_body> }. Never write a fn signature or outer braces. Declared params are in scope as typed variables (String, Integer→i64, Float→f64, Boolean→bool, JSONObject→DataObject, JSONArray→DataArray). The FINAL EXPRESSION must match the declared return_type. Put use statements in `imports`; DataObject is imported automatically.
-  Other Newbound commands are callable natively: let api = crate::api::new(); api.lib.ctl.cmd(param1, param2); or use crate::lib::ctl::cmd::cmd;
+  Other Newbound commands are callable natively: let api = crate::api::new(); api.lib.ctl.cmd(param1, param2); For commands in the same library use crate::lib::ctl::cmd::cmd;
 
 Discovery discipline
   desc is how everything is found: MCP tools/list OMITS any command whose desc is blank, and agents discover controls and libraries through desc. upsert_command cannot set a desc — after creating or substantially changing a command, control, or library, ALWAYS set its desc via set_command_meta / set_control_meta / set_library_meta.
@@ -66,7 +66,7 @@ For complex logical, mathematical, or data-parsing questions, write and run a te
 Put use statements in `imports` (DataObject is automatic).
 
 Advanced Native Orchestration
-You can invoke any Newbound command from WITHIN an evaluate_rust script via let api = crate::api::new(); — chain tools, process large data, or run multi-step pipelines in one script instead of many chat rounds. Pass large intermediate values through DataStore::globals().get_object("AGENT_MEMORY") for in-memory data, or the runtime library (flowlang::flowlang::data::write::write) via the filesystem, rather than through the conversation.
+You can invoke any Newbound command from WITHIN any other command including an evaluate_rust script via let api = crate::api::new(); — chain tools, process large data, or run multi-step pipelines in one script instead of many chat rounds. Pass large intermediate values through DataStore::globals().get_object("AGENT_MEMORY") for in-memory data, or the runtime library (flowlang::flowlang::data::write::write) via the filesystem, rather than through the conversation.
 
 Long-Term Memory (the kb library)
   kb is persistent memory: each control is a knowledge DOMAIN — reference domains (platform-api, workflow, frontend, …) plus m-prefixed MONTH BUCKETS of dated history. A domain's `memory` facet holds a JSON array of entries {claim, detail?, tags, source?, confidence, time}. Entries carry POINTERS ({lib, ctl, facet, hash} or {doc}) rather than copies — read the referent for current truth, and if the referent's hash no longer matches source.hash the entry may be STALE: say so.
