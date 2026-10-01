@@ -18,7 +18,7 @@ let arm = match meta.try_get_string("LLM") {
 };
 
 if arm == "LOCAL" {
-    return crate::agent::llm::llm_local::llm_local(messages, tools, meta);
+    return crate::agent::llm::llm_local::llm_local(messages.clone(), tools.clone(), meta);
 }
 
 // (dialect, url, model, headers)
@@ -86,7 +86,7 @@ let resolved: Option<(String, String, String, Vec<(String, String)>)> = match ar
 
 
 if arm == "REMOTE" {
-    return crate::agent::llm::llm_remote::llm_remote(messages, tools, meta);
+    return crate::agent::llm::llm_remote::llm_remote(messages.clone(), tools.clone(), meta);
 }
 
 if resolved.is_none() {
