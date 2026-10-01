@@ -56,6 +56,10 @@ while i < messages.len() {
 
     if role == "system" { i += 1; continue; }
 
+    // the venue's hidden [CONTEXT] preamble rides as a user row ahead of the
+    // real ask (session titling hit this too); it is not conversation, skip it
+    if role == "user" && content.trim_start().starts_with("[CONTEXT]") { i += 1; continue; }
+
     if role == "user" || role == "assistant" {
         // an assistant row that only carries tool_calls (no text) folds into glue below
         let has_calls = m.has("tool_calls") && m.get_property("tool_calls").is_array();

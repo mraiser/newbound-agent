@@ -495,7 +495,7 @@ async function init(host) {
         messages.push(userMsg);
       }
       const text = await agent.chatTurn({
-        messages, tools, execTool,
+        messages, tools, execTool, venue: "chat", entity: userName((await userP()) ?? {}),
         onRound: () => { busyEl.querySelector(".ag-cell-body").textContent = "agent is using tools…"; },
       });
       messages.push({ role: "assistant", content: text });
