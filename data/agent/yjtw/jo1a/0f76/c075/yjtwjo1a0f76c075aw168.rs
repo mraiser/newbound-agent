@@ -1,3 +1,6 @@
+err_out("llm_common is a shared helper module for the LLM arms, not an entry point - call agent.llm.chat_llm")
+}
+
 pub fn err_out(msg: &str) -> DataObject {
     let mut o = DataObject::new();
     o.put_string("kind", "error");
@@ -130,6 +133,3 @@ pub fn obj_from_str(s: &str) -> Option<DataObject> {
 }
 pub fn args_to_object(s: &str) -> DataObject {
     obj_from_str(s).unwrap_or_else(DataObject::new)
-}
-
-err_out("llm_common is a shared helper module for the LLM arms, not an entry point - call agent.llm.chat_llm")
