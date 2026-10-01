@@ -287,7 +287,7 @@ for attempt in 0..attempts {
             match resp.into_string() {
                 Ok(body) => {
                     match obj_from_str(&body) {
-                        Some(root) => match match dialect.as_str() {
+                        Some(root) => match match dialect {
                             "anthropic" => parse_anthropic(&root, &arm),
                             "gemini" => parse_gemini(&root, &arm),
                             "ollama" => parse_ollama(&root, &arm),

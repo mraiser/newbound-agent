@@ -9,7 +9,7 @@ pub fn run(messages:&DataArray, tools:&DataArray, meta:&DataObject, arm:&str,
     dispatch(messages, tools, arm, "openai", url, payload, headers, parse_openai)
 }
 
-pub fn MISSING_FUNCTION_NAME(messages: &DataArray, tools: &DataArray, model: &str, temperature: f64, max_tokens: i64, arm: &str) -> DataObject {
+pub fn build_openai_payload(messages: &DataArray, tools: &DataArray, model: &str, temperature: f64, max_tokens: i64, arm: &str) -> DataObject {
     let mut p = DataObject::new();
         p.put_string("model", &model);
         // Strict OpenAI-compatible servers (KIMI K3 above all) 400 with
@@ -226,7 +226,7 @@ for attempt in 0..attempts {
             match resp.into_string() {
                 Ok(body) => {
                     match obj_from_str(&body) {
-                        Some(root) => match match dialect.as_str() {
+                        Some(root) => match match dialect {
                             "anthropic" => parse_anthropic(&root, &arm),
                             "gemini" => parse_gemini(&root, &arm),
                             "ollama" => parse_ollama(&root, &arm),

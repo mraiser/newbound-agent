@@ -1,5 +1,5 @@
 // The REMOTE arm: the peer IS the transport. Callers use agent.llm.chat_llm.
-pub fn run(messages:&DataArray, tools:&DataArray, meta:&DataObject) -> DataObject {
+//pub fn run(messages:&DataArray, tools:&DataArray, meta:&DataObject) -> DataObject {
     let arm = "REMOTE";
     // The peer IS the transport - no HTTP, no keys, no dialect here. The
     // whole (messages, tools) pair goes to the named peer, which runs its
@@ -96,6 +96,3 @@ pub fn run(messages:&DataArray, tools:&DataArray, meta:&DataObject) -> DataObjec
         _ => err_out(&format!("REMOTE arm: peer {} answered without a chat_llm result: {}",
             uuid, res.to_string().chars().take(800).collect::<String>())),
     };
-}
-
-err_out("llm_remote is the REMOTE arm, called by chat_llm - call agent.llm.chat_llm")
