@@ -1,4 +1,4 @@
-// The REMOTE arm: the peer IS the transport. Entry point for callers is agent.llm.chat_llm.
+// The REMOTE arm: the peer IS the transport. Callers use agent.llm.chat_llm; this is the delegate.
 pub fn run(messages:&DataArray, tools:&DataArray, meta:&DataObject) -> DataObject {
     let arm = "REMOTE";
     // The peer IS the transport - no HTTP, no keys, no dialect here. The

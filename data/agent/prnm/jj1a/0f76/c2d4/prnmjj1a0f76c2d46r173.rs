@@ -1,5 +1,5 @@
-// The LOCAL arm: the resident model service answers the chat (POST /chat). Entry point
-// for callers is agent.llm.chat_llm.
+// The LOCAL arm: the resident model service answers the chat (POST /chat). Callers use
+// agent.llm.chat_llm; this is the delegate.
 pub fn run(messages:&DataArray, tools:&DataArray, meta:&DataObject) -> DataObject {
     // Phase 8a: the resident service's USER-FACING pointer answers the
     // chat (POST /chat). Text-only - the local model carries no tool
