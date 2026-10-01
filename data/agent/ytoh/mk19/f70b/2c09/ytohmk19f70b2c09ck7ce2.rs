@@ -18,7 +18,7 @@ let arm = match meta.try_get_string("LLM") {
 };
 
 if arm == "LOCAL" {
-    return crate::agent::llm::llm_local(messages, tools, meta);
+    return crate::agent::llm::llm_local::llm_local(messages, tools, meta);
 }
 
 // (dialect, url, model, headers)
@@ -86,7 +86,7 @@ let resolved: Option<(String, String, String, Vec<(String, String)>)> = match ar
 
 
 if arm == "REMOTE" {
-    return crate::agent::llm::llm_remote::run(&messages, &tools, &meta);
+    return crate::agent::llm::llm_remote::llm_remote(messages, tools, meta);
 }
 
 if resolved.is_none() {
@@ -160,10 +160,10 @@ for kv in extra_headers(&meta, &arm) {
     headers.push(kv);
 }
 match dialect.as_str() {
-    "anthropic" => return crate::agent::llm::llm_anthropic::run(&messages, &tools, &meta, &arm, &url, &model, headers),
-    "gemini"    => return crate::agent::llm::llm_gemini::run(&messages, &tools, &meta, &arm, &url, &model, headers),
-    "ollama"    => return crate::agent::llm::llm_ollama::run(&messages, &tools, &meta, &arm, &url, &model, headers),
-    _           => return crate::agent::llm::llm_openai::run(&messages, &tools, &meta, &arm, &url, &model, headers),
+    "anthropic" => return crate::agent::llm::llm_anthropic::llm_anthropic(messages, tools, meta, arm, url, model, headers),
+    "gemini"    => return crate::agent::llm::llm_gemini::llm_gemini(messages, tools, meta, arm, url, model, headers),
+    "ollama"    => return crate::agent::llm::llm_ollama::llm_ollama(messages, tools, meta, arm, url, model, headers),
+    _           => return crate::agent::llm::llm_openai::llm_openai(messages, tools, meta, arm, url, model, headers),
 }
 
 })();
