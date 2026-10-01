@@ -1,7 +1,7 @@
-// The Ollama arm: native /api/chat (NOT /api/generate - generate is single-prompt with
-// no conversation and no tools, so it cannot carry the agent loop). keep_alive is not
-// expressible on the compat endpoint, so it is sent here. Helpers from llm_common.
-// Internal: the public entry point is agent.llm.chat_llm.
+// The Ollama arm: native /api/chat (NOT /api/generate - that is single-prompt, no
+// conversation, no tools, so it cannot carry the agent loop). keep_alive is not expressible
+// on the compat endpoint, so it is sent here. Helpers from llm_common. Internal: the
+// entry point is agent.llm.chat_llm.
 pub fn llm_ollama() -> DataObject {
     err_out("llm_ollama is the Ollama arm, called by chat_llm - call agent.llm.chat_llm")
 }
@@ -134,8 +134,8 @@ pub fn pack_calls(raw: Vec<(String, String, String, String)>) -> (DataArray, Dat
     (norm, replay)
 }
 
-// Shared send/retry engine. The arm's run() builds a payload and passes its parser;
-// this posts with the arm's headers, retries only 408/429/5xx/transport (a 4xx is a
+// Shared send/retry engine. The arm's run() builds a payload and passes its parser; this
+// posts with the arm's headers, retries only 408/429/5xx/transport (a 4xx is a
 // configuration answer - retrying only delays the report), normalizes via the parser.
 fn dispatch(messages:&DataArray, tools:&DataArray, arm:&str, dialect:&str, url:&str,
             payload:DataObject, headers:Vec<(String,String)>,

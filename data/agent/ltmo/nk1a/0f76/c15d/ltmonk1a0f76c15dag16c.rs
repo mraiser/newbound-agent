@@ -1,8 +1,7 @@
-// The Anthropic arm: native /v1/messages. x-api-key + anthropic-version, system as a
-// top-level param, REQUIRED max_tokens, input_schema tools, tool_use/tool_result content
-// blocks, thinking blocks replayed verbatim, no temperature, optional ANTHROPIC_EFFORT/
-// ANTHROPIC_THINKING, prompt caching on by default. Helpers from llm_common. Internal:
-// the public entry point is agent.llm.chat_llm.
+// The Anthropic arm: native /v1/messages. x-api-key + anthropic-version, system top-level,
+// REQUIRED max_tokens, input_schema tools, tool_use/tool_result blocks, thinking blocks
+// replayed verbatim, no temperature, optional ANTHROPIC_EFFORT/ANTHROPIC_THINKING, prompt
+// caching on by default. Helpers from llm_common. Internal: entry point agent.llm.chat_llm.
 pub fn llm_anthropic() -> DataObject {
     err_out("llm_anthropic is the Anthropic arm, called by chat_llm - call agent.llm.chat_llm")
 }
@@ -278,8 +277,8 @@ pub fn pack_calls(raw: Vec<(String, String, String, String)>) -> (DataArray, Dat
     (norm, replay)
 }
 
-// Shared send/retry engine. The arm's run() builds a payload and passes its parser;
-// this posts with the arm's headers, retries only 408/429/5xx/transport (a 4xx is a
+// Shared send/retry engine. The arm's run() builds a payload and passes its parser; this
+// posts with the arm's headers, retries only 408/429/5xx/transport (a 4xx is a
 // configuration answer - retrying only delays the report), normalizes via the parser.
 fn dispatch(messages:&DataArray, tools:&DataArray, arm:&str, dialect:&str, url:&str,
             payload:DataObject, headers:Vec<(String,String)>,

@@ -1,9 +1,6 @@
 // The LOCAL arm: the resident model service's USER-FACING pointer answers the chat
 // (POST /chat on MODEL_SERVICE_PORT, default 8077). Text-only - the local model carries
-// no tool protocol, so the agent loop degrades to plain answers. Routing here is the
-// owner's deliberate flip (LLM=LOCAL in botd), and the service refuses (503) until its
-// user gate has promoted a pointer. Helpers from llm_common. Internal: the public entry
-// point is agent.llm.chat_llm.
+// no tool protocol. Helpers from llm_common. Internal: the entry point is agent.llm.chat_llm.
 pub fn llm_local() -> DataObject {
     err_out("llm_local is the LOCAL arm, called by chat_llm - call agent.llm.chat_llm")
 }
@@ -58,4 +55,6 @@ pub fn run(messages:&DataArray, tools:&DataArray, meta:&DataObject) -> DataObjec
         },
         Err(_) => err_out(&format!("LOCAL arm: service answered non-JSON at {}", url)),
     };
+}
+
 }

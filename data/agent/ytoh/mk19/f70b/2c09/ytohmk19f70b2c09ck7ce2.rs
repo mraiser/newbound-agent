@@ -1,10 +1,9 @@
-// ── THE provider engine, now a thin GATE. LLM= in runtime/agent/botd.properties picks
-// an arm; this command resolves the arm, applies <ARM>_HEADERS, and delegates to the
-// provider command under agent.llm (llm_openai / llm_anthropic / llm_gemini / llm_ollama
-// for the HTTP dialects, llm_local / llm_remote for the non-HTTP routes, the LLM_CTL
-// escape hatch below for anything custom). The capture seam still wraps the whole
-// dispatch, so LLM_CAPTURE and the normalized result shape live in exactly one place -
-// here. ask_llm and tool_loop call this command's run; there is no second resolver.
+// ── THE provider engine, now a thin GATE. LLM= in runtime/agent/botd.properties picks an
+// arm; this command resolves it, applies <ARM>_HEADERS, and delegates to the provider
+// command under agent.llm (llm_openai / llm_anthropic / llm_gemini / llm_ollama for the
+// HTTP dialects, llm_local / llm_remote for the non-HTTP routes, LLM_CTL for custom). The
+// capture seam still wraps the whole dispatch, so LLM_CAPTURE and the normalized result
+// shape live in exactly one place - here. ask_llm and tool_loop call this command.
 pub fn chat_llm(messages: DataArray, tools: DataArray) -> DataObject {
 let __result: DataObject = (|| -> DataObject {
 // ── resolve ──────────────────────────────────────────────────────────────

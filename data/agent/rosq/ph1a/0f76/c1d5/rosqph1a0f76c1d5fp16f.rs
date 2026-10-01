@@ -1,7 +1,6 @@
 // The Gemini arm: native generateContent. system_instruction, safetySettings BLOCK_NONE
 // (the OpenAI-compat endpoint has nowhere to put them, so its DEFAULT filters silently
-// applied - a filtered answer arrives with no content and was misdiagnosed),
-// functionDeclarations, named blocks. Helpers from llm_common. Internal: the public
+// applied), functionDeclarations, named blocks. Helpers from llm_common. Internal: the
 // entry point is agent.llm.chat_llm.
 pub fn llm_gemini() -> DataObject {
     err_out("llm_gemini is the Gemini arm, called by chat_llm - call agent.llm.chat_llm")
@@ -302,8 +301,8 @@ pub fn pack_calls(raw: Vec<(String, String, String, String)>) -> (DataArray, Dat
     (norm, replay)
 }
 
-// Shared send/retry engine. The arm's run() builds a payload and passes its parser;
-// this posts with the arm's headers, retries only 408/429/5xx/transport (a 4xx is a
+// Shared send/retry engine. The arm's run() builds a payload and passes its parser; this
+// posts with the arm's headers, retries only 408/429/5xx/transport (a 4xx is a
 // configuration answer - retrying only delays the report), normalizes via the parser.
 fn dispatch(messages:&DataArray, tools:&DataArray, arm:&str, dialect:&str, url:&str,
             payload:DataObject, headers:Vec<(String,String)>,
