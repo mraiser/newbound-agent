@@ -1,7 +1,5 @@
-// ── THE provider engine, now a thin GATE. LLM= picks an arm; resolve it, apply
-// <ARM>_HEADERS, delegate to the provider command under agent.llm. The capture seam wraps
-// the whole dispatch, so LLM_CAPTURE and the normalized result live here only.
-pub fn chat_llm(messages: DataArray, tools: DataArray) -> DataObject {
+// ── THE provider engine, now a thin GATE. LLM= picks an arm; resolve it, apply <ARM>_HEADERS,
+// delegate to the provider command under agent.llm. The capture seam wraps the whole dispatch.
 let __result: DataObject = (|| -> DataObject {
 // ── resolve ──────────────────────────────────────────────────────────────
 let meta = (|| -> Option<DataObject> {

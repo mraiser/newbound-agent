@@ -132,8 +132,4 @@ pub fn args_to_object(s: &str) -> DataObject {
     obj_from_str(s).unwrap_or_else(DataObject::new)
 }
 
-// Shared helpers for every LLM provider arm (above). Extracted verbatim from
-// agent.llm.chat_llm; each arm does `use crate::agent::llm::llm_common::*;`. The public
-// entry point for LLM work is agent.llm.chat_llm.
-pub fn llm_common() -> DataObject {
-    err_out("llm_common is a shared helper module for the LLM arms, not an entry point - call agent.llm.chat_llm")
+err_out("llm_common is a shared helper module for the LLM arms, not an entry point - call agent.llm.chat_llm")

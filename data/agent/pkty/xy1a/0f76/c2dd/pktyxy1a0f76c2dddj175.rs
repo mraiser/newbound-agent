@@ -1,4 +1,4 @@
-// The REMOTE arm: the peer IS the transport. Callers use agent.llm.chat_llm; this is the delegate.
+// The REMOTE arm: the peer IS the transport. Callers use agent.llm.chat_llm.
 pub fn run(messages:&DataArray, tools:&DataArray, meta:&DataObject) -> DataObject {
     let arm = "REMOTE";
     // The peer IS the transport - no HTTP, no keys, no dialect here. The
@@ -98,5 +98,4 @@ pub fn run(messages:&DataArray, tools:&DataArray, meta:&DataObject) -> DataObjec
     };
 }
 
-pub fn llm_remote() -> DataObject {
-    err_out("llm_remote is the REMOTE arm, called by chat_llm - call agent.llm.chat_llm")
+err_out("llm_remote is the REMOTE arm, called by chat_llm - call agent.llm.chat_llm")

@@ -261,8 +261,6 @@ for attempt in 0..attempts {
 out
 }
 
-// The OpenAI chat-completions arm: LLM=VLLM and LLM=OPENAI, and OpenAI-compatible
-// endpoints via <ARM>_URL. Entry point for callers is agent.llm.chat_llm.
 pub fn run(messages:&DataArray, tools:&DataArray, meta:&DataObject, arm:&str,
            url:&str, model:&str, headers:Vec<(String,String)>) -> DataObject {
     let temperature = opt(meta, "LLM_TEMPERATURE", "0.2").parse::<f64>().unwrap_or(0.2);
@@ -271,5 +269,4 @@ pub fn run(messages:&DataArray, tools:&DataArray, meta:&DataObject, arm:&str,
     dispatch(messages, tools, arm, "openai", url, payload, headers, parse_openai)
 }
 
-pub fn llm_openai() -> DataObject {
-    err_out("llm_openai is the OpenAI-dialect arm, called by chat_llm - call agent.llm.chat_llm")
+err_out("llm_openai is the OpenAI-dialect arm, called by chat_llm - call agent.llm.chat_llm")

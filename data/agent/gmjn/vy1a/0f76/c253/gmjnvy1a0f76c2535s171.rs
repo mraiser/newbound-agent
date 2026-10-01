@@ -187,7 +187,6 @@ for attempt in 0..attempts {
 out
 }
 
-// The Ollama arm: native /api/chat. Entry point for callers is agent.llm.chat_llm.
 pub fn run(messages:&DataArray, tools:&DataArray, meta:&DataObject, arm:&str,
            url:&str, model:&str, headers:Vec<(String,String)>) -> DataObject {
     let temperature = opt(meta, "LLM_TEMPERATURE", "0.2").parse::<f64>().unwrap_or(0.2);
@@ -197,5 +196,4 @@ pub fn run(messages:&DataArray, tools:&DataArray, meta:&DataObject, arm:&str,
     dispatch(messages, tools, arm, "ollama", url, payload, headers, parse_ollama)
 }
 
-pub fn llm_ollama() -> DataObject {
-    err_out("llm_ollama is the Ollama arm, called by chat_llm - call agent.llm.chat_llm")
+err_out("llm_ollama is the Ollama arm, called by chat_llm - call agent.llm.chat_llm")

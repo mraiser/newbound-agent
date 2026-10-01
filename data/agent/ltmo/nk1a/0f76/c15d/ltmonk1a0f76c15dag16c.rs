@@ -329,7 +329,6 @@ for attempt in 0..attempts {
 out
 }
 
-// The Anthropic arm: native /v1/messages. Entry point for callers is agent.llm.chat_llm.
 pub fn run(messages:&DataArray, tools:&DataArray, meta:&DataObject, arm:&str,
            url:&str, model:&str, headers:Vec<(String,String)>) -> DataObject {
     let max_tokens = opt(meta, "LLM_MAX_TOKENS", "8192").parse::<i64>().unwrap_or(8192);
@@ -340,5 +339,4 @@ pub fn run(messages:&DataArray, tools:&DataArray, meta:&DataObject, arm:&str,
     dispatch(messages, tools, arm, "anthropic", url, payload, headers, parse_anthropic)
 }
 
-pub fn llm_anthropic() -> DataObject {
-    err_out("llm_anthropic is the Anthropic arm, called by chat_llm - call agent.llm.chat_llm")
+err_out("llm_anthropic is the Anthropic arm, called by chat_llm - call agent.llm.chat_llm")

@@ -355,7 +355,6 @@ for attempt in 0..attempts {
 out
 }
 
-// The Gemini arm: native generateContent. Entry point for callers is agent.llm.chat_llm.
 pub fn run(messages:&DataArray, tools:&DataArray, meta:&DataObject, arm:&str,
            url:&str, model:&str, headers:Vec<(String,String)>) -> DataObject {
     let temperature = opt(meta, "LLM_TEMPERATURE", "0.2").parse::<f64>().unwrap_or(0.2);
@@ -364,5 +363,4 @@ pub fn run(messages:&DataArray, tools:&DataArray, meta:&DataObject, arm:&str,
     dispatch(messages, tools, arm, "gemini", url, payload, headers, parse_gemini)
 }
 
-pub fn llm_gemini() -> DataObject {
-    err_out("llm_gemini is the Gemini arm, called by chat_llm - call agent.llm.chat_llm")
+err_out("llm_gemini is the Gemini arm, called by chat_llm - call agent.llm.chat_llm")
