@@ -1,11 +1,4 @@
-// The REMOTE arm: the peer IS the transport - no HTTP, no keys, no dialect. The whole
-// (messages, tools) pair goes to the named peer (LLM_REMOTE=<peer-uuid>), which runs its
-// OWN chat_llm under its own LLM= arm and answers in this command's normalized shape.
-// Helpers from llm_common. Internal: the entry point is agent.llm.chat_llm.
-pub fn llm_remote() -> DataObject {
-    err_out("llm_remote is the REMOTE arm, called by chat_llm - call agent.llm.chat_llm")
-}
-
+// The REMOTE arm: the peer IS the transport. Entry point for callers is agent.llm.chat_llm.
 pub fn run(messages:&DataArray, tools:&DataArray, meta:&DataObject) -> DataObject {
     let arm = "REMOTE";
     // The peer IS the transport - no HTTP, no keys, no dialect here. The
@@ -104,3 +97,6 @@ pub fn run(messages:&DataArray, tools:&DataArray, meta:&DataObject) -> DataObjec
             uuid, res.to_string().chars().take(800).collect::<String>())),
     };
 }
+
+pub fn llm_remote() -> DataObject {
+    err_out("llm_remote is the REMOTE arm, called by chat_llm - call agent.llm.chat_llm")

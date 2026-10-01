@@ -1,19 +1,3 @@
-// The OpenAI chat-completions arm: LLM=VLLM and LLM=OPENAI, and any OpenAI-compatible
-// endpoint via <ARM>_URL (LM Studio, llama.cpp, Groq, OpenRouter). Owns the request shape
-// - the tool_call_id scrub, vision content-parts, VLLM-only chat_template_kwargs - and
-// parse_openai. Helpers from llm_common. Internal: the entry point is agent.llm.chat_llm.
-pub fn llm_openai() -> DataObject {
-    err_out("llm_openai is the OpenAI-dialect arm, called by chat_llm - call agent.llm.chat_llm")
-}
-
-pub fn run(messages:&DataArray, tools:&DataArray, meta:&DataObject, arm:&str,
-           url:&str, model:&str, headers:Vec<(String,String)>) -> DataObject {
-    let temperature = opt(meta, "LLM_TEMPERATURE", "0.2").parse::<f64>().unwrap_or(0.2);
-    let max_tokens = opt(meta, "LLM_MAX_TOKENS", "8192").parse::<i64>().unwrap_or(8192);
-    let payload = build_openai_payload(messages, tools, model, temperature, max_tokens, arm);
-    dispatch(messages, tools, arm, "openai", url, payload, headers, parse_openai)
-}
-
 fn build_openai_payload(messages:&DataArray, tools:&DataArray, model:&str,
                         temperature:f64, max_tokens:i64, arm:&str) -> DataObject {
     let mut p = DataObject::new();
@@ -207,9 +191,6 @@ pub fn parse_openai(root: &DataObject, arm: &str) -> Result<DataObject, DataObje
         root.to_string().chars().take(1200).collect::<String>())))
 }
 
-// Shared send/retry engine. The arm's run() builds a payload and passes its parser; this
-// posts with the arm's headers, retries only 408/429/5xx/transport (a 4xx is a
-// configuration answer - retrying only delays the report), normalizes via the parser.
 fn dispatch(messages:&DataArray, tools:&DataArray, arm:&str, dialect:&str, url:&str,
             payload:DataObject, headers:Vec<(String,String)>,
             parse:fn(&DataObject,&str)->Result<DataObject,DataObject>) -> DataObject {
@@ -279,3 +260,16 @@ for attempt in 0..attempts {
 }
 out
 }
+
+// The OpenAI chat-completions arm: LLM=VLLM and LLM=OPENAI, and OpenAI-compatible
+// endpoints via <ARM>_URL. Entry point for callers is agent.llm.chat_llm.
+pub fn run(messages:&DataArray, tools:&DataArray, meta:&DataObject, arm:&str,
+           url:&str, model:&str, headers:Vec<(String,String)>) -> DataObject {
+    let temperature = opt(meta, "LLM_TEMPERATURE", "0.2").parse::<f64>().unwrap_or(0.2);
+    let max_tokens = opt(meta, "LLM_MAX_TOKENS", "8192").parse::<i64>().unwrap_or(8192);
+    let payload = build_openai_payload(messages, tools, model, temperature, max_tokens, arm);
+    dispatch(messages, tools, arm, "openai", url, payload, headers, parse_openai)
+}
+
+pub fn llm_openai() -> DataObject {
+    err_out("llm_openai is the OpenAI-dialect arm, called by chat_llm - call agent.llm.chat_llm")

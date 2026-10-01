@@ -1,20 +1,3 @@
-// The Ollama arm: native /api/chat (NOT /api/generate - that is single-prompt, no
-// conversation, no tools, so it cannot carry the agent loop). keep_alive is not expressible
-// on the compat endpoint, so it is sent here. Helpers from llm_common. Internal: the
-// entry point is agent.llm.chat_llm.
-pub fn llm_ollama() -> DataObject {
-    err_out("llm_ollama is the Ollama arm, called by chat_llm - call agent.llm.chat_llm")
-}
-
-pub fn run(messages:&DataArray, tools:&DataArray, meta:&DataObject, arm:&str,
-           url:&str, model:&str, headers:Vec<(String,String)>) -> DataObject {
-    let temperature = opt(meta, "LLM_TEMPERATURE", "0.2").parse::<f64>().unwrap_or(0.2);
-    let max_tokens = opt(meta, "LLM_MAX_TOKENS", "8192").parse::<i64>().unwrap_or(8192);
-    let payload = build_ollama_payload(messages, tools, model, temperature, max_tokens,
-                                     &opt(meta, "OLLAMA_KEEP_ALIVE", "0"));
-    dispatch(messages, tools, arm, "ollama", url, payload, headers, parse_ollama)
-}
-
 pub fn build_ollama_payload(messages: &DataArray, tools: &DataArray, model: &str,
                         temperature: f64, max_tokens: i64, keep_alive: &str) -> DataObject {
     let mut payload = DataObject::new();
@@ -134,9 +117,6 @@ pub fn pack_calls(raw: Vec<(String, String, String, String)>) -> (DataArray, Dat
     (norm, replay)
 }
 
-// Shared send/retry engine. The arm's run() builds a payload and passes its parser; this
-// posts with the arm's headers, retries only 408/429/5xx/transport (a 4xx is a
-// configuration answer - retrying only delays the report), normalizes via the parser.
 fn dispatch(messages:&DataArray, tools:&DataArray, arm:&str, dialect:&str, url:&str,
             payload:DataObject, headers:Vec<(String,String)>,
             parse:fn(&DataObject,&str)->Result<DataObject,DataObject>) -> DataObject {
@@ -206,3 +186,16 @@ for attempt in 0..attempts {
 }
 out
 }
+
+// The Ollama arm: native /api/chat. Entry point for callers is agent.llm.chat_llm.
+pub fn run(messages:&DataArray, tools:&DataArray, meta:&DataObject, arm:&str,
+           url:&str, model:&str, headers:Vec<(String,String)>) -> DataObject {
+    let temperature = opt(meta, "LLM_TEMPERATURE", "0.2").parse::<f64>().unwrap_or(0.2);
+    let max_tokens = opt(meta, "LLM_MAX_TOKENS", "8192").parse::<i64>().unwrap_or(8192);
+    let payload = build_ollama_payload(messages, tools, model, temperature, max_tokens,
+                                     &opt(meta, "OLLAMA_KEEP_ALIVE", "0"));
+    dispatch(messages, tools, arm, "ollama", url, payload, headers, parse_ollama)
+}
+
+pub fn llm_ollama() -> DataObject {
+    err_out("llm_ollama is the Ollama arm, called by chat_llm - call agent.llm.chat_llm")
