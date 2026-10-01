@@ -1,10 +1,13 @@
-// export_tick: the timer-fired auto-export. Reads CURRICULUM_EXPORT_MIN from
-// globals (system.apps.agent.runtime - the same live botd.properties map every
-// LLM setting rides) to learn its own cadence, then delegates to
-// curriculum_export, landing a batch in the trainer's ingest dir. The interval
-// the timer uses is read from the same key by the service-boot wiring, so the
-// two never disagree. on/off: absent/0/off disables (returns skipped); the
-// manual curriculum_export path is untouched and always available.
+// export_tick: the timer-fired auto-export. The timer is a fixed 1-minute
+// heartbeat with NO cadence knowledge of its own; CURRICULUM_EXPORT_MIN in
+// botd.properties (live globals system.apps.agent.runtime, the same map
+// every LLM setting rides) is the single source of truth. Each fire
+// compares wall-clock minutes elapsed since the last actual export
+// (persisted in this command's own data record) against the setting and
+// exports only when elapsed >= the setting. So the property changes pace
+// live, with no timer re-registration and no dual knobs to disagree.
+// on/off: absent/0/off disables (returns skipped); the manual
+// curriculum_export path is untouched and always available.
 fn prop(key: &str, dflt: &str) -> String {
     (|| -> Option<String> {
         let s = DataStore::globals().try_get_object("system").ok()?;
@@ -35,8 +38,27 @@ if minutes <= 0 {
                           ("cadence_min", "0")]);
 }
 
-// land the batch where the trainer's drain loop reads it.
+// wall-clock gate: minutes since the last actual export vs the setting.
+// last_run persists across restarts in this command's own data record.
 let store = DataStore::new();
+let id = flowlang::command::Command::lookup("agent", "model", "export_tick").id;
+let rec = store.get_data("agent", &id);
+let mut data = rec.get_object("data");
+let now = time();
+let last_run = data.get_int("last_run");
+if last_run > 0 {
+    let elapsed_min = (now - last_run) / 60000;
+    if elapsed_min < minutes {
+        return flat_status(&[
+            ("skipped", "interval not elapsed"),
+            ("cadence_min", &minutes.to_string()),
+            ("elapsed_min", &elapsed_min.to_string()),
+            ("next_in_min", &(minutes - elapsed_min).to_string()),
+        ]);
+    }
+}
+
+// land the batch where the trainer's drain loop reads it.
 let root = match store.root.canonicalize().ok()
         .and_then(|r| r.parent().map(|p| p.to_path_buf())) {
     Some(r) => r,
@@ -49,9 +71,13 @@ let root = match store.root.canonicalize().ok()
 };
 let ingest = root.join("runtime").join("agent").join("model").join("ingest");
 let _ = std::fs::create_dir_all(&ingest);
-let path = ingest.join(format!("batch-auto-{}.jsonl", time()));
+let path = ingest.join(format!("batch-auto-{}.jsonl", now));
 
 let res = curriculum_export(path.display().to_string());
+
+// stamp the export time: restarts and cadence changes both behave.
+data.put_int("last_run", now);
+
 // surface the cadence alongside the export's own counts
 let mut o = res.clone();
 o.put_int("cadence_min", minutes);
