@@ -119,11 +119,21 @@ async function init(host) {
   const persist = async () => {
     if (!messages.length) return;   // empty sessions are never saved
     const me2 = (await userP()) ?? {};
-    const w = await jsonP("../app/write", "lib=runtime&id=" + encodeURIComponent(sessId ?? "null") +
-      "&readers=[]&writers=[]&data=" + encodeURIComponent(JSON.stringify({
-        username: userName(me2), title: sessTitle(messages), time: Date.now(),
-        messages, transcript })));
-    if (w.status === "ok" && w.id) sessId = w.id;
+    const res = await fetch("../app/write", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        lib: "runtime", id: sessId ?? null, readers: [], writers: [],
+        data: {
+          username: userName(me2), title: sessTitle(messages), time: Date.now(),
+          messages, transcript } }),
+    });
+    const w = await res.json();
+    if (w && w.status === "ok" && w.id) {
+      sessId = w.id;
+      // keep the sidebar (index) in step with the store (truth)
+      await invokeP("agent", "chat", "session_touch", { id: sessId });
+    }
     await renderSessions();
   };
   async function openSession(id) {
@@ -160,7 +170,7 @@ async function init(host) {
       const del = document.createElement("button");
       del.className = "ag-sess-del";
       del.textContent = "✕";
-      del.title = "forget this session";
+      del.title = "forget this session (removes it from the list)";
       del.addEventListener("click", async () => {
         if (del.textContent !== "sure?") {
           del.textContent = "sure?";
