@@ -56,5 +56,3 @@ pub fn run(messages:&DataArray, tools:&DataArray, meta:&DataObject) -> DataObjec
         Err(_) => err_out(&format!("LOCAL arm: service answered non-JSON at {}", url)),
     };
 }
-
-}
