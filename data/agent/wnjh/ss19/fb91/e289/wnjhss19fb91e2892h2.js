@@ -124,7 +124,8 @@ async function init(host) {
     // session onto one record. Mint a real server-side id up front instead.
     if (!sessId) {
       const idr = await jsonP("../app/unique_session_id", null);
-      if (idr && idr.status === "ok" && idr.data) sessId = String(idr.data);
+      const newId = idr && idr.status === "ok" ? (idr.data ?? idr.msg) : null;
+      if (newId) sessId = String(newId);
     }
     const res = await fetch("../app/write", {
       method: "POST",
