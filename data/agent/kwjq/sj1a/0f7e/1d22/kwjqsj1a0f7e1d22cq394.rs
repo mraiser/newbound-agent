@@ -39,13 +39,20 @@ if minutes <= 0 {
 }
 
 // wall-clock gate: minutes since the last actual export vs the setting.
-// last_run persists across restarts in this command's own data record.
+// last_run lives in globals (the AGENT_EXECUTIVE pattern for live runtime
+// state) - the command's own meta record does not durably save ad-hoc puts.
 let store = DataStore::new();
-let id = flowlang::command::Command::lookup("agent", "model", "export_tick").id;
-let rec = store.get_data("agent", &id);
-let mut data = rec.get_object("data");
+let mut g = DataStore::globals();
+let mut state = match g.try_get_object("AGENT_CURRICULUM_EXPORT") {
+    Ok(s) => s,
+    Err(_) => {
+        let s = DataObject::new();
+        g.put_object("AGENT_CURRICULUM_EXPORT", s.clone());
+        s
+    }
+};
 let now = time();
-let last_run = data.get_int("last_run");
+let last_run = if state.has("last_run") { state.get_int("last_run") } else { 0 };
 if last_run > 0 {
     let elapsed_min = (now - last_run) / 60000;
     if elapsed_min < minutes {
@@ -75,8 +82,9 @@ let path = ingest.join(format!("batch-auto-{}.jsonl", now));
 
 let res = curriculum_export(path.display().to_string());
 
-// stamp the export time: restarts and cadence changes both behave.
-data.put_int("last_run", now);
+// stamp the export time: cadence changes behave, and the state is visible
+// under globals AGENT_CURRICULUM_EXPORT like every other live executive state.
+state.put_int("last_run", now);
 
 // surface the cadence alongside the export's own counts
 let mut o = res.clone();
