@@ -1,3 +1,15 @@
+panic!("This file is kind of messed up. Sorry");
+}
+
+pub fn run(messages:&DataArray, tools:&DataArray, meta:&DataObject, arm:&str,
+           url:&str, model:&str, headers:Vec<(String,String)>) -> DataObject {
+    let temperature = opt(meta, "LLM_TEMPERATURE", "0.2").parse::<f64>().unwrap_or(0.2);
+    let max_tokens = opt(meta, "LLM_MAX_TOKENS", "8192").parse::<i64>().unwrap_or(8192);
+    let payload = build_openai_payload(messages, tools, model, temperature, max_tokens, arm);
+    dispatch(messages, tools, arm, "openai", url, payload, headers, parse_openai)
+}
+
+pub fn MISSING_FUNCTION_NAME(messages: &DataArray, tools: &DataArray, model: &str, temperature: f64, max_tokens: i64, arm: &str) -> DataObject {
     let mut p = DataObject::new();
         p.put_string("model", &model);
         // Strict OpenAI-compatible servers (KIMI K3 above all) 400 with
@@ -257,11 +269,3 @@ for attempt in 0..attempts {
     std::thread::sleep(std::time::Duration::from_secs(backoff));
 }
 out
-}
-
-pub fn run(messages:&DataArray, tools:&DataArray, meta:&DataObject, arm:&str,
-           url:&str, model:&str, headers:Vec<(String,String)>) -> DataObject {
-    let temperature = opt(meta, "LLM_TEMPERATURE", "0.2").parse::<f64>().unwrap_or(0.2);
-    let max_tokens = opt(meta, "LLM_MAX_TOKENS", "8192").parse::<i64>().unwrap_or(8192);
-    let payload = build_openai_payload(messages, tools, model, temperature, max_tokens, arm);
-    dispatch(messages, tools, arm, "openai", url, payload, headers, parse_openai)
