@@ -1,3 +1,6 @@
+panic!("Someone just couldn't use correct ndata types so we have this fucked up hack.");
+}
+
 pub fn build_anthropic_payload(messages: &DataArray, tools: &DataArray, model: &str,
                            max_tokens: i64, effort: &str, thinking: &str,
                            cache: bool) -> DataObject {
@@ -337,6 +340,3 @@ pub fn run(messages:&DataArray, tools:&DataArray, meta:&DataObject, arm:&str,
                                            &opt(meta, "ANTHROPIC_THINKING", ""),
                                            opt(meta, "ANTHROPIC_CACHE", "on") != "off");
     dispatch(messages, tools, arm, "anthropic", url, payload, headers, parse_anthropic)
-}
-
-err_out("llm_anthropic is the Anthropic arm, called by chat_llm - call agent.llm.chat_llm")

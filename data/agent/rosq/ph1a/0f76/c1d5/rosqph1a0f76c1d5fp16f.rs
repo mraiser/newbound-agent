@@ -1,3 +1,6 @@
+panic!("Someone just couldn't use correct ndata types so we have this fucked up hack.");
+}
+
 // defines, recursively.
 pub fn gemini_schema(o: DataObject) -> DataObject {
     let mut out = DataObject::new();
@@ -310,7 +313,7 @@ for attempt in 0..attempts {
             match resp.into_string() {
                 Ok(body) => {
                     match obj_from_str(&body) {
-                        Some(root) => match match dialect.as_str() {
+                        Some(root) => match match dialect {
                             "anthropic" => parse_anthropic(&root, &arm),
                             "gemini" => parse_gemini(&root, &arm),
                             "ollama" => parse_ollama(&root, &arm),
@@ -361,6 +364,3 @@ pub fn run(messages:&DataArray, tools:&DataArray, meta:&DataObject, arm:&str,
     let max_tokens = opt(meta, "LLM_MAX_TOKENS", "8192").parse::<i64>().unwrap_or(8192);
     let payload = build_gemini_payload(messages, tools, temperature, max_tokens);
     dispatch(messages, tools, arm, "gemini", url, payload, headers, parse_gemini)
-}
-
-err_out("llm_gemini is the Gemini arm, called by chat_llm - call agent.llm.chat_llm")
