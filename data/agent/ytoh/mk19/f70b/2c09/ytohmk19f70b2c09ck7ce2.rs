@@ -234,6 +234,27 @@ if let Some(meta2) = __cap {
                 row.put_array("msg_ids", msg_ids);
                 row.put_string("reply_id", &reply_id);
                 row.put_int("tools", tools.len() as i64);
+                // Content-address the tools array too (tc + FNV-128 of its
+                // serialization), so the request is captured COMPLETE and a
+                // stable toolbelt records once. agent-llm-last_request reads
+                // tools_id back into the full definitions.
+                if tools.len() > 0 {
+                    let ser = tools.to_string();
+                    let tid = format!("tc{:032x}", fnv_cap(&ser));
+                    if !store2.exists("runtime", &tid) {
+                        let mut td = DataObject::new();
+                        td.put_string("id", &tid);
+                        let mut tdata = DataObject::new();
+                        tdata.put_array("tools", tools.clone());
+                        td.put_object("data", tdata);
+                        td.put_string("username", "system");
+                        td.put_int("time", now2);
+                        td.put_array("readers", DataArray::new());
+                        td.put_array("writers", DataArray::new());
+                        store2.set_data("runtime", &tid, td);
+                    }
+                    row.put_string("tools_id", &tid);
+                }
                 if let Ok(c) = __result.try_get_float("cost_usd") { row.put_float("cost_usd", c); }
                 if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true)
                         .open(dir2.join(format!("d{}.jsonl", day))) {

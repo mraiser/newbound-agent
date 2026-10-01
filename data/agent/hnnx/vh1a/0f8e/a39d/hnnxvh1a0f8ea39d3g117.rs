@@ -104,7 +104,7 @@ if !reply_id.is_empty() {
 }
 
 // tools: exact definitions where the row captured them (tools_id), else the
-// current tool_loop definitions as a labeled stand-in
+// current MCP list converted to the OpenAI wire shape as a labeled stand-in
 out.put_int("tools_count", row.try_get_int("tools").unwrap_or(0));
 let tools_id = row.try_get_string("tools_id").unwrap_or_default();
 let mut have_exact = false;
@@ -117,16 +117,24 @@ if !tools_id.is_empty() {
     }
 }
 if !have_exact {
-    let tl = Command::lookup("agent", "tools", "tool_loop");
-    if let Ok(inv) = tl.execute(DataObject::new()) {
-        if let Ok(d) = inv.try_get_object("data") {
-            if let Ok(t) = d.try_get_array("tools") {
-                out.put_string("tools_from", "current tool_loop (row predates tools capture)");
-                out.put_array("tools", t);
-            }
+    let lt = crate::agent::plugin::list_tools::list_tools();
+    if let Ok(t) = lt.try_get_array("tools") {
+        // MCP shape ({name, description, inputSchema}) -> OpenAI function shape
+        let mut fns = DataArray::new();
+        for i in 0..t.len() {
+            let tool = t.get_object(i);
+            let mut f = DataObject::new();
+            f.put_string("type", "function");
+            let mut fnobj = DataObject::new();
+            fnobj.put_string("name", &tool.try_get_string("name").unwrap_or_default().replace('_', "-"));
+            fnobj.put_string("description", &tool.try_get_string("description").unwrap_or_default());
+            if let Ok(schema) = tool.try_get_object("inputSchema") { fnobj.put_object("parameters", schema); }
+            f.put_object("function", fnobj);
+            fns.push_object(f);
         }
-    }
-    if !out.has("tools") {
+        out.put_string("tools_from", "current MCP list (row predates tools capture)");
+        out.put_array("tools", fns);
+    } else {
         out.put_string("tools_from", "not captured on this row");
         out.put_array("tools", DataArray::new());
     }
