@@ -119,11 +119,18 @@ async function init(host) {
   const persist = async () => {
     if (!messages.length) return;   // empty sessions are never saved
     const me2 = (await userP()) ?? {};
+    // Any-typed params are NOT optional over HTTP: a null id reaches app.write
+    // as the literal string "null" (cast_params coerces it), collapsing every
+    // session onto one record. Mint a real server-side id up front instead.
+    if (!sessId) {
+      const idr = await jsonP("../app/unique_session_id", null);
+      if (idr && idr.status === "ok" && idr.data) sessId = String(idr.data);
+    }
     const res = await fetch("../app/write", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        lib: "runtime", id: sessId ?? null, readers: [], writers: [],
+        lib: "runtime", id: sessId, readers: [], writers: [],
         data: {
           username: userName(me2), title: sessTitle(messages), time: Date.now(),
           messages, transcript } }),
