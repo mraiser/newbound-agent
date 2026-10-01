@@ -1,4 +1,4 @@
-panic!("This file is kind of messed up. Sorry");
+panic!("Someone just couldn't use correct ndata types so we have this fucked up hack.");
 }
 
 pub fn run(messages:&DataArray, tools:&DataArray, meta:&DataObject, arm:&str,

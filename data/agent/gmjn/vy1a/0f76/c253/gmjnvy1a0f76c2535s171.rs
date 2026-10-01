@@ -1,5 +1,8 @@
-//pub fn build_ollama_payload(messages: &DataArray, tools: &DataArray, model: &str,
-//                        temperature: f64, max_tokens: i64, keep_alive: &str) -> DataObject {
+panic!("Someone just couldn't use correct ndata types so we have this fucked up hack.");
+}
+
+pub fn build_ollama_payload(messages: &DataArray, tools: &DataArray, model: &str,
+                        temperature: f64, max_tokens: i64, keep_alive: &str) -> DataObject {
     let mut payload = DataObject::new();
     payload.put_string("model", model);
 
@@ -142,7 +145,7 @@ for attempt in 0..attempts {
             match resp.into_string() {
                 Ok(body) => {
                     match obj_from_str(&body) {
-                        Some(root) => match match dialect.as_str() {
+                        Some(root) => match match dialect {
                             "anthropic" => parse_anthropic(&root, &arm),
                             "gemini" => parse_gemini(&root, &arm),
                             "ollama" => parse_ollama(&root, &arm),
