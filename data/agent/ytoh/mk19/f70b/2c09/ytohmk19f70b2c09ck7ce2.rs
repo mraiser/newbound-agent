@@ -160,10 +160,10 @@ for kv in extra_headers(&meta, &arm) {
     headers.push(kv);
 }
 match dialect.as_str() {
-    "anthropic" => return crate::agent::llm::llm_anthropic::run(messages, tools, meta, arm, url, model, headers),
-    "gemini"    => return crate::agent::llm::llm_gemini::run(messages, tools, meta, arm, url, model, headers),
-    "ollama"    => return crate::agent::llm::llm_ollama::run(messages, tools, meta, arm, url, model, headers),
-    _           => return crate::agent::llm::llm_openai::run(messages, tools, meta, arm, url, model, headers),
+    "anthropic" => return crate::agent::llm::llm_anthropic::run(&messages, &tools, &meta, &arm, &url, &model, headers),
+    "gemini"    => return crate::agent::llm::llm_gemini::run(&messages, &tools, &meta, &arm, &url, &model, headers),
+    "ollama"    => return crate::agent::llm::llm_ollama::run(&messages, &tools, &meta, &arm, &url, &model, headers),
+    _           => return crate::agent::llm::llm_openai::run(&messages, &tools, &meta, &arm, &url, &model, headers),
 }
 
 })();
