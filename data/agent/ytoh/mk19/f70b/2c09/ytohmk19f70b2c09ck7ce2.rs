@@ -18,7 +18,7 @@ let arm = match meta.try_get_string("LLM") {
 };
 
 if arm == "LOCAL" {
-    return crate::agent::llm::llm_local::run(&messages, &tools, &meta);
+    return crate::agent::llm::llm_local(messages, tools, meta);
 }
 
 // (dialect, url, model, headers)

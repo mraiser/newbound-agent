@@ -1,5 +1,5 @@
 // The LOCAL arm: the resident model service answers the chat (POST /chat). Callers use chat_llm.
-pub fn run(messages:&DataArray, tools:&DataArray, meta:&DataObject) -> DataObject {
+//pub fn run(messages:&DataArray, tools:&DataArray, meta:&DataObject) -> DataObject {
     // Phase 8a: the resident service's USER-FACING pointer answers the
     // chat (POST /chat). Text-only - the local model carries no tool
     // protocol, so the agent loop degrades to plain answers. Routing
@@ -49,6 +49,6 @@ pub fn run(messages:&DataArray, tools:&DataArray, meta:&DataObject) -> DataObjec
         },
         Err(_) => err_out(&format!("LOCAL arm: service answered non-JSON at {}", url)),
     };
-}
+//}
 
-err_out("llm_local is the LOCAL arm, called by chat_llm - call agent.llm.chat_llm")
+//err_out("llm_local is the LOCAL arm, called by chat_llm - call agent.llm.chat_llm")
