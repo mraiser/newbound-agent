@@ -68,14 +68,16 @@ let fold = || -> DataArray {
     let mut out = DataArray::new();
     for (id, row) in latest {
         if row.has("deleted") && row.get_boolean("deleted") { continue; }
+        let title = if row.has("title") { row.get_string("title") } else { "untitled session".to_string() };
+        let t = if row.has("time") { row.get_int("time") } else { 0 };
         let mut e = DataObject::new();
         e.put_string("id", &id);
-        e.put_string("title", if row.has("title") { &row.get_string("title") } else { "untitled session" });
-        e.put_int("time", if row.has("time") { row.get_int("time") } else { 0 });
+        e.put_string("title", &title);
+        e.put_int("time", t);
         out.push_object(e);
     }
     // newest first, by the row's recorded time
-    let mut v: Vec<DataObject> = out.objects().map(|d| d.object()).collect();
+    let mut v: Vec<DataObject> = out.objects().into_iter().map(|d| d.object()).collect();
     v.sort_by(|a, b| b.get_int("time").cmp(&a.get_int("time")));
     let mut out2 = DataArray::new();
     for o in v { out2.push_object(o); }
