@@ -658,49 +658,81 @@ async function init(host) {
   const entriesEl = host.querySelector(".ag-entries");
   const memCap = host.querySelector(".ag-mem-cap");
   const journalEl = host.querySelector(".ag-mem-journal");
-  let openDomainName = null;
+  let openDomainKey = null;   // "lib.ctl" of the open domain
+  let openDomainLib = null;   // lib of the open domain
+  let openDomainName = null;  // ctl name of the open domain
 
+  // A "memory domain" is any control that carries a memory facet — the kb
+  // knowledge domains AND control-resident memory (agent.llm, dev.code, …).
+  // The list is grouped by library; the open key is "lib.ctl".
   async function loadDomains() {
-    const controls = await controlsOf("kb");
+    const libs = await jsonP("../app/libs", null);
     domainsEl.replaceChildren();
-    if (controls instanceof Error) {
-      domainsEl.textContent = "kb unavailable: " + controls.message;
+    if (libs.status !== "ok") {
+      domainsEl.textContent = "library list unavailable: " + (libs.msg || "read failed");
       return;
     }
-    for (const c of controls.slice().sort((a, b) => a.name.localeCompare(b.name))) {
-      const rec = await readRec("kb", c.id);
-      const btn = document.createElement("button");
-      btn.className = "ag-domain" + (c.name === openDomainName ? " on" : "");
-      let n = "?";
-      try { n = JSON.parse((rec instanceof Error ? "[]" : rec.memory) ?? "[]").length; } catch { n = "!"; }
-      btn.innerHTML = "";
-      btn.textContent = `kb.${c.name} (${n})`;
-      btn.title = (rec instanceof Error ? "" : rec.desc) ?? "";
-      btn.addEventListener("click", () => openDomain(c.name));
-      domainsEl.appendChild(btn);
+    const ids = (libs.data ?? []).map((l) => l.id).sort((a, b) => a.localeCompare(b));
+    const groups = [];
+    for (const lib of ids) {
+      const controls = await controlsOf(lib);
+      if (controls instanceof Error) continue;
+      const doms = [];
+      for (const c of controls.slice().sort((a, b) => a.name.localeCompare(b.name))) {
+        const rec = await readRec(lib, c.id);
+        if (rec instanceof Error || rec.memory === undefined || rec.memory === null) continue;
+        let n = "?";
+        try {
+          const t = (rec.memory ?? "").trim();
+          if (t.startsWith("[")) n = JSON.parse(t || "[]").length;
+          else n = t ? t.split("\n").filter((x) => x.trim()).length : 0;
+        } catch { n = "!"; }
+        doms.push({ lib, name: c.name, n, desc: rec.desc ?? "" });
+      }
+      if (doms.length) groups.push({ lib, doms });
+    }
+    if (!groups.length) { domainsEl.textContent = "no memory facets found in any library"; return; }
+    for (const g of groups) {
+      const head = document.createElement("p");
+      head.className = "ag-domlib lbl";
+      head.textContent = g.lib;
+      domainsEl.appendChild(head);
+      for (const d of g.doms) {
+        const btn = document.createElement("button");
+        const key = `${g.lib}.${d.name}`;
+        btn.className = "ag-domain" + (key === openDomainKey ? " on" : "");
+        btn.dataset.key = key;
+        btn.innerHTML = "";
+        btn.textContent = `${d.name} (${d.n})`;
+        btn.title = d.desc;
+        btn.addEventListener("click", () => openDomain(g.lib, d.name));
+        domainsEl.appendChild(btn);
+      }
     }
   }
 
-  async function openDomain(name) {
+  async function openDomain(lib, name) {
+    openDomainKey = `${lib}.${name}`;
+    openDomainLib = lib;
     openDomainName = name;
     for (const b of domainsEl.querySelectorAll(".ag-domain")) {
-      b.classList.toggle("on", b.textContent.startsWith(`kb.${name} `) || b.textContent === `kb.${name}`);
+      b.classList.toggle("on", b.dataset.key === openDomainKey);
     }
-    const r = await readFacet("kb", name, "memory");
+    const r = await readFacet(lib, name, "memory");
     entriesEl.replaceChildren();
     journalEl.replaceChildren();
     if (r.status !== "ok") { entriesEl.textContent = "read failed: " + r.msg; return; }
     let entries;
     try { entries = JSON.parse(r.source || "[]"); }
     catch { entriesEl.textContent = "this domain's memory facet is not valid JSON — repair it in the journal's history"; return; }
-    memCap.textContent = `kb.${name} — ${entries.length} entr${entries.length === 1 ? "y" : "ies"}; every change below is a journaled patch`;
+    memCap.textContent = `${lib}.${name} — ${entries.length} entr${entries.length === 1 ? "y" : "ies"}; every change below is a journaled patch`;
 
     const save = async (next, label) => {
       const body = JSON.stringify(next, null, 2) + "\n";
-      const pr = await patchFacet("kb", name, "memory",
+      const pr = await patchFacet(lib, name, "memory",
         { oldSnippet: r.source, newSnippet: body, base: r.hash, label });
       if (pr.status !== "ok") { note(memCap, `save failed: ${pr.msg}`, true); return false; }
-      await openDomain(name);
+      await openDomain(lib, name);
       await loadDomains();
       return true;
     };
@@ -786,7 +818,7 @@ async function init(host) {
       entriesEl.appendChild(card);
     });
 
-    const j = await listPatches("kb", name, 10);
+    const j = await listPatches(lib, name, 10);
     if (j.status === "ok") {
       for (const p of (j.patches ?? []).filter((p) => p.facet === "memory")) {
         const line = document.createElement("div");
@@ -807,14 +839,14 @@ async function init(host) {
     entry.confidence = host.querySelector(".ag-rem-conf").value;
     const user = await userP();
     const r = await invokeP("agent", "archivist", "remember", {
-      lib: "kb", domain: openDomainName, entry,
+      lib: openDomainLib, domain: openDomainName, entry,
       author: user?.displayname || user?.id || "owner",
     });
     if (r.status !== "ok") { note(memCap, `remember failed: ${r.msg}`, true); return; }
     host.querySelector(".ag-rem-claim").value = "";
     host.querySelector(".ag-rem-detail").value = "";
     host.querySelector(".ag-rem-tags").value = "";
-    await openDomain(openDomainName);
+    await openDomain(openDomainLib, openDomainName);
     await loadDomains();
   });
 
