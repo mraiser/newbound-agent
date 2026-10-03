@@ -1023,17 +1023,19 @@ async function init(host) {
     }, 5000);
     const kv = (n) => host.querySelector(`[data-kv="${n}"]`);
 
-    const [exR, snR, svR, trR, slR, hvR] = await Promise.all([
+    const [exR, snR, svR, trR, slR, hvR, cmR] = await Promise.all([
       invoke("agent", "executive", "status", {}),
       invoke("agent", "sensor", "status", {}),
       invoke("agent", "model", "service_status", {}),
       invoke("agent", "model", "train_status", {}),
       invoke("agent", "executive", "salience_log", {}),
       invoke("agent", "model", "harvest_report", { window_days: 7 }),
+      invoke("agent", "committer", "status", {}),
     ]);
     const ex = mEnv(exR) || {}, sn = mEnv(snR) || {}, sv = mEnv(svR) || {};
     const tr = mEnv(trR) || {}, sl = mEnv(slR) || {};
     const hv = mEnv(hvR) || {};
+    const cm = mEnv(cmR) || {};
 
     // the harvest - what the week grew (H6). Claims by domain, the
     // banks, the garden's acts, the syspack gauge - and the owner's
@@ -1069,6 +1071,33 @@ async function init(host) {
 
     // the loop
     const ctx = ex.last_context || {};
+    // agent autocommit - which repos the LLM committer drives
+    {
+      const all = cm.all || [], en = cm.repos || [];
+      const enMap = {};
+      en.forEach((r) => { enMap[r.repo] = r; });
+      const sel = host.querySelector(".ag-commit-repo");
+      if (sel) {
+        const cur = sel.value;
+        sel.innerHTML = all.map((r) =>
+          `<option value="${mEsc(r.repo)}">${mEsc(r.repo)}${r.agent_commit ? " ●" : ""}${r.dev_autocommit ? " (dev)" : ""}</option>`).join("");
+        if (cur && all.some((r) => r.repo === cur)) sel.value = cur;
+      }
+      const chips = all.length
+        ? all.map((r) => {
+            const st = enMap[r.repo] ? enMap[r.repo].state
+              : (r.dev_autocommit ? "dev mechanical" : "off");
+            const cls = st === "active" ? "ok" : (st === "shadowed_by_dev_autocommit" ? "warn"
+              : (st === "refused_default_branch" ? "err" : "off"));
+            return mChip(`${r.repo}: ${st}`, cls);
+          }).join("")
+        : mChip("no dev-registered repos", "off");
+      kv("committer").innerHTML = chips + mKv([
+        ["agent-commit repos", String(cm.enabled ?? 0)],
+        ["how it works", "diff is the source of truth - one LLM message per store unit, fallback if the model is down"],
+      ]);
+    }
+
     kv("loop").innerHTML =
       mChip(ex.running ? `executive ${ex.phase || "on"}` : "executive stopped", ex.running ? "ok" : "off") +
       mChip(sn.running ? "sensor on" : "sensor stopped", sn.running ? "ok" : "off") +
@@ -1287,6 +1316,37 @@ async function init(host) {
       if (isNaN(n) || n < 0) { mindNote("loop", "drive must be a number ≥ 0", true); return; }
       const r = mEnv(await invoke("agent", "executive", "set_drive", { acts_per_hour: n }));
       mindNote("loop", r && r.status === "ok" ? `drive set to ${n}/hr` : "set_drive failed", !(r && r.status === "ok"));
+      loadMind();
+    });
+    act("commit-toggle").addEventListener("click", async () => {
+      const sel = host.querySelector(".ag-commit-repo");
+      const repo = sel && sel.value;
+      if (!repo) { mindNote("committer", "pick a repo first", true); return; }
+      const cm = mEnv(await invoke("agent", "committer", "status", {}));
+      const cur = (cm && (cm.all || []).find((r) => r.repo === repo)) || {};
+      const turnOn = !cur.agent_commit;
+      const r = mEnv(await invoke("agent", "committer", "set_enabled", { repo, enabled: turnOn }));
+      let msg = r && r.status === "ok" ? `${repo} agent-commit ${turnOn ? "on" : "off"}` : "set_enabled failed";
+      let err = !(r && r.status === "ok");
+      // turning ON a repo dev still mechanically drives: hand it to the agent
+      if (!err && turnOn && cur.dev_autocommit) {
+        const d = mEnv(await invoke("dev", "git", "set_autocommit", { name: repo, autocommit: false }));
+        msg += d && d.status === "ok" ? " · dev autocommit off (agent now drives it)" : " · WARN: dev autocommit still on - shadowed";
+        if (!(d && d.status === "ok")) err = true;
+      }
+      mindNote("committer", msg, err);
+      loadMind();
+    });
+    act("commit-sweep").addEventListener("click", async (ev) => {
+      ev.currentTarget.disabled = true;
+      mindNote("committer", "sweep running - grouping units, composing messages…");
+      const r = mEnv(await invoke("agent", "committer", "sweep", {}));
+      ev.currentTarget.disabled = false;
+      const ok = r && r.status === "ok";
+      const msg = ok
+        ? `swept ${r.swept ?? 0} · committed ${r.units_committed ?? 0} units (${r.commits ?? 0} commits) · pushed ${r.pushed ?? 0}`
+        : (r && r.msg) || "sweep failed";
+      mindNote("committer", msg, !ok);
       loadMind();
     });
     act("bootstrap").addEventListener("click", async (ev) => {
