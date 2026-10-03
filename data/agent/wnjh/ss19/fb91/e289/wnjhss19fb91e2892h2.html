@@ -102,6 +102,18 @@
 
     <section class="ag-pane" data-pane="mind" hidden>
       <div class="ag-mind-grid">
+        <div class="ag-card" data-card="committer">
+          <p class="ag-card-t lbl">agent autocommit — LLM-written commit messages</p>
+          <div class="ag-kv" data-kv="committer"></div>
+          <span class="ag-btnrow">
+            <select class="ag-commit-repo" title="a dev-registered repo to agent-commit"></select>
+            <button class="ag-mind-btn" data-act="commit-toggle"
+              title="toggle agent-commit for the selected repo - on a shadowed repo this also turns dev's mechanical autocommit OFF so the agent drives it">toggle</button>
+            <button class="ag-mind-btn" data-act="commit-sweep"
+              title="run the agent-committer's sweep now - group dirty store units, compose a message each, commit, push">sweep now</button>
+          </span>
+          <pre class="ag-mind-note lbl" data-note="committer"></pre>
+        </div>
         <div class="ag-card" data-card="loop">
           <p class="ag-card-t lbl">the loop — executive + sensor</p>
           <div class="ag-kv" data-kv="loop"></div>
