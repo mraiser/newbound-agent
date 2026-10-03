@@ -30,4 +30,17 @@ for repo in areg.get_keys(){
 }
 o.put_array("repos",rows);
 o.put_int("enabled", areg.get_keys().len() as i64);
+// every dev-registered repo, for a UI picker (toggle targets, not just the enabled set)
+let mut all=DataArray::new();
+let mut names = devreg.get_keys(); names.sort();
+for repo in names {
+    let e=devreg.get_object(&repo);
+    let mut r=DataObject::new();
+    r.put_string("repo",&repo);
+    r.put_string("role",&e.try_get_string("role").unwrap_or_default());
+    r.put_boolean("dev_autocommit", matches!(e.try_get_boolean("autocommit"),Ok(true)));
+    r.put_boolean("agent_commit", areg.has(&repo));
+    all.push_object(r);
+}
+o.put_array("all",all);
 o
