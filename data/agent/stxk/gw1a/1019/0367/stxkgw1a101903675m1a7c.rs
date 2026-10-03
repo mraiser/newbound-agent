@@ -21,20 +21,20 @@ let (lib, ctl) = (parts[0], parts[1]);
 let pathsib = format!("data/{}", lib);
 let mut dargs = DataArray::new();
 dargs.push_string("HEAD"); dargs.push_string("--"); dargs.push_string(&pathsib);
-let d = crate::dev::git::read::read(repo.clone(), "diff".to_string(), dargs);
+let d = crate::api::new().dev.git.read(repo.clone(), "diff".to_string(), dargs);
 let mut diff = if okr(&d){ outs(&d) } else { String::new() };
 // also the generated rust for this control, so a message can mention behavior
 let gen = format!("newbound_core/src/{}/{}", lib, ctl);
 let mut gargs = DataArray::new();
 gargs.push_string("HEAD"); gargs.push_string("--"); gargs.push_string(&gen);
-let g = crate::dev::git::read::read(repo.clone(), "diff".to_string(), gargs);
+let g = crate::api::new().dev.git.read(repo.clone(), "diff".to_string(), gargs);
 if okr(&g){ let gd = outs(&g); if !gd.trim().is_empty(){ diff.push_str("\n# generated sources\n"); diff.push_str(&gd); } }
 let diff_truncated = diff.len() > 12000;
 if diff_truncated { diff = diff.chars().take(12000).collect(); diff.push_str("\n...[diff truncated]..."); }
 if diff.trim().is_empty(){ return fail("no diff for this unit - nothing to describe"); }
 
 // --- house style: recent subjects --------------------------------------------
-let lg = crate::dev::git::read::read(repo.clone(), "log".to_string(), sargs(&["-8","--format=%s"]));
+let lg = crate::api::new().dev.git.read(repo.clone(), "log".to_string(), sargs(&["-8","--format=%s"]));
 let style = if okr(&lg){ outs(&lg) } else { String::new() };
 
 // --- sibling context ----------------------------------------------------------
