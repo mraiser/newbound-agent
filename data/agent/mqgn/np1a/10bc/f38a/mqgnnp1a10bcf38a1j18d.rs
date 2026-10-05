@@ -40,19 +40,14 @@ if needs_arg && arg.trim().is_empty() {
     return o;
 }
 let tmo: i64 = if timeout_ms > 0 { timeout_ms } else { 10000 };
-// The page-side runner polls at 100 ms; give the channel time to deliver at
-// least one re-armed result beyond the page-side deadline.
+// The page-side poll interval the script will re-arm with; the eval channel
+// must outlive at least one of those cycles to ever see a result.
+let interval_ms: i64 = 250;
 let channel = tmo * 3 + 15000;
-if channel < 400 {
-    let mut o = DataObject::new();
-    o.put_string("status", "err");
-    o.put_string("msg", "timeout_ms too small for the file channel (need >= ~1000 ms; the page-side wait re-arms at 100 ms)");
-    return o;
-}
 
 let js = format!(
     r#"(function(){{
-var SL={}, AC={}, AR={}, D={}, TMO={};
+var SL={}, AC={}, AR={}, D={}, TMO={}, IVL={};
 function txt(n){{return (n.textContent||'').replace(/\s+/g,' ').trim();}}
 function vis(e){{if(!e||!e.isConnected)return false;var d=e.ownerDocument||document;var r=e.getBoundingClientRect();if(r.width<1||r.height<1)return false;var s=d.defaultView.getComputedStyle(e);return s.display!=='none'&&s.visibility!=='hidden'&&parseFloat(s.opacity||'1')>0;}}
 function walk(c,fn,depth){{fn(c);if(depth>24)return;var fr;try{{fr=c.querySelectorAll('iframe,frame');}}catch(x){{return;}}for(var i=0;i<fr.length;i++){{var fd=null;try{{fd=fr[i].contentDocument;}}catch(x){{fd=null;}}if(fd)walk(fd,fn,depth+1);}}}}
@@ -75,8 +70,7 @@ if(ac==='press'){{e.focus();var defs=keydefs(ar),last=null;for(var i=0;i<defs.le
 if(last&&last.key==='Enter'){{try{{if(e.form&&e.form.requestSubmit)e.form.requestSubmit();}}catch(x){{}}}}
 for(var i=defs.length-1;i>=0;i--)dispatchKey(e,defs[i],'keyup');return true;}}
 return 'unknown action';}}
-function report(o){{if(o==null)return null;o.retries=(o.retries||0)+1;if(o.ok||o.done)return o;if(Date.now()>D+TMO){{o.done=true;o.err='timeout';return o;}}
-var r=resolve(SL);if(!r||!r[0]){{o.err='not found';return o;}}
+function report(o){{if(o==null)return null;o.retries=(o.retries||0)+1;if(o.ok||o.done)return o;if(Date.now()>D+TMO){{o.done=true;o.err='timeout';return o;}}var r=resolve(SL);if(!r||!r[0]){{o.err='not found';return o;}}
 var e=r[0],root=r[1];var rr=e.getBoundingClientRect();o.bbox={{x:rr.x,y:rr.y,w:rr.width,h:rr.height}};
 if(!vis(e)){{o.err='not visible';return o;}}
 if(AC==='click'&&!focusable(e)){{o.err='not enabled';return o;}}
@@ -90,6 +84,7 @@ return o;}})()"#,
     js_string(&act_l),
     js_string(&arg),
     flowlang::flowlang::system::time::time(),
-    tmo
+    tmo,
+    interval_ms
 );
 crate::agent::browser::eval::eval(js, channel)
