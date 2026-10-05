@@ -102,71 +102,58 @@ async function init(host) {
   let messages = [];       // the raw conversation (openai shapes), persisted
   let transcript = [];     // rendered cells {kind, title?, text, error?}
 
-  // ── sessions: many conversations, each its own localStorage record ───
-  const SESS_INDEX = "agent.chat.sessions.v1";  // [{id, title, time}], newest first
-  const sessKey = (id) => "agent.chat.s." + id;
-  const loadIndex = () => {
-    try {
-      const ix = JSON.parse(localStorage.getItem(SESS_INDEX) ?? "[]");
-      return Array.isArray(ix) ? ix : [];
-    } catch { return []; }
-  };
-  const saveIndex = (ix) => {
-    try { localStorage.setItem(SESS_INDEX, JSON.stringify(ix)); } catch { /* fine */ }
-  };
+  // ── sessions: many conversations, each a store record tied to the user ──
+  // Records live in the runtime lib (admin-only by default) and are written
+  // through the platform's gated app.write; the sidebar list + delete ride
+  // agent.chat.session_index (the per-user index), and openSession rides the
+  // owner-checking agent.chat.session_open. Ids are minted server-side with
+  // leading entropy, so the store's filename sharding is preserved.
+  const userName = (u) => (u && (u.username || u.id || u.displayname)) || "anonymous";
   function sessTitle(msgs) {
     const first = (msgs ?? []).find((m) =>
       m.role === "user" && !String(m.content ?? "").startsWith("[CONTEXT]"));
     const t = String(first?.content ?? "").replace(/\s+/g, " ").trim();
     return t ? t.slice(0, 48) : "untitled session";
   }
-  // one-time migration: the single-session store becomes the first entry
-  try {
-    const legacy = JSON.parse(localStorage.getItem(STORE_KEY) ?? "null");
-    if (legacy && Array.isArray(legacy.messages) && legacy.messages.length) {
-      const id = Date.now().toString(36);
-      localStorage.setItem(sessKey(id), JSON.stringify(legacy));
-      saveIndex([{ id, title: sessTitle(legacy.messages), time: Date.now() },
-        ...loadIndex()]);
-    }
-    localStorage.removeItem(STORE_KEY);
-  } catch { /* fresh */ }
-  // one-time repair: retitle sessions whose title was minted from the
-  // injected [CONTEXT] preamble before sessTitle learned to skip it
-  try {
-    const ix = loadIndex();
-    let dirty = false;
-    for (const s of ix) {
-      if (!String(s.title ?? "").startsWith("[CONTEXT]")) continue;
-      const rec = JSON.parse(localStorage.getItem(sessKey(s.id)) ?? "null");
-      if (rec && Array.isArray(rec.messages)) { s.title = sessTitle(rec.messages); dirty = true; }
-    }
-    if (dirty) saveIndex(ix);
-  } catch { /* fine */ }
-  let sessId = null;        // minted at the first persisted message
-  const persist = () => {
+  let sessId = null;        // minted server-side on the first save
+  const persist = async () => {
     if (!messages.length) return;   // empty sessions are never saved
-    if (!sessId) sessId = Date.now().toString(36);
-    try {
-      localStorage.setItem(sessKey(sessId), JSON.stringify({
-        messages: messages.slice(-60), transcript: transcript.slice(-120) }));
-    } catch { /* storage full — the chat still works */ }
-    const ix = loadIndex().filter((s) => s.id !== sessId);
-    ix.unshift({ id: sessId, title: sessTitle(messages), time: Date.now() });
-    saveIndex(ix);
-    renderSessions();
+    const me2 = (await userP()) ?? {};
+    // Any-typed params are NOT optional over HTTP: a null id reaches app.write
+    // as the literal string "null" (cast_params coerces it), collapsing every
+    // session onto one record. Mint a real server-side id up front instead.
+    if (!sessId) {
+      const idr = await jsonP("../app/unique_session_id", null);
+      const newId = idr && idr.status === "ok" ? (idr.data ?? idr.msg) : null;
+      if (newId) sessId = String(newId);
+    }
+    const res = await fetch("../app/write", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        lib: "runtime", id: sessId, readers: [], writers: [],
+        data: {
+          username: userName(me2), title: sessTitle(messages), time: Date.now(),
+          messages, transcript } }),
+    });
+    const w = await res.json();
+    if (w && w.status === "ok" && w.id) {
+      sessId = w.id;
+      // keep the sidebar (index) in step with the store (truth)
+      await invokeP("agent", "chat", "session_touch", { id: sessId });
+    }
+    await renderSessions();
   };
-  function openSession(id) {
-    let rec = null;
-    try { rec = JSON.parse(localStorage.getItem(sessKey(id)) ?? "null"); }
-    catch { /* unreadable — opens empty */ }
+  async function openSession(id) {
+    const r = await invokeP("agent", "chat", "session_open", { id });
+    const rec = (r.status === "ok" && r.data && r.data.data) ? r.data.data : null;
     sessId = id;
     messages = (rec && Array.isArray(rec.messages)) ? rec.messages : [];
     transcript = (rec && Array.isArray(rec.transcript)) ? rec.transcript : [];
     thread.replaceChildren();
     for (const entry of transcript) thread.appendChild(cellEl(entry));
     thread.scrollTop = thread.scrollHeight;
-    renderSessions();
+    await renderSessions();
   }
   function newSession() {
     sessId = null;
@@ -176,8 +163,9 @@ async function init(host) {
     renderSessions();
   }
   const sessListEl = host.querySelector(".ag-sess-list");
-  function renderSessions() {
-    const ix = loadIndex();
+  async function renderSessions() {
+    const r = await invokeP("agent", "chat", "session_index", { op: "list", id: "" });
+    const ix = (r.status === "ok" && r.data && r.data.list) ? r.data.list : [];
     sessListEl.replaceChildren();
     for (const s of ix) {
       const row = document.createElement("div");
@@ -190,16 +178,15 @@ async function init(host) {
       const del = document.createElement("button");
       del.className = "ag-sess-del";
       del.textContent = "✕";
-      del.title = "forget this session (this browser only)";
-      del.addEventListener("click", () => {
+      del.title = "forget this session (removes it from the list)";
+      del.addEventListener("click", async () => {
         if (del.textContent !== "sure?") {
           del.textContent = "sure?";
           setTimeout(() => { del.textContent = "✕"; }, 2500);
           return;
         }
-        try { localStorage.removeItem(sessKey(s.id)); } catch { /* fine */ }
-        saveIndex(loadIndex().filter((x) => x.id !== s.id));
-        if (s.id === sessId) newSession(); else renderSessions();
+        await invokeP("agent", "chat", "session_index", { op: "delete", id: s.id });
+        if (s.id === sessId) newSession(); else await renderSessions();
       });
       row.append(open, del);
       sessListEl.appendChild(row);
@@ -344,7 +331,9 @@ async function init(host) {
     persist();
     return entry;
   }
-  { const ix = loadIndex(); ix.length ? openSession(ix[0].id) : renderSessions(); }
+  { const r = await invokeP("agent", "chat", "session_index", { op: "list", id: "" });
+    const ix = (r.status === "ok" && r.data && r.data.list) ? r.data.list : [];
+    ix.length ? await openSession(ix[0].id) : await renderSessions(); }
 
   // new session — the current one stays in the sidebar; nothing is lost.
   host.querySelector(".ag-newsession").addEventListener("click", newSession);
@@ -514,7 +503,7 @@ async function init(host) {
         messages.push(userMsg);
       }
       const text = await agent.chatTurn({
-        messages, tools, execTool,
+        messages, tools, execTool, venue: "chat", entity: userName((await userP()) ?? {}),
         onRound: () => { busyEl.querySelector(".ag-cell-body").textContent = "agent is using tools…"; },
       });
       messages.push({ role: "assistant", content: text });
@@ -669,49 +658,81 @@ async function init(host) {
   const entriesEl = host.querySelector(".ag-entries");
   const memCap = host.querySelector(".ag-mem-cap");
   const journalEl = host.querySelector(".ag-mem-journal");
-  let openDomainName = null;
+  let openDomainKey = null;   // "lib.ctl" of the open domain
+  let openDomainLib = null;   // lib of the open domain
+  let openDomainName = null;  // ctl name of the open domain
 
+  // A "memory domain" is any control that carries a memory facet — the kb
+  // knowledge domains AND control-resident memory (agent.llm, dev.code, …).
+  // The list is grouped by library; the open key is "lib.ctl".
   async function loadDomains() {
-    const controls = await controlsOf("kb");
+    const libs = await jsonP("../app/libs", null);
     domainsEl.replaceChildren();
-    if (controls instanceof Error) {
-      domainsEl.textContent = "kb unavailable: " + controls.message;
+    if (libs.status !== "ok") {
+      domainsEl.textContent = "library list unavailable: " + (libs.msg || "read failed");
       return;
     }
-    for (const c of controls.slice().sort((a, b) => a.name.localeCompare(b.name))) {
-      const rec = await readRec("kb", c.id);
-      const btn = document.createElement("button");
-      btn.className = "ag-domain" + (c.name === openDomainName ? " on" : "");
-      let n = "?";
-      try { n = JSON.parse((rec instanceof Error ? "[]" : rec.memory) ?? "[]").length; } catch { n = "!"; }
-      btn.innerHTML = "";
-      btn.textContent = `kb.${c.name} (${n})`;
-      btn.title = (rec instanceof Error ? "" : rec.desc) ?? "";
-      btn.addEventListener("click", () => openDomain(c.name));
-      domainsEl.appendChild(btn);
+    const ids = (libs.data ?? []).map((l) => l.id).sort((a, b) => a.localeCompare(b));
+    const groups = [];
+    for (const lib of ids) {
+      const controls = await controlsOf(lib);
+      if (controls instanceof Error) continue;
+      const doms = [];
+      for (const c of controls.slice().sort((a, b) => a.name.localeCompare(b.name))) {
+        const rec = await readRec(lib, c.id);
+        if (rec instanceof Error || rec.memory === undefined || rec.memory === null) continue;
+        let n = "?";
+        try {
+          const t = (rec.memory ?? "").trim();
+          if (t.startsWith("[")) n = JSON.parse(t || "[]").length;
+          else n = t ? t.split("\n").filter((x) => x.trim()).length : 0;
+        } catch { n = "!"; }
+        doms.push({ lib, name: c.name, n, desc: rec.desc ?? "" });
+      }
+      if (doms.length) groups.push({ lib, doms });
+    }
+    if (!groups.length) { domainsEl.textContent = "no memory facets found in any library"; return; }
+    for (const g of groups) {
+      const head = document.createElement("p");
+      head.className = "ag-domlib lbl";
+      head.textContent = g.lib;
+      domainsEl.appendChild(head);
+      for (const d of g.doms) {
+        const btn = document.createElement("button");
+        const key = `${g.lib}.${d.name}`;
+        btn.className = "ag-domain" + (key === openDomainKey ? " on" : "");
+        btn.dataset.key = key;
+        btn.innerHTML = "";
+        btn.textContent = `${d.name} (${d.n})`;
+        btn.title = d.desc;
+        btn.addEventListener("click", () => openDomain(g.lib, d.name));
+        domainsEl.appendChild(btn);
+      }
     }
   }
 
-  async function openDomain(name) {
+  async function openDomain(lib, name) {
+    openDomainKey = `${lib}.${name}`;
+    openDomainLib = lib;
     openDomainName = name;
     for (const b of domainsEl.querySelectorAll(".ag-domain")) {
-      b.classList.toggle("on", b.textContent.startsWith(`kb.${name} `) || b.textContent === `kb.${name}`);
+      b.classList.toggle("on", b.dataset.key === openDomainKey);
     }
-    const r = await readFacet("kb", name, "memory");
+    const r = await readFacet(lib, name, "memory");
     entriesEl.replaceChildren();
     journalEl.replaceChildren();
     if (r.status !== "ok") { entriesEl.textContent = "read failed: " + r.msg; return; }
     let entries;
     try { entries = JSON.parse(r.source || "[]"); }
     catch { entriesEl.textContent = "this domain's memory facet is not valid JSON — repair it in the journal's history"; return; }
-    memCap.textContent = `kb.${name} — ${entries.length} entr${entries.length === 1 ? "y" : "ies"}; every change below is a journaled patch`;
+    memCap.textContent = `${lib}.${name} — ${entries.length} entr${entries.length === 1 ? "y" : "ies"}; every change below is a journaled patch`;
 
     const save = async (next, label) => {
       const body = JSON.stringify(next, null, 2) + "\n";
-      const pr = await patchFacet("kb", name, "memory",
+      const pr = await patchFacet(lib, name, "memory",
         { oldSnippet: r.source, newSnippet: body, base: r.hash, label });
       if (pr.status !== "ok") { note(memCap, `save failed: ${pr.msg}`, true); return false; }
-      await openDomain(name);
+      await openDomain(lib, name);
       await loadDomains();
       return true;
     };
@@ -797,7 +818,7 @@ async function init(host) {
       entriesEl.appendChild(card);
     });
 
-    const j = await listPatches("kb", name, 10);
+    const j = await listPatches(lib, name, 10);
     if (j.status === "ok") {
       for (const p of (j.patches ?? []).filter((p) => p.facet === "memory")) {
         const line = document.createElement("div");
@@ -818,14 +839,14 @@ async function init(host) {
     entry.confidence = host.querySelector(".ag-rem-conf").value;
     const user = await userP();
     const r = await invokeP("agent", "archivist", "remember", {
-      lib: "kb", domain: openDomainName, entry,
+      lib: openDomainLib, domain: openDomainName, entry,
       author: user?.displayname || user?.id || "owner",
     });
     if (r.status !== "ok") { note(memCap, `remember failed: ${r.msg}`, true); return; }
     host.querySelector(".ag-rem-claim").value = "";
     host.querySelector(".ag-rem-detail").value = "";
     host.querySelector(".ag-rem-tags").value = "";
-    await openDomain(openDomainName);
+    await openDomain(openDomainLib, openDomainName);
     await loadDomains();
   });
 
@@ -1002,17 +1023,19 @@ async function init(host) {
     }, 5000);
     const kv = (n) => host.querySelector(`[data-kv="${n}"]`);
 
-    const [exR, snR, svR, trR, slR, hvR] = await Promise.all([
+    const [exR, snR, svR, trR, slR, hvR, cmR] = await Promise.all([
       invoke("agent", "executive", "status", {}),
       invoke("agent", "sensor", "status", {}),
       invoke("agent", "model", "service_status", {}),
       invoke("agent", "model", "train_status", {}),
       invoke("agent", "executive", "salience_log", {}),
       invoke("agent", "model", "harvest_report", { window_days: 7 }),
+      invoke("agent", "committer", "status", {}),
     ]);
     const ex = mEnv(exR) || {}, sn = mEnv(snR) || {}, sv = mEnv(svR) || {};
     const tr = mEnv(trR) || {}, sl = mEnv(slR) || {};
     const hv = mEnv(hvR) || {};
+    const cm = mEnv(cmR) || {};
 
     // the harvest - what the week grew (H6). Claims by domain, the
     // banks, the garden's acts, the syspack gauge - and the owner's
@@ -1048,6 +1071,33 @@ async function init(host) {
 
     // the loop
     const ctx = ex.last_context || {};
+    // agent autocommit - which repos the LLM committer drives
+    {
+      const all = cm.all || [], en = cm.repos || [];
+      const enMap = {};
+      en.forEach((r) => { enMap[r.repo] = r; });
+      const sel = host.querySelector(".ag-commit-repo");
+      if (sel) {
+        const cur = sel.value;
+        sel.innerHTML = all.map((r) =>
+          `<option value="${mEsc(r.repo)}">${mEsc(r.repo)}${r.agent_commit ? " ●" : ""}${r.dev_autocommit ? " (dev)" : ""}</option>`).join("");
+        if (cur && all.some((r) => r.repo === cur)) sel.value = cur;
+      }
+      const chips = all.length
+        ? all.map((r) => {
+            const st = enMap[r.repo] ? enMap[r.repo].state
+              : (r.dev_autocommit ? "dev mechanical" : "off");
+            const cls = st === "active" ? "ok" : (st === "shadowed_by_dev_autocommit" ? "warn"
+              : (st === "refused_default_branch" ? "err" : "off"));
+            return mChip(`${r.repo}: ${st}`, cls);
+          }).join("")
+        : mChip("no dev-registered repos", "off");
+      kv("committer").innerHTML = chips + mKv([
+        ["agent-commit repos", String(cm.enabled ?? 0)],
+        ["how it works", "diff is the source of truth - one LLM message per store unit, fallback if the model is down"],
+      ]);
+    }
+
     kv("loop").innerHTML =
       mChip(ex.running ? `executive ${ex.phase || "on"}` : "executive stopped", ex.running ? "ok" : "off") +
       mChip(sn.running ? "sensor on" : "sensor stopped", sn.running ? "ok" : "off") +
@@ -1266,6 +1316,37 @@ async function init(host) {
       if (isNaN(n) || n < 0) { mindNote("loop", "drive must be a number ≥ 0", true); return; }
       const r = mEnv(await invoke("agent", "executive", "set_drive", { acts_per_hour: n }));
       mindNote("loop", r && r.status === "ok" ? `drive set to ${n}/hr` : "set_drive failed", !(r && r.status === "ok"));
+      loadMind();
+    });
+    act("commit-toggle").addEventListener("click", async () => {
+      const sel = host.querySelector(".ag-commit-repo");
+      const repo = sel && sel.value;
+      if (!repo) { mindNote("committer", "pick a repo first", true); return; }
+      const cm = mEnv(await invoke("agent", "committer", "status", {}));
+      const cur = (cm && (cm.all || []).find((r) => r.repo === repo)) || {};
+      const turnOn = !cur.agent_commit;
+      const r = mEnv(await invoke("agent", "committer", "set_enabled", { repo, enabled: turnOn }));
+      let msg = r && r.status === "ok" ? `${repo} agent-commit ${turnOn ? "on" : "off"}` : "set_enabled failed";
+      let err = !(r && r.status === "ok");
+      // turning ON a repo dev still mechanically drives: hand it to the agent
+      if (!err && turnOn && cur.dev_autocommit) {
+        const d = mEnv(await invoke("dev", "git", "set_autocommit", { name: repo, autocommit: false }));
+        msg += d && d.status === "ok" ? " · dev autocommit off (agent now drives it)" : " · WARN: dev autocommit still on - shadowed";
+        if (!(d && d.status === "ok")) err = true;
+      }
+      mindNote("committer", msg, err);
+      loadMind();
+    });
+    act("commit-sweep").addEventListener("click", async (ev) => {
+      ev.currentTarget.disabled = true;
+      mindNote("committer", "sweep running - grouping units, composing messages…");
+      const r = mEnv(await invoke("agent", "committer", "sweep", {}));
+      ev.currentTarget.disabled = false;
+      const ok = r && r.status === "ok";
+      const msg = ok
+        ? `swept ${r.swept ?? 0} · committed ${r.units_committed ?? 0} units (${r.commits ?? 0} commits) · pushed ${r.pushed ?? 0}`
+        : (r && r.msg) || "sweep failed";
+      mindNote("committer", msg, !ok);
       loadMind();
     });
     act("bootstrap").addEventListener("click", async (ev) => {
