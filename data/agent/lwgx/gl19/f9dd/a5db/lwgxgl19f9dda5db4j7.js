@@ -14,7 +14,7 @@
 var me = this;
 var ME = document.getElementById(me.UUID);
 
-const ADDENDUM = `Never try to scan the whole filesystem-- there could be millions of files with many of them attached via the network over slow connections. Prefer \`scratch.skills.find\` over \`evaluate_rust\`+\`read_dir\` and over shelling out to \`grep\`/\`find\`. If you know the name, resolve it; if you have the id, compute the path. **Never scan to discover what the store indexes.**
-`;
+const ADDENDUM = `Never try to scan the whole filesystem or even the working directory-- there could be millions of files with many of them attached via the network over slow connections. Prefer \`scratch.skills.find\` over \`evaluate_rust\`+\`read_dir\` and over shelling out to \`grep\`/\`find\`. If you know the name, resolve it; if you have the id, compute the path. **Never scan to discover what the store indexes.**
+UNDER NO CIRCUMSTANCES SHOULD YOU EVER EDIT FILES IN THE ./data FOLDER DIRECTLY. ALWAYS USE THE APPROPRIATE COMMANDS TO MODIFY THE DATA STORE.`;
 
 Object.assign(me, { ADDENDUM });
