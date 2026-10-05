@@ -75,6 +75,13 @@ if(kind==='css'){{if(root.matches&&root.matches(val))list.push(root);var rr2=roo
 else{{scanEl(root);var all2=root.querySelectorAll('*');for(var q4=0;q4<all2.length;q4++)scanEl(all2[q4]);}}
 }}catch(x){{}}
 }}
+if(kind==='text'||kind==='has'){{
+// prefer the DEEPEST match: a container's text contains every descendant's
+// text, so first-match would otherwise resolve text= to <body>. Keep the
+// lowest element whose own (sub)tree still matches.
+var deep=list.filter(function(e){{return !list.some(function(o){{return o!==e&&e.contains(o);}});}});
+if(deep.length>0)list=deep;
+}}
 if(sub)list=list.filter(function(e){{return txt(e).toLowerCase().indexOf(sub.toLowerCase())>=0;}});
 if(visf)list=list.filter(function(e){{return vis(e);}});
 return [list,nth];}}
