@@ -1,24 +1,14 @@
-// Playwright-style auto-waiting interaction primitive. One round-trip per
-// poll: each eval re-resolves the selector, checks actionability (attached,
-// visible, enabled; bounding-box stability for pointer actions), and, when
-// actionable, dispatches the action in the SAME synchronous task — the page
-// cannot change between check and act. The wait loop lives on the Rust side
-// because the v2 transport captures only synchronous return values (a blocked
-// in-page wait would freeze the page's own event loop).
-//
-// Selector engine (beyond CSS):
-//   text=Save            innermost element whose text contains "Save"
-//   css=div.item         explicit CSS (bare strings are CSS too)
-//   :visible             keep only visible matches
-//   :nth-match(2)        1-based index into matches
-//   form >> text=Submit  chain: descendants of previous matches
-//
-// Actions: click, fill (native setter, React-safe), type (per-char key
-// events), press (Enter/Tab/Escape/arrows/...; Enter requestSubmits),
-// select (by value/label/text), check, uncheck.
-// Returns {status, action, selector, desc, bbox, attempts, elapsed_ms, ...}
-// or {status:err, msg, state(absent|hidden|disabled|stabilizing|no-option),
-// attempts}.
+// Playwright-style auto-waiting interaction. One eval CANNOT wait — the
+// Noobscape mechanism is JS::Evaluate -> JSON.stringify(rval), fully
+// synchronous (a promise rval stringifies to {}), so the actionability wait
+// lives HERE in Rust: poll the page with self-contained eval ticks. Each tick
+// resolves the selector, checks attached/visible/enabled, and (for
+// click/check/uncheck) bounding-box stability across consecutive ticks via a
+// window-side breadcrumb keyed by a per-call id; the tick that finds the
+// target actionable dispatches in that same synchronous task. Returns
+// {status, action, selector, desc, bbox, attempts, elapsed_ms,
+// typed?/selected?/already?} or {status:err, msg, state(absent|hidden|
+// disabled|stabilizing|no-option|error|channel), attempts, elapsed_ms}.
 fn js_string(s: &str) -> String {
     let mut out = String::from("\"");
     for c in s.chars() {
@@ -35,239 +25,178 @@ fn js_string(s: &str) -> String {
     out.push('"');
     out
 }
-fn errobj(m: &str) -> DataObject {
+
+let act_l = action.to_lowercase();
+let valid = matches!(act_l.as_str(), "click" | "fill" | "type" | "press" | "select" | "check" | "uncheck");
+if !valid {
     let mut o = DataObject::new();
     o.put_string("status", "err");
-    o.put_string("msg", m);
-    o
+    o.put_string("msg", &format!("unknown action: {} (want click|fill|type|press|select|check|uncheck)", action));
+    return o;
 }
-
-let action_l = action.trim().to_lowercase();
-let known = ["click", "fill", "type", "press", "select", "check", "uncheck"];
-if !known.contains(&action_l.as_str()) {
-    return errobj(&format!(
-        "unknown action '{}' (expected one of: {})",
-        action,
-        known.join(", ")
-    ));
+let needs_arg = matches!(act_l.as_str(), "fill" | "type" | "press" | "select");
+if needs_arg && arg.trim().is_empty() {
+    let mut o = DataObject::new();
+    o.put_string("status", "err");
+    o.put_string("msg", &format!("{} requires a non-empty arg", act_l));
+    return o;
 }
-let need_stable = matches!(action_l.as_str(), "click" | "check" | "uncheck");
 let tmo: i64 = if timeout_ms > 0 { timeout_ms } else { 10000 };
+let id = format!("act{}_{}", time(), rand_range(0, 1_000_000));
 
-const ENGINE: &str = r##"(function(){
-function vis(e){ if(!e||e.nodeType!==1) return false; var w=e.ownerDocument.defaultView; var s=w.getComputedStyle(e); if(s.display==='none'||s.visibility==='hidden'||s.visibility==='collapse') return false; var r=e.getBoundingClientRect(); return r.width>0&&r.height>0; }
-function enabled(e){ if(e.disabled) return false; if(e.getAttribute&&e.getAttribute('aria-disabled')==='true') return false; if(e.closest&&e.closest('fieldset[disabled]')) return false; return true; }
-function bbox(e){ var r=e.getBoundingClientRect(); return r.left.toFixed(1)+','+r.top.toFixed(1)+','+r.width.toFixed(1)+','+r.height.toFixed(1); }
-function desc(e){ var t=e.tagName?e.tagName.toLowerCase():'?'; var id=e.id?'#'+e.id:''; var cn=(''+(e.className||'')).trim().split(/\s+/).filter(Boolean).slice(0,2).map(function(x){return '.'+x;}).join(''); return t+id+cn; }
-function norm(s){ return (''+s).replace(/\s+/g,' '); }
-function matchSeg(seg,roots){
-  var nth=null,needVis=false,m;
-  m=seg.match(/:nth-match\((\d+)\)\s*$/); if(m){ nth=parseInt(m[1],10); seg=seg.slice(0,seg.length-m[0].length); }
-  m=seg.match(/:nth\((\d+)\)\s*$/); if(m){ nth=parseInt(m[1],10); seg=seg.slice(0,seg.length-m[0].length); }
-  if(/:visible\s*$/.test(seg)){ needVis=true; seg=seg.replace(/:visible\s*$/,''); }
-  var out=[],mode='css',body=seg;
-  if(seg.indexOf('text=')===0){ mode='text'; body=seg.slice(5); }
-  else if(seg.indexOf('css=')===0){ body=seg.slice(4); }
-  body=body.replace(/^['"]|['"]$/g,'');
-  for(var i=0;i<roots.length;i++){
-    var root=roots[i];
-    if(mode==='text'){
-      var needle=norm(body).toLowerCase();
-      var all=root.querySelectorAll('*');
-      var hits=[];
-      for(var j=0;j<all.length;j++){ var el=all[j]; if(norm(el.textContent).toLowerCase().indexOf(needle)>=0) hits.push(el); }
-      for(var j2=0;j2<hits.length;j2++){ var h=hits[j2]; var inner=true; for(var j3=0;j3<hits.length;j3++){ if(j3!==j2&&h.contains(hits[j3])){ inner=false; break; } } if(inner) out.push(h); }
-    } else {
-      try{ var list=root.querySelectorAll(body); for(var k=0;k<list.length;k++) out.push(list[k]); }catch(x){}
-    }
-  }
-  var ded=[]; for(var d=0;d<out.length;d++){ if(ded.indexOf(out[d])<0) ded.push(out[d]); }
-  out=ded;
-  if(needVis) out=out.filter(vis);
-  if(nth!==null) out=(nth>=1&&nth<=out.length)?[out[nth-1]]:[];
-  return out;
-}
-function resolve(sel){
-  var segs=sel.split(/\s*>>\s*/);
-  var roots=[document];
-  var cur=[];
-  for(var i=0;i<segs.length;i++){ cur=matchSeg(segs[i],roots); roots=cur; }
-  return cur;
-}
-function nativeSet(e,v){
-  var w=e.ownerDocument.defaultView;
-  var p;
-  if(e instanceof w.HTMLTextAreaElement) p=w.HTMLTextAreaElement.prototype;
-  else if(e instanceof w.HTMLSelectElement) p=w.HTMLSelectElement.prototype;
-  else p=w.HTMLInputElement.prototype;
-  var sd=Object.getOwnPropertyDescriptor(p,'value');
-  if(sd&&sd.set) sd.set.call(e,v); else e.value=v;
-}
-function fire(e,t){ var d=e.ownerDocument,w=d.defaultView,ev; try{ ev=new w.Event(t,{bubbles:true,cancelable:true}); }catch(x){ ev=d.createEvent('Event'); ev.initEvent(t,true,true); } return e.dispatchEvent(ev); }
-function keyInfo(k){
-  var map={Enter:['Enter','Enter',13],Tab:['Tab','Tab',9],Escape:['Escape','Escape',27],Backspace:['Backspace','Backspace',8],Delete:['Delete','Delete',46],ArrowLeft:['ArrowLeft','ArrowLeft',37],ArrowUp:['ArrowUp','ArrowUp',38],ArrowRight:['ArrowRight','ArrowRight',39],ArrowDown:['ArrowDown','ArrowDown',40],Home:['Home','Home',36],End:['End','End',35],PageUp:['PageUp','PageUp',33],PageDown:['PageDown','PageDown',34],' ':[' ','Space',32]};
-  var mm=map[k]; if(mm) return {key:mm[0],code:mm[1],kc:mm[2]};
-  if(k&&k.length===1){ var c=k.toUpperCase(); return {key:k,code:'Key'+c,kc:c.charCodeAt(0)}; }
-  return null;
-}
-function keyEv(e,t,ki){ var w=e.ownerDocument.defaultView; var ev; try{ ev=new w.KeyboardEvent(t,{key:ki.key,code:ki.code,bubbles:true,cancelable:true}); }catch(x){ return true; } try{ Object.defineProperty(ev,'keyCode',{get:function(){return ki.kc;}}); Object.defineProperty(ev,'which',{get:function(){return ki.kc;}}); }catch(x2){} return e.dispatchEvent(ev); }
-function doAct(action,e,arg){
-  try{ e.scrollIntoView({block:'nearest',inline:'nearest'}); }catch(x){ try{ e.scrollIntoView(); }catch(x2){} }
-  var tag=e.tagName?e.tagName.toLowerCase():'';
-  if(action==='click'){ e.click(); return {}; }
-  if(action==='check'||action==='uncheck'){
-    var want=(action==='check'); var ty=(''+(e.type||'')).toLowerCase();
-    if(ty!=='checkbox'&&ty!=='radio') return {hard:'not a checkbox/radio: '+desc(e)};
-    if(!!e.checked===want) return {already:true};
-    e.click(); return {};
-  }
-  if(action==='fill'){
-    if(tag==='select') return doAct('select',e,arg);
-    if(e.isContentEditable){ e.focus(); e.textContent=arg; fire(e,'input'); return {}; }
-    if(e.value===undefined) return {hard:'not editable: '+desc(e)};
-    e.focus(); nativeSet(e,arg); fire(e,'input'); fire(e,'change'); return {};
-  }
-  if(action==='type'){
-    if(e.value===undefined&&!e.isContentEditable) return {hard:'not editable: '+desc(e)};
-    e.focus();
-    for(var i=0;i<arg.length;i++){
-      var ch=arg.charAt(i); var ki=keyInfo(ch);
-      if(ki) keyEv(e,'keydown',ki);
-      if(e.value!==undefined){ nativeSet(e,(''+e.value)+ch); } else { e.textContent=(''+e.textContent)+ch; }
-      fire(e,'input');
-      if(ki) keyEv(e,'keyup',ki);
-    }
-    fire(e,'change');
-    return {typed:arg.length};
-  }
-  if(action==='press'){
-    var ki2=keyInfo(arg); if(!ki2) return {hard:'unknown key: '+arg};
-    e.focus();
-    var kd=keyEv(e,'keydown',ki2);
-    keyEv(e,'keyup',ki2);
-    if(arg==='Backspace'&&kd&&e.value!==undefined){ nativeSet(e,(''+e.value).slice(0,-1)); fire(e,'input'); }
-    if(arg==='Enter'&&kd){ var f=e.form; if(f){ try{ if(f.requestSubmit) f.requestSubmit(); else fire(f,'submit'); }catch(x3){} } }
-    return {};
-  }
-  if(action==='select'){
-    var sel=(tag==='select')?e:(e.closest?e.closest('select'):null);
-    if(!sel) return {hard:'not a select: '+desc(e)};
-    var hit=null;
-    for(var oi=0;oi<sel.options.length;oi++){ var o=sel.options[oi]; if(o.value===arg||o.label===arg||norm(o.textContent).replace(/^\s+|\s+$/g,'')===arg){ hit=o; break; } }
-    if(!hit) return {noopt:true};
-    sel.focus(); nativeSet(sel,hit.value); fire(sel,'input'); fire(sel,'change');
-    return {selected:hit.value};
-  }
-  return {hard:'unknown action: '+action};
-}
-function nb_act(action,sel,arg,prevBbox,needStable){
-  var els=resolve(sel);
-  if(!els.length) return {done:false,state:'absent'};
-  var e=els[0];
-  var bb=bbox(e);
-  if(!vis(e)) return {done:false,state:'hidden',bbox:bb};
-  if(!enabled(e)) return {done:false,state:'disabled',bbox:bb};
-  if(needStable&&(!prevBbox||prevBbox!==bb)) return {done:false,state:'stabilizing',bbox:bb};
-  var r=doAct(action,e,arg);
-  if(r.hard) return {done:true,ok:false,reason:r.hard};
-  if(r.noopt) return {done:false,state:'no-option',bbox:bb};
-  var out={done:true,ok:true,desc:desc(e),bbox:bbox(e)};
-  for(var k in r){ out[k]=r[k]; }
-  return out;
-}
-return nb_act(__ACTION__, __SELECTOR__, __ARG__, __PREV__, __STABLE__);
-})()"##;
+// One self-contained tick: resolve -> check -> (maybe) dispatch. No re-arm,
+// no pending state machine: the tick either dispatches or reports its state,
+// and Rust decides whether to tick again.
+let js = format!(
+    r#"(function(){{
+var SL={}, AC={}, AR={}, ID={};
+function txt(n){{return (n.textContent||'').replace(/\s+/g,' ').trim();}}
+function vis(e){{if(!e||!e.isConnected)return false;var d=e.ownerDocument||document;var r=e.getBoundingClientRect();if(r.width<1||r.height<1)return false;var s=d.defaultView.getComputedStyle(e);return s.display!=='none'&&s.visibility!=='hidden'&&parseFloat(s.opacity||'1')>0;}}
+function desc(e){{if(!e)return '';var t=(e.tagName||'').toLowerCase();var id=e.id?('#'+e.id):'';var cls='';try{{if(e.className&&typeof e.className==='string'&&e.className.trim())cls='.'+e.className.trim().split(/\s+/).slice(0,2).join('.');}}catch(x){{}}return t+id+cls;}}
+function walk(c,fn,depth){{fn(c);if(depth>24)return;var fr;try{{fr=c.querySelectorAll('iframe,frame');}}catch(x){{return;}}for(var i=0;i<fr.length;i++){{var fd=null;try{{fd=fr[i].contentDocument;}}catch(x){{fd=null;}}if(fd)walk(fd,fn,depth+1);}}}}
+function one(root,spec){{
+var kind=spec.k,val=spec.v,sub=spec.s,visf=spec.n,nth=spec.i||0;var list=[];
+function scanEl(e){{
+if(kind==='text'){{if(txt(e).indexOf(val)>=0)list.push(e);}}
+else if(kind==='has'){{if(txt(e).toLowerCase().indexOf(val.toLowerCase())>=0)list.push(e);}}
+else if(kind==='role'){{if((((e.getAttribute&&e.getAttribute('role'))||'')===val)||((e.tagName||'').toLowerCase()===val.toLowerCase()))list.push(e);}}
+else if(kind==='xp'){{try{{var d=e.ownerDocument||document;if(d.evaluate(val,d,null,9,null).singleNodeValue===e)list.push(e);}}catch(x){{}}}}
+}}
+if(root.nodeType===9){{
+walk(root,function(c){{
+try{{
+if(kind==='css'){{var rr=c.querySelectorAll(val);for(var q=0;q<rr.length;q++)list.push(rr[q]);}}
+else{{var all=c.querySelectorAll('body,body *');for(var q2=0;q2<all.length;q2++)scanEl(all[q2]);}}
+}}catch(x){{}}
+}});
+}} else {{
+try{{
+if(kind==='css'){{if(root.matches&&root.matches(val))list.push(root);var rr2=root.querySelectorAll(val);for(var q3=0;q3<rr2.length;q3++)list.push(rr2[q3]);}}
+else{{scanEl(root);var all2=root.querySelectorAll('*');for(var q4=0;q4<all2.length;q4++)scanEl(all2[q4]);}}
+}}catch(x){{}}
+}}
+if(kind==='text'||kind==='has'){{
+// prefer the DEEPEST match: a container's text contains every descendant's
+// text, so first-match would otherwise resolve text= to <body>. Keep the
+// lowest element whose own (sub)tree still matches.
+var deep=list.filter(function(e){{return !list.some(function(o){{return o!==e&&e.contains(o);}});}});
+if(deep.length>0)list=deep;
+}}
+if(sub)list=list.filter(function(e){{return txt(e).toLowerCase().indexOf(sub.toLowerCase())>=0;}});
+if(visf)list=list.filter(function(e){{return vis(e);}});
+return [list,nth];}}
+function parse(s){{var steps=[],re=/(?:^|\s*)>>\s*/g,m,last=0;while((m=re.exec(s))){{steps.push(s.slice(last,m.index));last=m.index+m[0].length;}}steps.push(s.slice(last));steps=steps.filter(function(x){{return x.trim().length>0;}});var out=[];
+for(var i=0;i<steps.length;i++){{var st=steps[i].trim(),nth=0,nm;
+nm=st.match(/^(.*):nth-match\((-?\d+)\)$/);if(nm){{st=nm[1];nth=parseInt(nm[2],10);}}
+var visf=false;if(/:visible$/.test(st)){{visf=true;st=st.replace(/:visible$/,'');}}
+var mm;
+if((mm=st.match(/^text=(.*)$/)))out.push({{k:'text',v:mm[1].trim(),i:nth,n:visf}});
+else if((mm=st.match(/^role=(.*)$/)))out.push({{k:'role',v:mm[1].trim(),i:nth,n:visf}});
+else if((mm=st.match(/^xpath=(.*)$/)))out.push({{k:'xp',v:mm[1].trim(),i:nth,n:visf}});
+else if((mm=st.match(/^:has-text\((.*)\)$/)))out.push({{k:'has',v:mm[1].trim(),i:nth,n:visf}});
+else if((mm=st.match(/^css=(.*)$/)))out.push({{k:'css',v:mm[1].trim(),i:nth,n:visf}});
+else if((mm=st.match(/^(.*?):has-text\((.*)\)$/)))out.push({{k:'css',v:mm[1].trim(),s:mm[2],i:nth,n:visf}});
+else out.push({{k:'css',v:st,i:nth,n:visf}});}}
+return out;}}
+function resolve(sl){{var steps=parse(sl),bases=[document];
+for(var i=0;i<steps.length;i++){{var spec=steps[i],nx=[];
+for(var j=0;j<bases.length;j++){{var r=one(bases[j],spec),list=r[0],nth=r[1];
+if(list.length>0){{var idx=nth<0?list.length+nth:nth;if(idx<0)idx=0;if(idx>=list.length)idx=list.length-1;nx.push(list[idx]);}}}}
+if(nx.length===0)return null;bases=nx;}}
+return bases[bases.length-1];}}
+function enabled(e){{if(!e)return false;if(e.disabled)return false;if(e.getAttribute&&e.getAttribute('aria-disabled')==='true')return false;var t=(e.tagName||'').toLowerCase();return /^(input|textarea|select|button|a|option)$/.test(t)||e.isContentEditable||(e.tabIndex>=0)||(e.onclick!=null)||((e.getAttribute&&e.getAttribute('role'))!=null);}}
+function keydefs(k){{k=String(k);var map={{Enter:['Enter','Enter'],Tab:['Tab','Tab'],Escape:['Escape','Escape'],Backspace:['Backspace','Backspace'],Delete:['Delete','Delete'],Home:['Home','Home'],End:['End','End'],PageUp:['PageUp','PageUp'],PageDown:['PageDown','PageDown'],ArrowLeft:['ArrowLeft','ArrowLeft'],ArrowRight:['ArrowRight','ArrowRight'],ArrowUp:['ArrowUp','ArrowUp'],ArrowDown:['ArrowDown','ArrowDown']}};var names=k.split('+'),out=[];for(var i=0;i<names.length;i++){{var n=names[i].trim();if(map[n])out.push({{key:map[n][0],code:map[n][1]}});else if(n.length===1)out.push({{key:n,code:n,text:n}});}}return out;}}
+function kd(e,d,type){{var v=e.ownerDocument.defaultView;try{{e.dispatchEvent(new v.KeyboardEvent(type,{{key:d.key,code:d.code||d.key,bubbles:true,cancelable:true}}));}}catch(x){{var ev=e.ownerDocument.createEvent('Event');ev.initEvent(type,true,true);ev.key=d.key;ev.code=d.code||d.key;e.dispatchEvent(ev);}}}}
+function setVal(e,val){{var d=e.ownerDocument,v=d.defaultView;
+if(e.isContentEditable){{e.textContent=String(val);}}
+else{{var proto=(e.tagName||'').toLowerCase()==='textarea'?(v.HTMLTextAreaElement&&v.HTMLTextAreaElement.prototype):(v.HTMLInputElement&&v.HTMLInputElement.prototype);
+var dd=proto&&Object.getOwnPropertyDescriptor(proto,'value');var setter=dd&&dd.set;
+if(setter)setter.call(e,String(val));else e.value=String(val);}}
+e.dispatchEvent(new v.Event('input',{{bubbles:true}}));e.dispatchEvent(new v.Event('change',{{bubbles:true}}));}}
+function doAction(ac,ar,e,o){{var v=e.ownerDocument.defaultView;
+if(ac==='click'){{e.click();return true;}}
+if(ac==='check'||ac==='uncheck'){{var want=(ac==='check');if(!('checked'in e)){{e.click();return true;}}if(e.checked===want){{o.already=true;return true;}}e.click();return true;}}
+if(ac==='select'){{if((e.tagName||'').toLowerCase()!=='select')return 'not a <select>';var want=String(ar).toLowerCase(),hit=-1;for(var i=0;i<e.options.length;i++){{var op=e.options[i];if(op.value===String(ar)||(op.text||'').trim().toLowerCase()===want||(op.label||'').toLowerCase()===want){{hit=i;break;}}}}if(hit<0)return 'no-option: '+ar;e.selectedIndex=hit;e.dispatchEvent(new v.Event('input',{{bubbles:true}}));e.dispatchEvent(new v.Event('change',{{bubbles:true}}));o.selected=e.options[hit]?(e.options[hit].text||e.options[hit].value):'';return true;}}
+if(ac==='fill'){{e.focus();setVal(e,ar);o.typed=String(ar);return true;}}
+if(ac==='type'){{e.focus();var s=String(ar);for(var i=0;i<s.length;i++){{var ch=s[i];kd(e,{{key:ch,code:ch}},'keydown');try{{if(!e.isContentEditable&&'value'in e)e.value+=ch;else if(e.isContentEditable)e.textContent+=ch;}}catch(x){{}}try{{e.dispatchEvent(new v.InputEvent('input',{{bubbles:true,data:ch,inputType:'insertText'}}));}}catch(x2){{e.dispatchEvent(new v.Event('input',{{bubbles:true}}));}}kd(e,{{key:ch,code:ch}},'keyup');}}o.typed=s;return true;}}
+if(ac==='press'){{e.focus();var defs=keydefs(ar),last=null;for(var i=0;i<defs.length;i++){{last=defs[i];kd(e,last,'keydown');if(last.text){{try{{if(!e.isContentEditable&&'value'in e)e.value+=last.text;else if(e.isContentEditable)e.textContent+=last.text;}}catch(x){{}}try{{e.dispatchEvent(new v.InputEvent('input',{{bubbles:true,data:last.text,inputType:'insertText'}}));}}catch(x2){{e.dispatchEvent(new v.Event('input',{{bubbles:true}}));}}}}}}if(last&&last.key==='Enter'){{try{{if(e.form&&e.form.requestSubmit)e.form.requestSubmit();}}catch(x3){{}}}}for(var i2=defs.length-1;i2>=0;i2--)kd(e,defs[i2],'keyup');o.typed=ar;return true;}}
+return 'unknown action';}}
+var out={{state:'absent',action:AC,selector:SL}};
+var e=resolve(SL);
+if(!e)return out;
+out.desc=desc(e);
+var r=e.getBoundingClientRect();out.bbox={{x:r.x,y:r.y,w:r.width,h:r.height}};
+if(!vis(e)){{out.state='hidden';return out;}}
+if(!enabled(e)){{out.state='disabled';return out;}}
+if(AC==='click'||AC==='check'||AC==='uncheck'){{
+var st=window.__NB_ACT=window.__NB_ACT||{{}};var p=st[ID];
+if(!(p&&p.x===out.bbox.x&&p.y===out.bbox.y&&p.w===out.bbox.w&&p.h===out.bbox.h)){{st[ID]=out.bbox;out.state='stabilizing';return out;}}
+delete st[ID];
+}}
+var res=doAction(AC,AR,e,out);
+if(res!==true){{out.state=(String(res).indexOf('no-option')===0)?'no-option':'error';out.msg=String(res);return out;}}
+out.state='dispatched';
+return out;}})()"#,
+    js_string(&selector),
+    js_string(&act_l),
+    js_string(&arg),
+    js_string(&id)
+);
 
 let start = time();
 let deadline = start + tmo;
-let mut prev = String::new();
-let mut last_state = String::from("absent");
 let mut attempts: i64 = 0;
-
+let mut last_state = String::from("channel");
+let mut last_desc = String::new();
 loop {
-    let remaining = deadline - time();
-    if remaining <= 0 {
-        break;
-    }
     attempts += 1;
-    let prev_js = if prev.is_empty() {
-        "null".to_string()
-    } else {
-        js_string(&prev)
-    };
-    let js = ENGINE
-        .replace("__ACTION__", &js_string(&action_l))
-        .replace("__SELECTOR__", &js_string(&selector))
-        .replace("__ARG__", &js_string(&arg))
-        .replace("__PREV__", &prev_js)
-        .replace("__STABLE__", if need_stable { "true" } else { "false" });
-    let r = crate::agent::browser::eval::eval(js, remaining.min(5000));
-    let ok = r
-        .try_get_string("status")
-        .map(|s| s == "ok")
-        .unwrap_or(false);
-    if !ok {
-        let m = r
-            .try_get_string("msg")
-            .unwrap_or_else(|_| "eval failed".to_string());
-        return errobj(&format!("act aborted: {}", m));
-    }
-    let v = match r.try_get_object("value") {
-        Ok(v) => v,
-        Err(_) => return errobj("act: unexpected eval payload (not an object)"),
-    };
-    if v.try_get_boolean("done").unwrap_or(false) {
-        if v.try_get_boolean("ok").unwrap_or(false) {
-            let mut out = DataObject::new();
-            out.put_string("status", "ok");
-            out.put_string("action", &action_l);
-            out.put_string("selector", &selector);
-            if let Ok(d) = v.try_get_string("desc") {
-                out.put_string("desc", &d);
+    let r = crate::agent::browser::eval::eval(js.clone(), 5000);
+    let ok = r.try_get_string("status").map(|s| s == "ok").unwrap_or(false);
+    if ok {
+        if let Ok(v) = r.try_get_object("value") {
+            let stt = v.try_get_string("state").unwrap_or_default();
+            if let Ok(d) = v.try_get_string("desc") { last_desc = d; }
+            match stt.as_str() {
+                "dispatched" => {
+                    let mut o = DataObject::new();
+                    o.put_string("status", "ok");
+                    o.put_string("action", &act_l);
+                    o.put_string("selector", &selector);
+                    if !last_desc.is_empty() { o.put_string("desc", &last_desc); }
+                    if let Ok(bb) = v.try_get_object("bbox") { o.put_object("bbox", bb); }
+                    if let Ok(t) = v.try_get_string("typed") { o.put_string("typed", &t); }
+                    if let Ok(s2) = v.try_get_string("selected") { o.put_string("selected", &s2); }
+                    if v.try_get_boolean("already").unwrap_or(false) { o.put_boolean("already", true); }
+                    o.put_int("attempts", attempts);
+                    o.put_int("elapsed_ms", time() - start);
+                    return o;
+                }
+                "no-option" | "error" => {
+                    let mut o = DataObject::new();
+                    o.put_string("status", "err");
+                    let m = v.try_get_string("msg").unwrap_or_else(|_| stt.clone());
+                    o.put_string("msg", &m);
+                    o.put_string("state", &stt);
+                    o.put_int("attempts", attempts);
+                    o.put_int("elapsed_ms", time() - start);
+                    return o;
+                }
+                other => { last_state = other.to_string(); }
             }
-            if let Ok(b) = v.try_get_string("bbox") {
-                out.put_string("bbox", &b);
-            }
-            if let Ok(s) = v.try_get_string("selected") {
-                out.put_string("selected", &s);
-            }
-            if let Ok(n) = v.try_get_int("typed") {
-                out.put_int("typed", n);
-            }
-            if let Ok(a) = v.try_get_boolean("already") {
-                out.put_boolean("already", a);
-            }
-            out.put_int("attempts", attempts);
-            out.put_int("elapsed_ms", time() - start);
-            return out;
+        } else {
+            last_state = String::from("channel");
         }
-        let reason = v
-            .try_get_string("reason")
-            .unwrap_or_else(|_| "action failed".to_string());
-        let mut out = errobj(&reason);
-        out.put_string("action", &action_l);
-        out.put_string("selector", &selector);
-        out.put_int("attempts", attempts);
-        return out;
-    }
-    let state = v
-        .try_get_string("state")
-        .unwrap_or_else(|_| "unknown".to_string());
-    last_state = state.clone();
-    if state == "stabilizing" {
-        prev = v.try_get_string("bbox").unwrap_or_else(|_| String::new());
     } else {
-        prev = String::new();
+        last_state = String::from("channel");
     }
+    if time() >= deadline { break; }
     std::thread::sleep(std::time::Duration::from_millis(120));
 }
-
-let mut out = errobj(&format!(
-    "act '{}' on '{}' timed out after {} ms (last state: {})",
-    action_l, selector, tmo, last_state
-));
-out.put_string("action", &action_l);
-out.put_string("selector", &selector);
-out.put_string("state", &last_state);
-out.put_int("attempts", attempts);
-out
+let mut o = DataObject::new();
+o.put_string("status", "err");
+o.put_string("msg", &format!("{} not actionable on `{}` within {} ms (last state: {})", act_l, selector, tmo, last_state));
+o.put_string("state", &last_state);
+if !last_desc.is_empty() { o.put_string("desc", &last_desc); }
+o.put_int("attempts", attempts);
+o.put_int("elapsed_ms", time() - start);
+o
