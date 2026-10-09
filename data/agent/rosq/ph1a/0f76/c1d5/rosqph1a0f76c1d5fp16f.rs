@@ -308,7 +308,7 @@ for attempt in 0..attempts {
     // is a configuration answer, and retrying it only delays the report — the
     // vLLM "System message must be at the beginning." 400 used to burn five
     // attempts and 31s of sleeps before surfacing.
-    let (retryable, retry_after) = match req.send_json(payload.to_string()) {
+    let (retryable, retry_after) = match req.send_json(payload.to_json()) {
         Ok(resp) => {
             match resp.into_string() {
                 Ok(body) => {
