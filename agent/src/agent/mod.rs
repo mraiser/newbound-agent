@@ -1,5 +1,6 @@
 // This file is auto-generated and managed by the flowlang build script.
 use flowlang::rustcmd::Transform;
+pub mod committer;
 pub mod agentloop;
 pub mod browser_builder;
 pub mod browser;
@@ -31,4 +32,5 @@ pub fn cmdinit(cmds: &mut Vec<(String, Transform, String)>) {
     browser::cmdinit(cmds);
     browser_builder::cmdinit(cmds);
     agentloop::cmdinit(cmds);
+    committer::cmdinit(cmds);
 }
