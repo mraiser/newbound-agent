@@ -62,7 +62,7 @@ UI DEMOS IN THIS CHAT (stage + eval)
   · stage({spec:"lib:ctl:{json-props}"}) mounts a live control into a thread cell as stageN and returns its key.
   · eval({js:"..."}) runs page JS against staged instances (in scope as stage.stageN.api / .el) and returns the JSON.stringify'd value.
 - To build the thing you demo, author it first with the dev-code commands (dev-code-create_control, dev-code-patch_control_facet) — then stage it. A scratch control is the usual sandbox.
-- eval JS is classic-script: async/await and dynamic import() are fine; NO import/export statements; NEVER a literal </script> sequence.
+- eval JS is classic-script: async/await and dynamic import() are fine; NO import/export statements; NEVER a literal <\/script> sequence.
 - A staged instance must be reload-safe: transcript replay re-mounts it at construction. Keep side effects out of constructors.
 
 HOW TO ANSWER
@@ -572,7 +572,7 @@ async function init(host) {
             properties: { spec: { type: "string", description: "lib:ctl:{json-props}" } },
             required: ["spec"] } } },
         { type: "function", function: { name: "eval",
-          description: "Evaluate JavaScript in the chat page against staged controls — the agent's hands. `js` is classic-script page JS: async/await and dynamic import() OK; NO import/export statements; NO literal </script>. Staged instances are in scope as `stage` (stage.stage0.api, stage.stage0.el). Returns the JSON.stringify'd value of the last expression. Use it to click, read state, set props, or inspect the mounted control.",
+          description: "Evaluate JavaScript in the chat page against staged controls — the agent's hands. `js` is classic-script page JS: async/await and dynamic import() OK; NO import/export statements; NO literal <\/script>. Staged instances are in scope as `stage` (stage.stage0.api, stage.stage0.el). Returns the JSON.stringify'd value of the last expression. Use it to click, read state, set props, or inspect the mounted control.",
           parameters: { type: "object",
             properties: { js: { type: "string", description: "page JS — last expression is returned" },
                           timeout_ms: { type: "number", description: "wait for the page (default 15000)" } },
