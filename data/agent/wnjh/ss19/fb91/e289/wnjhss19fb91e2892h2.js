@@ -18,6 +18,7 @@ var readyP = new Promise(function (res) { me.ready = res; }).then(async () => {
   // page's .nb-viewctx registry class.
   const viewctx = ME.querySelector(".nb-viewctx").api;
   const agent = ME.querySelector('[data-control="agent:agentloop"]').api;
+  const stageCtl = ME.querySelector('[data-control="agent:stage"]').api;
   const { ADDENDUM } = ME.querySelector('[data-control="agent:agentprompt"]').api;
   const jsonP = (c2, v2) => new Promise((res2) => json(c2, v2, res2));
   const invokeP = (l2, c2, m2, a2) => new Promise((res2) => invokeCommand(l2, c2, m2, a2, res2));
@@ -55,6 +56,14 @@ WHAT YOU SEE
 
 MEMORY IN THIS CHAT
 - Memory FORMATION is automatic: the archivist reviews completed sessions in the background. Do not file memories on your own initiative. When the user explicitly asks you to remember something, call dev-code-remember — it runs without confirmation, because the request itself is the authorization.
+
+UI DEMOS IN THIS CHAT (stage + eval)
+- You can DEMONSTRATE, TEST, and VISUALIZE UI right in this thread. Two tools, both confirm-gated:
+  · stage({spec:"lib:ctl:{json-props}"}) mounts a live control into a thread cell as stageN and returns its key.
+  · eval({js:"..."}) runs page JS against staged instances (in scope as stage.stageN.api / .el) and returns the JSON.stringify'd value.
+- To build the thing you demo, author it first with the dev-code commands (dev-code-create_control, dev-code-patch_control_facet) — then stage it. A scratch control is the usual sandbox.
+- eval JS is classic-script: async/await and dynamic import() are fine; NO import/export statements; NEVER a literal </script> sequence.
+- A staged instance must be reload-safe: transcript replay re-mounts it at construction. Keep side effects out of constructors.
 
 HOW TO ANSWER
 - Be concise and concrete. If you are unsure, say so plainly rather than inventing platform behavior.`;
@@ -213,6 +222,36 @@ async function init(host) {
     body.className = "ag-cell-body";
     renderRich(body, entry.text ?? "");
     div.appendChild(body);
+    if (entry.kind === "stage") {
+      body.classList.add("ag-stage-host");
+      const note = document.createElement("div");
+      note.className = "ag-stage-note lbl";
+      body.appendChild(note);
+      const mountBox = document.createElement("div");
+      mountBox.className = "nb-stage-host";
+      body.appendChild(mountBox);
+      if (!entry.spec || entry.spec.indexOf(":") < 0) {
+        note.textContent = entry.text || "no spec";
+      } else if (!stageCtl || !stageCtl.registry) {
+        note.textContent = "stage unavailable — reload the chat";
+      } else {
+        const i = entry.spec.indexOf(":"), j = entry.spec.lastIndexOf(":");
+        const lib = entry.spec.slice(0, i), ctl = entry.spec.slice(i + 1, j);
+        let props = {};
+        try { props = JSON.parse(entry.spec.slice(j + 1) || "{}"); } catch (e) {}
+        const key = "stage" + window.NB_STAGE.n++;
+        note.textContent = "stage " + key + " · " + entry.spec;
+        const el = document.createElement("div");
+        el.className = "nb-stage-instance";
+        mountBox.appendChild(el);
+        window.NB_STAGE.registry[key] = { el, spec: entry.spec };
+        installControl(el, lib, ctl, function (api) {
+          window.NB_STAGE.registry[key].api = api;
+          clampVisually(div, mountBox);
+        }, props);
+      }
+      return div;
+    }
     if (entry.kind === "tool") {
       // clipped = the flag, OR a legacy cell whose truncation is baked into
       // its text. The visible fragment is an exact prefix of what chat_llm
@@ -394,6 +433,45 @@ async function init(host) {
     let args = {};
     try { args = call.arguments ? JSON.parse(call.arguments) : {}; } catch { /* raw below */ }
 
+    if (call.name === "stage") {
+      const spec = args.spec ?? "";
+      if (!spec || spec.indexOf(":") < 0) {
+        toolCell("◈ stage", args, { error: true, output: "spec must be lib:ctl:{json-props}" });
+        return 'ERROR: spec must be lib:ctl:{json-props}';
+      }
+      if (agent.gateFor("agent-stage-stage", null) !== "auto") {
+        const confirmed = await askConfirm("stage", askConfirmed.has("stage"));
+        if (!confirmed) {
+          toolCell("◈ stage", args, { error: true, output: "denied by the user" });
+          return "DENIED: the user declined this action. Continue without it.";
+        }
+        askConfirmed.add("stage");
+      }
+      const entry = pushCell({ kind: "stage", title: "◈ stage", args: JSON.stringify(args), spec, text: "" });
+      const key = [...thread.querySelectorAll(".ag-stage-note")].pop()?.textContent.match(/^stage (stage\d+)/)?.[1];
+      return key
+        ? `Staged ${spec} as ${key} — a live instance is now rendered in the thread. Drive it with eval, e.g. eval({js:"stage.${key}.api"}) or read its element at stage.${key}.el.`
+        : `Staged ${spec}.`;
+    }
+    if (call.name === "eval") {
+      const js = args.js ?? "";
+      if (agent.gateFor("agent-stage-eval", null) !== "auto") {
+        const confirmed = await askConfirm("eval", askConfirmed.has("eval"));
+        if (!confirmed) {
+          toolCell("✳ eval", args, { error: true, output: "denied by the user" });
+          return "DENIED: the user declined this action. Continue without it.";
+        }
+        askConfirmed.add("eval");
+      }
+      const r = await invoke("agent", "stage", "eval", { js, timeout_ms: args.timeout_ms ?? 15000 });
+      const env = r.envelope ?? {};
+      const pay = env.value ?? env.msg ?? env;
+      const text = typeof pay === "string" ? pay : JSON.stringify(pay, null, 1);
+      toolCell("✳ eval", args, { error: env.status !== "ok", output: text });
+      if (env.status === "timeout")
+        return "TIMEOUT: the stage page did not answer — is this chat open? The eval bridge needs a live page.";
+      return env.status === "ok" ? agent.clamp(text, 4000) : `ERROR: ${text}`;
+    }
     if (call.name === "find_tools") {
       const catalog = await ensureCatalog();
       const hits = agent.searchCatalog(catalog, args.query ?? "");
@@ -487,7 +565,20 @@ async function init(host) {
       const core = await agent.corePrompt();
       const catalog = await ensureCatalog();
       const attached = agent.DEFAULT_TOOLS.filter((n) => catalog.some((t) => t.name === n));
-      const tools = [...agent.META_TOOL_DEFS, ...agent.toolDefs(catalog, attached)];
+      const STAGE_TOOL_DEFS = [
+        { type: "function", function: { name: "stage",
+          description: "Mount a live Newbound control into a chat thread cell and interact with it — demonstrate, test, or visualize UI in-page. spec is lib:ctl:{json-props} (e.g. scratch:clock:{\"tz\":\"UTC\"}). The instance appears live in the thread as stageN; drive it with the eval tool.",
+          parameters: { type: "object",
+            properties: { spec: { type: "string", description: "lib:ctl:{json-props}" } },
+            required: ["spec"] } } },
+        { type: "function", function: { name: "eval",
+          description: "Evaluate JavaScript in the chat page against staged controls — the agent's hands. `js` is classic-script page JS: async/await and dynamic import() OK; NO import/export statements; NO literal </script>. Staged instances are in scope as `stage` (stage.stage0.api, stage.stage0.el). Returns the JSON.stringify'd value of the last expression. Use it to click, read state, set props, or inspect the mounted control.",
+          parameters: { type: "object",
+            properties: { js: { type: "string", description: "page JS — last expression is returned" },
+                          timeout_ms: { type: "number", description: "wait for the page (default 15000)" } },
+            required: ["js"] } } },
+      ];
+      const tools = [...agent.META_TOOL_DEFS, ...STAGE_TOOL_DEFS, ...agent.toolDefs(catalog, attached)];
       const addendum = (ADDENDUM ?? "").trim();
       if (messages.length === 0 || messages[0].role !== "system") {
         messages.unshift({ role: "system", content: "" });
