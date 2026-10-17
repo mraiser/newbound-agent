@@ -6,26 +6,10 @@
 // request. No LLM configuration or credits needed.
 //
 //   node tools/smoke/scratchpad.mjs --base http://localhost:33199 --dir DIR
-import { smoke, login } from "./harness.mjs";
+import { smoke, login, agentApi } from "./harness.mjs";
 
 const BASE = (process.argv.includes("--base")
   ? process.argv[process.argv.indexOf("--base") + 1] : null) || "http://127.0.0.1:33199";
-
-/** dev.code's commands by name over HTTP (ids are per-instance). */
-async function devCode(base, sid) {
-  const read = async (lib, id) => (await fetch(`${base}/app/read?lib=${lib}&id=${id}`,
-    { headers: { Cookie: `sessionid=${sid}` } })).json();
-  const ctls = await read("dev", "controls");
-  const codeId = ctls.data?.list?.find((c) => c.name === "code")?.id;
-  if (!codeId) throw new Error("no dev.code control on this instance");
-  const ids = Object.fromEntries((await read("dev", codeId)).data.cmd.map((c) => [c.name, c.id]));
-  return async (name, a) => {
-    const r = await fetch(`${base}/app/exec?lib=dev&id=${ids[name]}&args=` +
-      encodeURIComponent(JSON.stringify(a)), { headers: { Cookie: `sessionid=${sid}` } });
-    const text = await r.text();
-    try { return JSON.parse(text); } catch { return { status: "err", http: r.status, msg: text.slice(0, 200) }; }
-  };
-}
 
 const COUNTER = {
   html: '<div class="ctr"><span class="n">0</span><button type="button" class="inc">+1</button><p class="hint">clicks so far</p></div>\n',
@@ -47,7 +31,7 @@ const reply = (t) => ({ kind: "text", content: t, assistant_message: { role: "as
 
 await smoke("agent chat scratchpad (real instance, scripted model)", async (t, browser) => {
   const sid = await login(BASE, { dir: t.args.dir, user: t.args.user, password: t.args.password });
-  const code = await devCode(BASE, sid);
+  const { call: code } = await agentApi(BASE, sid);
   const LIB = t.args.lib || "smoketest";
   await code("add_library", { lib: LIB });
   await code("create_control", { lib: LIB, name: "counter", desc: "scratchpad smoke fixture" });

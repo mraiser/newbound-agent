@@ -91,21 +91,23 @@ export async function login(base, { dir, user = "admin", password } = {}) {
   return sid;
 }
 
-/** Resolve agent.code's command ids BY NAME — ids are per-instance, so this
-    is the difference between a portable smoke and one that only ran here. */
+/** Resolve dev.code's command ids BY NAME — ids are per-instance, so this
+    is the difference between a portable smoke and one that only ran here.
+    (The editing surface moved from the agent library into the platform's
+    static dev library; the name agentApi predates the move.) */
 export async function agentApi(base, sid) {
   const read = async (lib, id) => (await fetch(
     `${base}/app/read?lib=${lib}&id=${id}`,
     { headers: { Cookie: `sessionid=${sid}` } })).json();
-  const ctls = await read("agent", "controls");
-  if (ctls.status !== "ok") throw new Error("cannot read agent controls: " + JSON.stringify(ctls).slice(0, 160));
+  const ctls = await read("dev", "controls");
+  if (ctls.status !== "ok") throw new Error("cannot read dev controls: " + JSON.stringify(ctls).slice(0, 160));
   const codeId = ctls.data.list.find((c) => c.name === "code")?.id;
-  if (!codeId) throw new Error("no agent.code control on this instance");
-  const code = await read("agent", codeId);
+  if (!codeId) throw new Error("no dev.code control on this instance");
+  const code = await read("dev", codeId);
   const ids = Object.fromEntries(code.data.cmd.map((c) => [c.name, c.id]));
   const call = async (name, a = {}) => {
-    if (!ids[name]) throw new Error(`agent.code.${name} missing on this instance`);
-    const r = await fetch(`${base}/app/exec?lib=agent&id=${ids[name]}&args=` +
+    if (!ids[name]) throw new Error(`dev.code.${name} missing on this instance`);
+    const r = await fetch(`${base}/app/exec?lib=dev&id=${ids[name]}&args=` +
       encodeURIComponent(JSON.stringify(a)), { headers: { Cookie: `sessionid=${sid}` } });
     const text = await r.text();
     // a command that panics server-side answers with an HTML 500, not JSON —
