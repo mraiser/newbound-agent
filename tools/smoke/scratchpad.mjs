@@ -41,7 +41,7 @@ await smoke("agent chat scratchpad (real instance, scripted model)", async (t, b
     if (w.status !== "ok") throw new Error("fixture write failed: " + JSON.stringify(w).slice(0, 200));
   }
 
-  const page = await t.page(browser, BASE, sid, { live: false });
+  const page = await t.page(browser, BASE, sid);
   const openChat = async () => {
     await page.goto(`${BASE}/agent/index.html`, { waitUntil: "domcontentloaded" });
     await page.waitForFunction(() => document.querySelector('[data-control="agent:stage"]')?.api?.mount,

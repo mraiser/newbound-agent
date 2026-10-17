@@ -1,8 +1,7 @@
 // run — the browser smoke battery.
 //
-//   node tools/smoke/run.mjs                          # everything that needs no instance
-//   node tools/smoke/run.mjs --base URL --dir DIR     # + the real-instance passes
-//   node tools/smoke/run.mjs flow-editor --base ...   # just one
+//   node tools/smoke/run.mjs --base URL --dir DIR     # every smoke, on a disposable instance
+//   node tools/smoke/run.mjs scratchpad --base ...    # just one
 //
 // Exit code is non-zero if any smoke reports a problem, so this is CI-shaped.
 import { spawn } from "node:child_process";
@@ -12,12 +11,6 @@ import { dirname, resolve } from "node:path";
 const HERE = dirname(fileURLToPath(import.meta.url));
 
 const SMOKES = [
-  { name: "stage-pools", file: "stage-pools.mjs", needsInstance: false },
-  { name: "scene-mock", file: "scene-mock.mjs", needsInstance: false },
-  { name: "flow-editor", file: "flow-editor.mjs", needsInstance: true },
-  { name: "boot-player", file: "boot-player.mjs", needsInstance: true },
-  { name: "wiring", file: "wiring.mjs", needsInstance: true },
-  { name: "deletion", file: "deletion.mjs", needsInstance: true },
   { name: "scratchpad", file: "scratchpad.mjs", needsInstance: true },
 ];
 

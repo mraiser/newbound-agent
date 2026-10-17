@@ -22,11 +22,7 @@
 //                       --chromium /path/to/chrome
 //                       --keep                    leave the browser open
 import { readFileSync, existsSync } from "node:fs";
-import { spawn } from "node:child_process";
-import { fileURLToPath } from "node:url";
-import { dirname, resolve } from "node:path";
-
-export const REPO = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
+import { resolve } from "node:path";
 
 export function args() {
   const a = { _: [] };
@@ -118,58 +114,6 @@ export async function agentApi(base, sid) {
   return { ids, call, read };
 }
 
-/** Create (or reuse) a library + control + FLOW command for the editor
-    smokes, and return the ids the #/flow route needs. write_flow_body is the
-    only API path that creates a flow command, so the body doubles as the
-    fixture. Everything is addressed by name; ids come back from the store. */
-export async function flowFixture(api, { lib = "smoketest", ctl = "probe",
-                                         cmd = "passthru", body, label = "smoke fixture" }) {
-  await api.call("add_library", { lib });
-  await api.call("add_control", { lib, ctl });
-  const w = await api.call("write_flow_body", { lib, ctl, cmd, body, base: "", label, author: "smoke" });
-  if (w.status !== "ok") throw new Error("fixture write failed: " + JSON.stringify(w).slice(0, 200));
-  const idx = await api.read(lib, "controls");
-  const ctlId = idx.data.list.find((c) => c.name === ctl)?.id;
-  if (!ctlId) throw new Error(`fixture control ${lib}.${ctl} not found after creation`);
-  const rec = await api.read(lib, ctlId);
-  const cmdId = (rec.data.cmd || []).find((c) => c.name === cmd)?.id;
-  if (!cmdId) throw new Error(`fixture command ${cmd} not found after creation`);
-  return { lib, ctl, cmd, ctlId, cmdId, hash: w.hash };
-}
-
-/** A minimal valid flow body: params a → return a, plus whatever ops given. */
-export function flowBody({ cmds = [], cons = null } = {}) {
-  return {
-    input: { a: { mode: "regular", type: "integer", x: 0.25 } },
-    output: { a: { mode: "regular", type: "integer", x: 0 } },
-    cmds,
-    cons: cons ?? [{ src: [-1, "a"], dest: [-2, "a"] }],
-  };
-}
-
-export const op = (name, x, y, extra = {}) => ({
-  name, type: "primitive", width: 1.5, pos: { x, y, z: 0 },
-  in: { a: { mode: "regular", type: "integer", x: 0 } },
-  out: { a: { mode: "regular", type: "integer", x: 0 } }, ...extra,
-});
-
-// ── a static file server, for the mock-mode and pure-stage smokes ───────────
-
-export async function staticServer(port = 0) {
-  const py = spawn("python3", ["-m", "http.server", String(port || 8471),
-                               "--directory", REPO],
-                   { stdio: "ignore", detached: true });
-  const url = `http://127.0.0.1:${port || 8471}`;
-  for (let i = 0; i < 40; i++) {
-    try {
-      const r = await fetch(url + "/index.html");
-      if (r.ok) return { url, stop: () => { try { process.kill(-py.pid); } catch { py.kill(); } } };
-    } catch { /* not up yet */ }
-    await new Promise((r) => setTimeout(r, 150));
-  }
-  throw new Error("static server did not come up on " + url);
-}
-
 // ── the smoke wrapper: checks, error capture, exit code ─────────────────────
 
 export async function smoke(title, body) {
@@ -186,9 +130,9 @@ export async function smoke(title, body) {
       if (!cond) errors.push(name);
     },
     note(msg) { console.log("      " + msg); },
-    /** A page wired the way the bench expects: session cookie, saves-ON
-        config, and console/page errors collected as failures. */
-    async page(browser, base, sid, { writable = true, viewport, live } = {}) {
+    /** A page with the session cookie set and console/page errors
+        collected as failures. */
+    async page(browser, base, sid, { viewport } = {}) {
       const ctx = await browser.newContext({ viewport: viewport || { width: 1440, height: 900 } });
       if (sid) await ctx.addCookies([{ name: "sessionid", value: sid, url: base }]);
       const page = await ctx.newPage();
@@ -205,14 +149,6 @@ export async function smoke(title, body) {
         errors.push(`console: ${text}${url ? ` (${url})` : ""}`);
         console.log("  !! " + text + (url ? ` (${url})` : ""));
       });
-      // Only seed a LIVE connection when one is wanted (default: whenever a
-      // session was supplied). A pure-stage smoke loads index.html off a
-      // static file server and imports a module directly — seeding live mode
-      // there makes the bench boot and 404 on /app/libs.
-      if (live ?? Boolean(sid)) {
-        await page.addInitScript(([b, w]) => localStorage.setItem("bench.connection",
-          JSON.stringify({ mode: "live", baseUrl: b, sessionid: "", writable: w })), [base, writable]);
-      }
       return page;
     },
   };
