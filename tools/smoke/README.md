@@ -20,6 +20,7 @@ Exit code is non-zero if anything fails, so this is CI-shaped.
 | `flow-editor` | a disposable instance | the 3D flow editor end to end: the deep loop (open → edit → ⌘S → journal → run ▸ → execute), untangle as one undoable mutation, keyboard wiring, and the journal diff view |
 | `boot-player` | a disposable instance | the published bench's boot chain (stock-mount stub → MODMAP → module graph → frame → shelf, all from facets), the `#/player` route and its postMessage bridge, and `installControl(el, 'bench', 'player', …)` mounting **inside another app's page** — the peer app's own path |
 | `wiring` | a disposable instance | the workbench timers/events panel over the replace-only setters: set, replace-by-name (Q7), the store record, the `timer` journal facet, and two-click removal |
+| `scratchpad` | a disposable instance | the agent chat's scratchpad (agent.stage) with a scripted model: the "pad" grant, stage → eval → snapshot, the snapshot PNG reaching the next model request, mounts persisting across turns, restaging picking up a facet edit, page errors surfacing, and re-mount after a reload |
 
 ## Why these were rewritten rather than copied
 

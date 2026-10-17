@@ -18,6 +18,7 @@ const SMOKES = [
   { name: "boot-player", file: "boot-player.mjs", needsInstance: true },
   { name: "wiring", file: "wiring.mjs", needsInstance: true },
   { name: "deletion", file: "deletion.mjs", needsInstance: true },
+  { name: "scratchpad", file: "scratchpad.mjs", needsInstance: true },
 ];
 
 const argv = process.argv.slice(2);
