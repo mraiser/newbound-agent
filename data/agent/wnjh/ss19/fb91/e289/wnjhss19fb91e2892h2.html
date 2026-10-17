@@ -9,6 +9,7 @@
       <button class="ag-tab" data-tab="plan" role="tab">plan</button>
     </nav>
     <button class="ag-newsession" title="start a fresh session — the current one stays in the sessions sidebar">new session</button>
+    <button class="ag-padtoggle" title="show or hide the scratchpad — live controls the agent mounts and drives">pad</button>
     <span class="ag-arch">
       <span class="ag-arch-q lbl"></span>
       <button class="ag-sweep" title="run the archivist's consolidate sweep now — reviews queued turns and files what is durable">sweep now</button>
@@ -45,6 +46,13 @@
           </span>
         </form>
       </div>
+      <aside class="ag-pad" hidden>
+        <header class="ag-pad-head">
+          <span class="lbl">scratchpad — live controls the agent mounts and drives</span>
+          <button type="button" class="ag-pad-close" title="hide the scratchpad — mounted controls keep running">✕</button>
+        </header>
+        <div class="data-control ag-pad-stage" data-control="agent:stage"></div>
+      </aside>
     </section>
 
     <section class="ag-pane" data-pane="memory" hidden>

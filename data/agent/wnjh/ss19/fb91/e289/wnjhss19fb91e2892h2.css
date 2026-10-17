@@ -48,6 +48,23 @@
 .ag-tool { align-self: flex-start; background: var(--panel); border: 1px solid var(--line);
   font-family: var(--mono, ui-monospace, monospace); font-size: 12px; opacity: 0.9; }
 .ag-cell.err { border: 1px solid var(--bad, #c0564f); }
+.ag-stage, .ag-snap { align-self: flex-start; background: var(--panel); border: 1px solid var(--line);
+  font-family: var(--mono, ui-monospace, monospace); font-size: 12px; opacity: 0.9; }
+.ag-stage-remount { margin-top: 6px; background: none; border: 1px solid var(--line);
+  border-radius: 6px; padding: 2px 8px; color: var(--accent, #f0a63c); cursor: pointer; font: inherit; }
+.ag-snap-img { display: block; max-width: 100%; margin-top: 6px;
+  border: 1px solid var(--line); border-radius: 6px; }
+.ag-padtoggle { color: var(--text-dim); }
+.ag-padtoggle.on { color: var(--text); border-color: var(--accent, #f0a63c); }
+.ag-pad { flex: 0 0 44%; min-width: 280px; max-width: 760px; min-height: 0;
+  display: flex; flex-direction: column; border-left: 1px solid var(--line); }
+.ag-pad-head { flex: none; display: flex; align-items: center; gap: 8px;
+  padding: 8px 12px; border-bottom: 1px solid var(--line); }
+.ag-pad-head .lbl { flex: 1; min-width: 0; }
+.ag-pad-close { background: none; border: 1px solid transparent; border-radius: 6px;
+  color: var(--text-dim); cursor: pointer; }
+.ag-pad-close:hover { border-color: var(--line); color: var(--text); }
+.ag-pad-stage { flex: 1; min-height: 0; overflow: auto; padding: 12px; }
 .ag-expand { display: block; margin-top: 6px; background: none; border: none;
   border-top: 1px dashed var(--line); width: 100%; text-align: left;
   padding: 4px 0 0; color: var(--text-dim); cursor: pointer;
