@@ -18,7 +18,8 @@ var readyP = new Promise(function (res) { me.ready = res; }).then(async () => {
   // page's .nb-viewctx registry class.
   const viewctx = ME.querySelector(".nb-viewctx").api;
   const agent = ME.querySelector('[data-control="agent:agentloop"]').api;
-  const stageCtl = ME.querySelector('[data-control="agent:stage"]').api;
+  // the scratchpad (agent.stage) — optional: a page without it still chats
+  const stageCtl = ME.querySelector('[data-control="agent:stage"]')?.api ?? null;
   const { ADDENDUM } = ME.querySelector('[data-control="agent:agentprompt"]').api;
   const jsonP = (c2, v2) => new Promise((res2) => json(c2, v2, res2));
   const invokeP = (l2, c2, m2, a2) => new Promise((res2) => invokeCommand(l2, c2, m2, a2, res2));
@@ -57,18 +58,45 @@ WHAT YOU SEE
 MEMORY IN THIS CHAT
 - Memory FORMATION is automatic: the archivist reviews completed sessions in the background. Do not file memories on your own initiative. When the user explicitly asks you to remember something, call dev-code-remember — it runs without confirmation, because the request itself is the authorization.
 
-UI DEMOS IN THIS CHAT (stage + eval)
-- You can DEMONSTRATE, TEST, and VISUALIZE UI right in this thread. Two tools, both confirm-gated:
-  · stage({spec:"lib:ctl:{json-props}"}) mounts a live control into a thread cell as stageN and returns its key.
-  · eval({js:"..."}) runs page JS against staged instances (in scope as stage.stageN.api / .el) and returns the JSON.stringify'd value.
-- To build the thing you demo, author it first with the dev-code commands (dev-code-create_control, dev-code-patch_control_facet) — then stage it. A scratch control is the usual sandbox.
-- eval JS is classic-script: async/await and dynamic import() are fine; NO import/export statements; NEVER a literal <\/script> sequence.
-- A staged instance must be reload-safe: transcript replay re-mounts it at construction. Keep side effects out of constructors.
+YOUR BROWSER: THE SCRATCHPAD
+- You run IN the user's browser — this chat page — so you DO have a browser. Never say you could not test UI end-to-end for lack of one. The scratchpad beside the thread is where you prototype, show, and verify controls live while the user watches (and can click along).
+- stage({name, spec}) mounts a control as pad.<name>; spec is lib:ctl or lib:ctl:{json-props}. Staging an existing name remounts it with the control's CURRENT code — do that after every facet edit. stage({name, remove:true}) takes it down. The reply is the mount's rendered structure plus any page errors.
+- eval({js}) runs page JS with pad.<name>.api / .el / .spec in scope: click, type, read state, call the api. A lone expression returns its value; multiple statements need an explicit return. async/await and dynamic import() are fine; no import/export statements; never a literal <\/script>. Every reply lists the page errors since your last look.
+- snapshot({name}) shows you the mount: its rendered structure as text and, by default, a PNG you can see (the user sees the thumbnail). Use it to check layout and looks, not just state.
+- The loop for UI work: author with the dev-code commands (dev-code-create_control — the scratch lib for prototypes — and dev-code-patch_control_facet) → stage → eval to exercise it → snapshot to look → fix → stage again. Report what you verified and how.
+- Mounts live in this page for this session: they persist across turns, not across a reload or a session switch (the thread then offers re-mount buttons). The first pad call asks the user to type "pad" once; after that the pad tools run freely for the session.
 
 HOW TO ANSWER
 - Be concise and concrete. If you are unsure, say so plainly rather than inventing platform behavior.`;
 
 const STORE_KEY = "agent.chat.v1";
+
+// The scratchpad tools. They run in this page (execTool → agent.stage), so
+// they are not catalog commands and carry no lib-ctl-cmd names.
+const PAD_TOOL_DEFS = [
+  { type: "function", function: { name: "stage",
+    description: "Mount a live Newbound control in the scratchpad beside this chat, as pad.<name> — prototype, demonstrate, or test UI in the user's own browser. Staging an existing name remounts it with the control's current code (do it after every facet edit). Returns the rendered structure plus any page errors. remove:true takes the mount down.",
+    parameters: { type: "object",
+      properties: {
+        name: { type: "string", description: "identifier for the mount, e.g. clock — eval sees it as pad.clock" },
+        spec: { type: "string", description: "lib:ctl or lib:ctl:{json-props}, e.g. scratch:clock:{\"tz\":\"UTC\"}" },
+        remove: { type: "boolean", description: "true to remove the named mount instead of mounting" } },
+      required: ["name"] } } },
+  { type: "function", function: { name: "eval",
+    description: "Run JavaScript in the chat page against the scratchpad's mounts — click, type, read state, call apis. pad.<name>.api is the control's api object, pad.<name>.el its element, pad.<name>.spec its spec. A lone expression returns its value; multiple statements need an explicit return. async/await OK; no import/export statements. Returns the JSON value plus the page errors since your last look.",
+    parameters: { type: "object",
+      properties: {
+        js: { type: "string", description: "page JS, e.g. pad.clock.el.querySelector('button').click()" },
+        timeout_ms: { type: "number", description: "give up after this long (default 10000)" } },
+      required: ["js"] } } },
+  { type: "function", function: { name: "snapshot",
+    description: "Look at a scratchpad mount: its rendered structure as text (tags, classes, sizes, positions, visible text, form values) and, unless image is false, a PNG of it that you can see. Use it to verify layout and appearance after a change.",
+    parameters: { type: "object",
+      properties: {
+        name: { type: "string", description: "the mount to capture" },
+        image: { type: "boolean", description: "false for the text outline only (default true)" } },
+      required: ["name"] } } },
+];
 
 async function init(host) {
   // ── tabs ─────────────────────────────────────────────────────────────
@@ -110,6 +138,23 @@ async function init(host) {
   const thread = host.querySelector(".ag-thread");
   let messages = [];       // the raw conversation (openai shapes), persisted
   let transcript = [];     // rendered cells {kind, title?, text, error?}
+  let padGranted = false;  // the user typed "pad" for this session
+
+  // ── the scratchpad pane: opens when the agent stages, or by hand ──────
+  const padEl = host.querySelector(".ag-pad");
+  const padToggle = host.querySelector(".ag-padtoggle");
+  function showPad(open) {
+    padEl.hidden = !open;
+    padToggle.classList.toggle("on", open);
+  }
+  padToggle.addEventListener("click", () => showPad(padEl.hidden));
+  host.querySelector(".ag-pad-close").addEventListener("click", () => showPad(false));
+  // the pad belongs to the conversation that staged it: a session switch
+  // clears it (the thread's notes offer re-mounts) and asks for the grant again
+  function resetPad() {
+    padGranted = false;
+    stageCtl?.unmountAll?.();
+  }
 
   // ── sessions: many conversations, each a store record tied to the user ──
   // Records live in the runtime lib (admin-only by default) and are written
@@ -157,6 +202,7 @@ async function init(host) {
     const r = await invokeP("agent", "chat", "session_open", { id });
     const rec = (r.status === "ok" && r.data && r.data.data) ? r.data.data : null;
     sessId = id;
+    resetPad();
     messages = (rec && Array.isArray(rec.messages)) ? rec.messages : [];
     transcript = (rec && Array.isArray(rec.transcript)) ? rec.transcript : [];
     thread.replaceChildren();
@@ -166,6 +212,7 @@ async function init(host) {
   }
   function newSession() {
     sessId = null;
+    resetPad();
     messages = [];
     transcript = [];
     thread.replaceChildren();
@@ -223,32 +270,36 @@ async function init(host) {
     renderRich(body, entry.text ?? "");
     div.appendChild(body);
     if (entry.kind === "stage") {
-      body.classList.add("ag-stage-host");
-      const note = document.createElement("div");
-      note.className = "ag-stage-note lbl";
-      body.appendChild(note);
-      const mountBox = document.createElement("div");
-      mountBox.className = "nb-stage-host";
-      body.appendChild(mountBox);
-      if (!entry.spec || entry.spec.indexOf(":") < 0) {
-        note.textContent = entry.text || "no spec";
-      } else if (!stageCtl || !stageCtl.registry) {
-        note.textContent = "stage unavailable — reload the chat";
-      } else {
-        const i = entry.spec.indexOf(":"), j = entry.spec.lastIndexOf(":");
-        const lib = entry.spec.slice(0, i), ctl = entry.spec.slice(i + 1, j);
-        let props = {};
-        try { props = JSON.parse(entry.spec.slice(j + 1) || "{}"); } catch (e) {}
-        const key = "stage" + window.NB_STAGE.n++;
-        note.textContent = "stage " + key + " · " + entry.spec;
-        const el = document.createElement("div");
-        el.className = "nb-stage-instance";
-        mountBox.appendChild(el);
-        window.NB_STAGE.registry[key] = { el, spec: entry.spec };
-        installControl(el, lib, ctl, function (api) {
-          window.NB_STAGE.registry[key].api = api;
-          clampVisually(div, mountBox);
-        }, props);
+      // a mount note. Replay never re-runs a control's code on its own: once
+      // the live instance is gone (reload, session switch) the note offers it.
+      if (entry.name && entry.spec && !entry.removed && stageCtl?.has && !stageCtl.has(entry.name)) {
+        const re = document.createElement("button");
+        re.type = "button";
+        re.className = "ag-stage-remount";
+        re.textContent = "↻ re-mount " + entry.name;
+        re.title = "mount " + entry.spec + " in the scratchpad again (runs its code)";
+        re.addEventListener("click", async () => {
+          re.disabled = true;
+          try {
+            showPad(true);
+            await stageCtl.mount(entry.name, entry.spec);
+            re.remove();
+          } catch (e) {
+            re.disabled = false;
+            re.textContent = "re-mount failed: " + (e.message || e);
+          }
+        });
+        body.appendChild(re);
+      }
+      return div;
+    }
+    if (entry.kind === "snap") {
+      if (entry.thumb) {
+        const img = document.createElement("img");
+        img.className = "ag-snap-img";
+        img.src = entry.thumb;
+        img.alt = "snapshot of pad." + (entry.name ?? "");
+        body.appendChild(img);
       }
       return div;
     }
@@ -381,12 +432,12 @@ async function init(host) {
   // ── the tool model (the notebook's ceremony, this venue's chrome) ────
   const confirmEl = host.querySelector(".ag-confirm");
   const askConfirmed = new Set();
-  function askConfirm(cmdName, lite) {
+  function askConfirm(cmdName, lite, msg) {
     return new Promise((done) => {
       confirmEl.hidden = false;
       confirmEl.querySelector(".ag-confirm-msg").textContent = lite
         ? `run ${cmdName} again?`
-        : `the agent wants to run ${cmdName} — type the command name to allow it:`;
+        : (msg || `the agent wants to run ${cmdName} — type the command name to allow it:`);
       const input = confirmEl.querySelector(".ag-confirm-input");
       const okBtn = confirmEl.querySelector(".ag-confirm-ok");
       input.hidden = lite;
@@ -429,49 +480,94 @@ async function init(host) {
     });
   };
 
+  // ── the scratchpad tools: in-page calls into agent.stage. One typed
+  // grant ("pad") covers stage / eval / snapshot for the rest of the session.
+  const PAD_TITLE = { stage: "◈ stage", eval: "◈ eval", snapshot: "◈ snapshot" };
+  const errBlock = (errs) => (errs && errs.length)
+    ? "\n\nPAGE ERRORS since your last look:\n" + errs.slice(-12).join("\n") : "";
+  async function padTool(tool, args) {
+    const title = PAD_TITLE[tool];
+    if (!stageCtl?.mount) {
+      toolCell(title, args, { error: true, output: "the scratchpad is not loaded on this page" });
+      return "ERROR: the scratchpad (agent.stage) is not loaded on this page — ask the user to reload the chat.";
+    }
+    if (!padGranted && agent.gateFor("pad", null) !== "auto") {
+      const ok = await askConfirm("pad", false,
+        "the agent wants to use the scratchpad — mount controls and run JS in this page. Type pad to allow it for this session:");
+      if (!ok) {
+        toolCell(title, args, { error: true, output: "denied by the user" });
+        return "DENIED: the user declined scratchpad access. Continue without it.";
+      }
+    }
+    padGranted = true;
+    try {
+      if (tool === "stage") return await padStage(args);
+      if (tool === "eval") return await padEval(args);
+      return await padSnapshot(args);
+    } catch (e) {
+      const msg = (e && e.message) || String(e);
+      const errs = stageCtl.errors();
+      toolCell(title, args, { error: true, output: msg + errBlock(errs) });
+      return "ERROR: " + msg + errBlock(errs);
+    }
+  }
+  async function padStage(args) {
+    const name = String(args.name ?? "").trim();
+    if (args.remove) {
+      const gone = stageCtl.unmount(name);
+      pushCell({ kind: "stage", title: PAD_TITLE.stage, args: JSON.stringify(args), name, removed: true,
+        text: gone ? `removed pad.${name}` : `nothing was mounted as ${name}` });
+      return gone ? `Removed pad.${name}.` : `Nothing is mounted as ${name}.`;
+    }
+    const spec = String(args.spec ?? "").trim();
+    showPad(true);
+    const r = await stageCtl.mount(name, spec);
+    let outline = "";
+    try { outline = stageCtl.outline(name); } catch (e) { outline = "(no outline: " + e.message + ")"; }
+    const errs = stageCtl.errors();
+    const status = r.ready ? "mounted" : "mounted but NOT ready — " + r.error;
+    pushCell({ kind: "stage", title: PAD_TITLE.stage, args: JSON.stringify(args), name, spec,
+      error: !r.ready, text: `${status}: pad.${name}` + errBlock(errs) });
+    return `${status}: pad.${name} (${spec}). Rendered structure:\n${outline}` + errBlock(errs);
+  }
+  async function padEval(args) {
+    const js = String(args.js ?? "");
+    const r = await stageCtl.evaluate(js, Number(args.timeout_ms) || 10000);
+    const shown = r.ok ? r.value : "threw: " + r.error;
+    toolCell(PAD_TITLE.eval, args, { error: !r.ok, output: shown + errBlock(r.errors) });
+    const hint = (r.ok && r.value === "undefined" && /[;\n]/.test(js.trim()) && !/\breturn\b/.test(js))
+      ? "\n(no value: a multi-statement script needs an explicit return)" : "";
+    return (r.ok ? agent.clamp(r.value, 4000) : "ERROR: " + agent.clamp(r.error, 2000)) + hint + errBlock(r.errors);
+  }
+  async function padSnapshot(args) {
+    const name = String(args.name ?? "").trim();
+    const outline = stageCtl.outline(name);
+    let images = [], thumb = null, note = "";
+    if (args.image !== false) {
+      try {
+        const shot = await stageCtl.capture(name);
+        const file = new File([shot.blob], `snapshot-${name}-${Date.now()}.png`, { type: "image/png" });
+        const up = await uploadOne(file);
+        images = [up.path];
+        thumb = shot.thumb;
+        note = `image ${shot.width}×${shot.height} attached`;
+      } catch (e) {
+        note = "image capture failed (" + ((e && e.message) || e) + ") — the outline is still exact";
+      }
+    }
+    const errs = stageCtl.errors();
+    pushCell({ kind: "snap", title: PAD_TITLE.snapshot, args: JSON.stringify(args), name, thumb,
+      text: `pad.${name}` + (note ? ` — ${note}` : "") + errBlock(errs) });
+    const content = `Snapshot of pad.${name}` + (note ? ` (${note})` : "") + `:\n${outline}` + errBlock(errs);
+    // {content, images}: agentloop's chatTurn delivers the pixels on its own
+    return images.length ? { content, images } : content;
+  }
+
   async function execTool(call) {
     let args = {};
     try { args = call.arguments ? JSON.parse(call.arguments) : {}; } catch { /* raw below */ }
 
-    if (call.name === "stage") {
-      const spec = args.spec ?? "";
-      if (!spec || spec.indexOf(":") < 0) {
-        toolCell("◈ stage", args, { error: true, output: "spec must be lib:ctl:{json-props}" });
-        return 'ERROR: spec must be lib:ctl:{json-props}';
-      }
-      if (agent.gateFor("agent-stage-stage", null) !== "auto") {
-        const confirmed = await askConfirm("stage", askConfirmed.has("stage"));
-        if (!confirmed) {
-          toolCell("◈ stage", args, { error: true, output: "denied by the user" });
-          return "DENIED: the user declined this action. Continue without it.";
-        }
-        askConfirmed.add("stage");
-      }
-      const entry = pushCell({ kind: "stage", title: "◈ stage", args: JSON.stringify(args), spec, text: "" });
-      const key = [...thread.querySelectorAll(".ag-stage-note")].pop()?.textContent.match(/^stage (stage\d+)/)?.[1];
-      return key
-        ? `Staged ${spec} as ${key} — a live instance is now rendered in the thread. Drive it with eval, e.g. eval({js:"stage.${key}.api"}) or read its element at stage.${key}.el.`
-        : `Staged ${spec}.`;
-    }
-    if (call.name === "eval") {
-      const js = args.js ?? "";
-      if (agent.gateFor("agent-stage-eval", null) !== "auto") {
-        const confirmed = await askConfirm("eval", askConfirmed.has("eval"));
-        if (!confirmed) {
-          toolCell("✳ eval", args, { error: true, output: "denied by the user" });
-          return "DENIED: the user declined this action. Continue without it.";
-        }
-        askConfirmed.add("eval");
-      }
-      const r = await invoke("agent", "stage", "eval", { js, timeout_ms: args.timeout_ms ?? 15000 });
-      const env = r.envelope ?? {};
-      const pay = env.value ?? env.msg ?? env;
-      const text = typeof pay === "string" ? pay : JSON.stringify(pay, null, 1);
-      toolCell("✳ eval", args, { error: env.status !== "ok", output: text });
-      if (env.status === "timeout")
-        return "TIMEOUT: the stage page did not answer — is this chat open? The eval bridge needs a live page.";
-      return env.status === "ok" ? agent.clamp(text, 4000) : `ERROR: ${text}`;
-    }
+    if (Object.hasOwn(PAD_TITLE, call.name)) return padTool(call.name, args);
     if (call.name === "find_tools") {
       const catalog = await ensureCatalog();
       const hits = agent.searchCatalog(catalog, args.query ?? "");
@@ -565,26 +661,23 @@ async function init(host) {
       const core = await agent.corePrompt();
       const catalog = await ensureCatalog();
       const attached = agent.DEFAULT_TOOLS.filter((n) => catalog.some((t) => t.name === n));
-      const STAGE_TOOL_DEFS = [
-        { type: "function", function: { name: "stage",
-          description: "Mount a live Newbound control into a chat thread cell and interact with it — demonstrate, test, or visualize UI in-page. spec is lib:ctl:{json-props} (e.g. scratch:clock:{\"tz\":\"UTC\"}). The instance appears live in the thread as stageN; drive it with the eval tool.",
-          parameters: { type: "object",
-            properties: { spec: { type: "string", description: "lib:ctl:{json-props}" } },
-            required: ["spec"] } } },
-        { type: "function", function: { name: "eval",
-          description: "Evaluate JavaScript in the chat page against staged controls — the agent's hands. `js` is classic-script page JS: async/await and dynamic import() OK; NO import/export statements; NO literal <\/script>. Staged instances are in scope as `stage` (stage.stage0.api, stage.stage0.el). Returns the JSON.stringify'd value of the last expression. Use it to click, read state, set props, or inspect the mounted control.",
-          parameters: { type: "object",
-            properties: { js: { type: "string", description: "page JS — last expression is returned" },
-                          timeout_ms: { type: "number", description: "wait for the page (default 15000)" } },
-            required: ["js"] } } },
-      ];
-      const tools = [...agent.META_TOOL_DEFS, ...STAGE_TOOL_DEFS, ...agent.toolDefs(catalog, attached)];
+      const tools = [...agent.META_TOOL_DEFS, ...(stageCtl ? PAD_TOOL_DEFS : []),
+        ...agent.toolDefs(catalog, attached)];
       const addendum = (ADDENDUM ?? "").trim();
       if (messages.length === 0 || messages[0].role !== "system") {
         messages.unshift({ role: "system", content: "" });
       }
       messages[0].content = core + "\n\n" + CHAT_SHELL + agent.TOOLS_PROMPT +
         (addendum ? "\n\nOWNER ADDENDUM\n" + addendum : "");
+      // A snapshot's pixels serve the turn that took it. Re-sending every old
+      // image on every call would grow each request without bound; the text
+      // stays, and the agent takes a fresh snapshot when it needs to look.
+      for (const m of messages) {
+        if (m.role === "user" && m.images && String(m.content ?? "").startsWith("[SNAPSHOT IMAGES")) {
+          delete m.images;
+          m.content += " (image no longer attached)";
+        }
+      }
       const ctx = agent.contextBlock(viewctx.snapshot());
       const userMsg = { role: "user", content: message };
       if (images.length) userMsg.images = images;
@@ -631,9 +724,10 @@ async function init(host) {
   // ── attachments: 📎 button, drag & drop, pasted screenshots ──────────
   // Files upload through agent.chat.upload via a direct JSON POST to
   // ../app/exec — the websocket/JSONP invoke path can't carry megabytes.
-  // The model is text-only across every chat_llm arm, so the message gets
-  // an [ATTACHED FILES] block of saved paths (small text files inlined);
-  // the agent opens the rest with its tools.
+  // The message gets an [ATTACHED FILES] block of saved paths (small text
+  // files inlined); images also ride the message's `images`, which chat_llm
+  // renders as image blocks for vision models. The agent opens the rest
+  // with its tools.
   const attachStrip = host.querySelector(".ag-attach");
   const fileInput = host.querySelector(".ag-file");
   const attachments = [];

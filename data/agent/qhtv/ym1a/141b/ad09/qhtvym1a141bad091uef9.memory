@@ -1,0 +1,69 @@
+[
+  {
+    "claim": "agent.stage is the chat's scratchpad: an in-page UI harness the agent drives in the user's own browser. agent.chat mounts it in its pad aside and its stage / eval / snapshot tools call straight into the api - mount(name, spec) (lib:ctl[:{json-props}], only the first two colons split), unmount/unmountAll, evaluate(js, ms) with the mounts in scope as pad.<name>.{api,el,spec} (a lone expression returns its value, statements need return), outline(name) (rendered structure as text), capture(name) (PNG + jpeg thumbnail), errors() (page errors since the previous read: uncaught errors, unhandled rejections, console.error/warn). There is no server round-trip: the chat's tool loop already runs in the page. Verified end to end by tools/smoke/scratchpad.mjs (scripted model).",
+    "tags": "scratchpad,ui-testing",
+    "confidence": "high",
+    "time": 1792244525480,
+    "sources": [
+      {
+        "lib": "agent",
+        "ctl": "stage",
+        "facet": "js"
+      },
+      {
+        "lib": "agent",
+        "ctl": "chat",
+        "facet": "js"
+      }
+    ]
+  },
+  {
+    "claim": "The platform mounter caches per page: control ids in CTLCACHE (5s), control records in allmetas, command stubs in alljsapis (all api.js globals). Re-mounting a control after editing its facets serves the OLD code unless those caches are cleared - agent.stage's mount() drops every settled entry (in-flight arrays of waiting callbacks stay) and resets the lib's CTLCACHE before each mount. Any other hot-remount feature needs the same.",
+    "tags": "scratchpad,platform-mounter",
+    "confidence": "high",
+    "time": 1792244525556,
+    "sources": [
+      {
+        "lib": "agent",
+        "ctl": "stage",
+        "facet": "js"
+      }
+    ]
+  },
+  {
+    "claim": "The pad tools need a tool-calling arm (VLLM, OPENAI, ANTHROPIC, GEMINI, OLLAMA). The CLAUDECODE arm never returns kind:tool_calls - Claude Code runs its own loop and ignores the page's tools - so a chat on that arm cannot stage, eval, or snapshot. Letting an out-of-page agent (CLAUDECODE delegate, MCP client, server-side tool_loop) drive the pad needs a server->page bridge: flowlang's fire_event + the page's subscribe_event websocket push is the substrate (the abandoned long-poll eval_pump never worked: the Rust command looked up a JS function as a backend command). Note `newbound mcp` is a separate process from the web server, so an MCP-side bridge must forward to the running server.",
+    "tags": "scratchpad,llm-arms",
+    "confidence": "high",
+    "time": 1792244525640,
+    "sources": [
+      {
+        "lib": "agent",
+        "ctl": "stage",
+        "facet": "js"
+      }
+    ]
+  },
+  {
+    "claim": "Snapshot pixels reach the model through agentloop's chatTurn: execTool may resolve {content, images:[paths]}; the round's images ride ONE user message ([SNAPSHOT IMAGES ...]) after all of that round's tool results, because tool messages carry no images on every wire (OpenAI's cannot) - the user-message images path is the one every chat_llm dialect already renders. agent.chat strips the images from earlier [SNAPSHOT IMAGES messages at the start of each new turn so requests don't grow without bound. capture() rasterizes via cloned subtree + inlined computed styles (inherited props compared with the parent, the rest with the tag's default from a sandbox iframe) -> SVG foreignObject -> canvas; pseudo-elements, scroll positions, iframes, shadow DOM and web fonts are lost.",
+    "tags": "scratchpad,vision",
+    "confidence": "high",
+    "time": 1792244525714,
+    "sources": [
+      {
+        "lib": "agent",
+        "ctl": "stage",
+        "facet": "js"
+      },
+      {
+        "lib": "agent",
+        "ctl": "agentloop",
+        "facet": "js"
+      },
+      {
+        "lib": "agent",
+        "ctl": "chat",
+        "facet": "js"
+      }
+    ]
+  }
+]

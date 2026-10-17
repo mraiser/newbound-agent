@@ -377,7 +377,9 @@ function parseToolName(name) {
  * One conversational turn, driving chat_llm until it answers in text.
  * execTool(call) is the session's: it renders the cell, gates mutating
  * commands behind the typed confirm, runs it, and resolves the tool-result
- * CONTENT string (or a denial note). Returns the final text.
+ * CONTENT string (or a denial note) — or {content, images} when the tool
+ * produced pictures (image file paths, e.g. a scratchpad snapshot).
+ * Returns the final text.
  */
 async function chatTurn({ messages, tools, execTool, onRound, venue = "", entity = "" }) {
   const seen = new Map();   // result text -> tool name, for the context guard
@@ -439,8 +441,13 @@ async function chatTurn({ messages, tools, execTool, onRound, venue = "", entity
     }
     messages.push(d.assistant_message);
     onRound?.(d.tool_calls);
+    const roundImages = [];
     for (const call of d.tool_calls) {
-      const content = await execTool(call);
+      let content = await execTool(call);
+      if (content && typeof content === "object") {
+        if (Array.isArray(content.images)) roundImages.push(...content.images);
+        content = String(content.content ?? "");
+      }
       // Context guard: if an identical result already sits in this turn's
       // messages (the model re-read an unchanged facet — a real trace showed
       // the same 26KB source pulled three times), elide the duplicate TEXT.
@@ -451,6 +458,14 @@ async function chatTurn({ messages, tools, execTool, onRound, venue = "", entity
           ? `[result identical to the ${prior} call earlier this turn — unchanged; reuse that output]`
           : content });
       if (prior === undefined) seen.set(content, call.function?.name ?? "tool");
+    }
+    // Tool messages carry no images on every wire (OpenAI's can't), so the
+    // round's pictures ride ONE user message after all of its tool results —
+    // the same `images` path chat_llm already renders for attachments.
+    // Arms without vision get the paths in the text.
+    if (roundImages.length) {
+      messages.push({ role: "user", images: roundImages,
+        content: `[SNAPSHOT IMAGES from this round's tool calls: ${roundImages.join(", ")}]` });
     }
   }
   // Budget exhausted. A bare stop misreports turns whose LAST round did the
