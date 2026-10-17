@@ -47,4 +47,7 @@ harness (`harness.mjs`) fixes what made them un-portable:
 `stage-pools`, `scene-mock`, `flow-editor`, `boot-player`, `wiring` and
 `deletion` drove the bench app (its `/bench/` routes and its repo-root
 `index.html` + `assets/`), which no longer ships with this repo or the
-platform. They were retired on 2026-10-17; git history keeps them.
+platform. The pure node checks that paired with them,
+`tools/flow3d-check.mjs` and `tools/scene-check.mjs`, imported the same
+`assets/` modules. All eight were retired on 2026-10-17; git history keeps
+them.
