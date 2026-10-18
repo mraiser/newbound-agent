@@ -20,7 +20,22 @@ var readyP = new Promise(function (res) { me.ready = res; }).then(async () => {
   const agent = ME.querySelector('[data-control="agent:agentloop"]').api;
   // the scratchpad (agent.stage) — optional: a page without it still chats
   const stageCtl = ME.querySelector('[data-control="agent:stage"]')?.api ?? null;
-  const { ADDENDUM } = ME.querySelector('[data-control="agent:agentprompt"]').api;
+  // The owner addendum is instance state in the instance-local `runtime`
+  // library (runtime:agentchataddendum, `addendum` facet — plain text), NOT
+  // library code: fetched lazily and cached like agentloop's corePrompt, a
+  // failed fetch clears the cache so the next ask retries.
+  let addendumPromise = null;
+  const ownerAddendum = () => {
+    if (!addendumPromise) {
+      addendumPromise = (async () => {
+        const r = await readFacet("runtime", "agentchataddendum", "addendum");
+        if (r?.status === "ok" && r.exists) return (r.source ?? "").trim();
+        addendumPromise = null;
+        return "";
+      })();
+    }
+    return addendumPromise;
+  };
   const jsonP = (c2, v2) => new Promise((res2) => json(c2, v2, res2));
   const invokeP = (l2, c2, m2, a2) => new Promise((res2) => invokeCommand(l2, c2, m2, a2, res2));
   const invoke = async (l2, c2, m2, a2) => {
@@ -663,7 +678,7 @@ async function init(host) {
       const attached = agent.DEFAULT_TOOLS.filter((n) => catalog.some((t) => t.name === n));
       const tools = [...agent.META_TOOL_DEFS, ...(stageCtl ? PAD_TOOL_DEFS : []),
         ...agent.toolDefs(catalog, attached)];
-      const addendum = (ADDENDUM ?? "").trim();
+      const addendum = (await ownerAddendum()).trim();
       if (messages.length === 0 || messages[0].role !== "system") {
         messages.unshift({ role: "system", content: "" });
       }
@@ -1049,17 +1064,8 @@ async function init(host) {
   const PROMPTS = [
     { key: "core", lib: "agent", ctl: "prompts", facet: "prompt",
       cap: "the platform-knowledge CORE (agent.prompts) — every consumer assembles on this" },
-    { key: "addendum", lib: "agent", ctl: "agentprompt", facet: "js",
-      cap: "the OWNER ADDENDUM — appended to every notebook/chat prompt; your experiment surface",
-      extract: (src) => {
-        const m = src.match(/const ADDENDUM = `([\s\S]*?)`;/);
-        return m ? m[1].replace(/\\`/g, "`").replace(/\\\$/g, "$").replace(/\\\\/g, "\\") : null;
-      },
-      inject: (src, text) => {
-        const esc = text.replace(/\\/g, "\\\\").replace(/`/g, "\\`").replace(/\$/g, "\\$");
-        return src.replace(/const ADDENDUM = `[\s\S]*?`;/,
-          "const ADDENDUM = `" + esc + "`;");
-      } },
+    { key: "addendum", lib: "runtime", ctl: "agentchataddendum", facet: "addendum",
+      cap: "the OWNER ADDENDUM — appended to every notebook/chat prompt; your experiment surface" },
     { key: "archivist", lib: "agent", ctl: "archivist", facet: "prompt",
       cap: "the ARCHIVIST's extraction prompt — what gets remembered, and how conservatively" },
   ];
