@@ -20,7 +20,32 @@ var readyP = new Promise(function (res) { me.ready = res; }).then(async () => {
   const agent = ME.querySelector('[data-control="agent:agentloop"]').api;
   // the scratchpad (agent.stage) — optional: a page without it still chats
   const stageCtl = ME.querySelector('[data-control="agent:stage"]')?.api ?? null;
-  const { ADDENDUM } = ME.querySelector('[data-control="agent:agentprompt"]').api;
+  // The owner addendum is instance state — a DATA RECORD in the instance-local
+  // `runtime` library (id "agentchataddendum", data.addendum = plain text), NOT
+  // a control (runtime holds instance data/settings, no controls). The library
+  // may not exist on a fresh install and the addendum is optional, so a missing
+  // library/record simply yields "" — skip it, never error. Fetched lazily and
+  // cached like agentloop's corePrompt; a failed read clears the cache so the
+  // next ask retries. Written via app.app.write (the prompts tab creates the
+  // record on first save).
+  let addendumPromise = null;
+  const ownerAddendum = () => {
+    if (!addendumPromise) {
+      addendumPromise = (async () => {
+        try {
+          const r = await invokeP("app", "app", "read", { lib: "runtime", id: "agentchataddendum", nn_sessionid: null });
+          if (r?.status === "ok" && r.data && typeof r.data.addendum === "string") {
+            return r.data.addendum.trim();
+          }
+          return ""; // missing library/record/field — no addendum configured
+        } catch (e) {
+          addendumPromise = null; // transient failure — retry next ask
+          return "";
+        }
+      })();
+    }
+    return addendumPromise;
+  };
   const jsonP = (c2, v2) => new Promise((res2) => json(c2, v2, res2));
   const invokeP = (l2, c2, m2, a2) => new Promise((res2) => invokeCommand(l2, c2, m2, a2, res2));
   const invoke = async (l2, c2, m2, a2) => {
@@ -663,7 +688,7 @@ async function init(host) {
       const attached = agent.DEFAULT_TOOLS.filter((n) => catalog.some((t) => t.name === n));
       const tools = [...agent.META_TOOL_DEFS, ...(stageCtl ? PAD_TOOL_DEFS : []),
         ...agent.toolDefs(catalog, attached)];
-      const addendum = (ADDENDUM ?? "").trim();
+      const addendum = (await ownerAddendum()).trim();
       if (messages.length === 0 || messages[0].role !== "system") {
         messages.unshift({ role: "system", content: "" });
       }
@@ -1049,17 +1074,8 @@ async function init(host) {
   const PROMPTS = [
     { key: "core", lib: "agent", ctl: "prompts", facet: "prompt",
       cap: "the platform-knowledge CORE (agent.prompts) — every consumer assembles on this" },
-    { key: "addendum", lib: "agent", ctl: "agentprompt", facet: "js",
-      cap: "the OWNER ADDENDUM — appended to every notebook/chat prompt; your experiment surface",
-      extract: (src) => {
-        const m = src.match(/const ADDENDUM = `([\s\S]*?)`;/);
-        return m ? m[1].replace(/\\`/g, "`").replace(/\\\$/g, "$").replace(/\\\\/g, "\\") : null;
-      },
-      inject: (src, text) => {
-        const esc = text.replace(/\\/g, "\\\\").replace(/`/g, "\\`").replace(/\$/g, "\\$");
-        return src.replace(/const ADDENDUM = `[\s\S]*?`;/,
-          "const ADDENDUM = `" + esc + "`;");
-      } },
+    { key: "addendum", record: true,
+      cap: "the OWNER ADDENDUM — appended to every notebook/chat prompt; your experiment surface" },
     { key: "archivist", lib: "agent", ctl: "archivist", facet: "prompt",
       cap: "the ARCHIVIST's extraction prompt — what gets remembered, and how conservatively" },
   ];
@@ -1072,6 +1088,24 @@ async function init(host) {
       const ta = block.querySelector("textarea");
       const status = block.querySelector(".ag-prompt-note");
       block.querySelector(".ag-prompt-cap").textContent = p.cap;
+      // The addendum is a runtime DATA RECORD (id "agentchataddendum",
+      // data.addendum), not a control facet: read via app.app.read, written via
+      // app.app.write, and created on first save (the runtime library / record
+      // may not exist yet on a fresh install). Other prompts stay facet patches.
+      if (p.record) {
+        const rec = await invokeP("app", "app", "read", { lib: "runtime", id: "agentchataddendum", nn_sessionid: null });
+        ta.value = (rec.status === "ok" && rec.data && typeof rec.data.addendum === "string")
+          ? rec.data.addendum : "";
+        block.querySelector(".ag-prompt-save").addEventListener("click", async () => {
+          const wr = await invokeP("app", "app", "write", {
+            lib: "runtime", id: "agentchataddendum",
+            data: { addendum: ta.value }, readers: [], writers: [], nn_sessionid: null });
+          note(status, wr.status === "ok"
+            ? "saved — takes effect on the next ask"
+            : `save failed: ${wr.msg}`, wr.status !== "ok");
+        });
+        continue;
+      }
       const r = await readFacet(p.lib, p.ctl, p.facet);
       if (r.status !== "ok") { status.textContent = "read failed: " + r.msg; ta.disabled = true; continue; }
       let text = r.source;
