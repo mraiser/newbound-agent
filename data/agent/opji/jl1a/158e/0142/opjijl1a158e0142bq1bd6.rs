@@ -1,23 +1,31 @@
-// step_item (kb.plan GATED plan-item autonomy, P-a): run ONE bounded step of
-// an ACCEPTED plan item. The human move to `accepted` is the authorization -
-// exactly like the remember request being its own authorization. Every
-// invariant from the plan item's design is enforced HERE, in one place:
+// step_item (kb.plan GATED plan-item autonomy, P-a): advance ONE accepted plan
+// item by REASONING about it. The human move to `accepted` is the
+// authorization - exactly like the remember request being its own
+// authorization. Invariants enforced HERE, in one place:
 //   (1) GATE: only entries tagged `accepted` are eligible. proposed stays
 //       human-only - the agent never executes its own ideas, and this command
 //       refuses in-progress/done/abandoned too (those are moved, not stepped,
 //       by the executive's lifecycle logic or are already settled).
-//   (2) ELIGIBILITY: the entry must carry a STRUCTURED `step` field
-//       {lib,ctl,cmd,args?} - a concrete, machine-checkable act. Pure-prose
-//       intent surfaces as a no-op (not an error): no LLM guessing in v1.
-//   (5) JOURNALED: the step's result is appended to the entry's `step_log`
-//       and the whole facet is written through patch_control_facet with the
-//       base hash - a bad step reverts like any human edit. On stale_base we
-//       abort and report current_hash; we NEVER force.
+//   (2) THINK: the item's claim + detail is the GOAL. The executive reasons
+//       about the MEANS via agent.llm.tool_loop (ONE bounded autonomous turn,
+//       its own TOOL_BUDGET + failure-abort). The human owns the WHAT (the
+//       accepted tag); the agent owns the HOW. v1 demanded a pre-authored
+//       `step` field and refused prose - but a pre-authored step only captures
+//       work already so well-understood it's done, so the ladder was empty for
+//       every novel item. The ban on reasoning was a lobotomy, not a guardrail
+//       (owner, 2026-08): the real guardrails are the substrate - the per-call
+//       mutating gate, TOOL_BUDGET, MAX_PLAN_STEPS, and this journaled
+//       step_log - not a refusal to think.
+//   (5) JOURNALED: the reasoning's answer is appended to the entry's
+//       `step_log` (home agent.llm.tool_loop) and the whole facet is written
+//       through patch_control_facet with the base hash - a bad step reverts
+//       like any human edit. On stale_base we abort and report current_hash;
+//       we NEVER force.
 //   (6) STALE LOOP: if the entry's source pointer's hash drifted since the
 //       entry was written, we defer to the stale path (evidence decay
 //       re-opens planning) instead of acting on possibly-outdated intent.
-// This command performs ONE step and returns; the executive's drive budget
-// (it spends a drive unit to call us) is the throttle - we never loop.
+// This command performs ONE reasoning turn and returns; the executive's drive
+// budget (it spends a drive unit to call us) is the throttle - we never loop.
 fn esc(s: &str) -> String {
     let mut out = String::new();
     for c in s.chars() {
@@ -165,8 +173,7 @@ Think, then act via the available tools. Prefer a single concrete, verifiable in
 If the item is already complete, verify it and say DONE. If you are blocked, say what you need.\n\n\
 GOAL: {}\n", goal);
 if !detail.trim().is_empty() {
-    let d: String = detail.chars().take(3000).collect();
-    prompt.push_str(&format!("\nDETAIL:\n{}\n", d));
+    let d: String = detail.chars().take(3000).collect();    prompt.push_str(&format!("\nDETAIL:\n{}\n", d));
 }
 if !prior_steps.is_empty() {
     prompt.push_str(&format!("\nPRIOR STEPS (do not repeat without new information):\n{}\n", prior_steps));
@@ -237,7 +244,7 @@ if !write_ok {
 out.put_string("status", "ok");
 out.put_string("action", if ok_step { "stepped" } else { "step_failed" });
 out.put_boolean("ok", ok_step);
-out.put_string("home", &format!("{}.{}.{}", slib, sctl, scmd));
+out.put_string("home", "agent.llm.tool_loop");
 out.put_string("result", &result_json);
 out.put_int("time", now);
 out
