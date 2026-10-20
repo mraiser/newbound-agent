@@ -404,7 +404,33 @@ let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
     let _ = logcmd.execute(la);
 }));
 
+// Parse the model's completion status out of the final answer's STATUS: marker
+// (the executive prompt instructs DONE/IN_PROGRESS/BLOCKED). This is the signal
+// step_item uses to close the loop: DONE -> verify + move_item(done), BLOCKED
+// -> surface once (never a silent 15-min re-prove). Default: a budget checkpoint
+// is incomplete; a clean text finish with no marker is IN_PROGRESS (the item
+// stays accepted and keeps being stepped).
+let mut status = "IN_PROGRESS".to_string();
+if final_answer.starts_with("[budget checkpoint") {
+    status = "IN_PROGRESS".to_string();
+}
+let has_evidence = final_answer.contains("VERIFIED:");
+for line in final_answer.lines() {
+    let t = line.trim();
+    if let Some(rest) = t.strip_prefix("STATUS:") {
+        let v = rest.trim().to_uppercase();
+        // DONE requires a VERIFIED: evidence line (the executive prompt's
+        // contract); a bare DONE claim with no check actually run is treated
+        // as IN_PROGRESS so an unverified claim can't prematurely close an item.
+        if v.starts_with("DONE") && has_evidence { status = "DONE".to_string(); }
+        else if v.starts_with("BLOCKED") { status = "BLOCKED".to_string(); }
+        else if v.starts_with("IN_PROGRESS") { status = "IN_PROGRESS".to_string(); }
+        break;
+    }
+}
+
 let mut response = DataObject::new();
 response.put_string("msg", &final_answer);
+response.put_string("status", &status);
 response.put_array("messages", messages);
 response
