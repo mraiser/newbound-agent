@@ -50,7 +50,7 @@ pub fn execute(o: DataObject) -> DataObject {
 }
 
 pub fn move_item(claim: String, lifecycle: String, base: String, nn_sessionid: String) -> DataObject {
-let lifecycles = ["proposed", "accepted", "in-progress", "done", "abandoned"];
+let lifecycles = ["proposed", "accepted", "in-progress", "completed", "done", "abandoned"];
 let mut out = DataObject::new();
 if !lifecycles.contains(&lifecycle.as_str()) {
     out.put_string("status", "err");

@@ -479,6 +479,15 @@ if entry.has("source") {
 
 // ── the target domain ───────────────────────────────────────────────────
 let ctlid = lookup_ctl_id(&lib, &domain);
+// kb.plan is a WORK BOARD, not a memory domain. A plan entry is ACTIONABLE
+// WORK-INTENT created by a human or agent.plan.add_item - never a memory
+// deposit. The archivist's sweep kept filing session-observations and
+// just-fixed-bug reports here (observed live 2026-10-21), polluting the board
+// and, via adjudicate, clobbering lifecycle/step_log. Route facts to a
+// reference domain or the month bucket; refuse plan deposits here.
+if lib == "kb" && domain == "plan" {
+    return err("kb.plan is a work board, not a memory domain - file facts into a reference domain (platform-api/workflow/frontend) or the month bucket. New plan items are created by a human or agent.plan.add_item, not by memory deposit.".to_string());
+}
 let store = DataStore::new();
 if !store.exists(&lib, &ctlid) {
     return err(format!("Domain control '{}' not found in library '{}'", domain, lib));

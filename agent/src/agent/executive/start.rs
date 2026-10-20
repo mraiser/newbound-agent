@@ -591,15 +591,15 @@ std::thread::spawn(move || {
                                 // GATED plan-item autonomy (P-b): the item is
                                 // `accepted` (a signed work order) and the
                                 // owner has armed PLAN_AUTONOMY. Spend this
-                                // tick's drive unit on ONE bounded step via
-                                // agent.plan.step_item - it re-gates on
-                                // accepted, re-checks the source hash, runs
-                                // the structured step panic-contained, and
-                                // journals to the item's step_log. The drive
-                                // unit was already charged above (next_act_time
-                                // advanced), so plans can never starve the
-                                // garden. Default off => the else branch
-                                // surfaces exactly as before.
+                                // tick's drive unit on ONE bounded REASONING
+                                // turn via agent.plan.step_item - it re-gates
+                                // on accepted, re-checks the source hash, then
+                                // hands the item to tool_loop to think + act,
+                                // journaling the outcome to the item's
+                                // step_log. The drive unit was already charged
+                                // above (next_act_time advanced), so plans can
+                                // never starve the garden. Default off => the
+                                // else branch surfaces exactly as before.
                                 ex.put_string("phase", "acting");
                                 let stepd = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                                     let cmd = Command::lookup("agent", "plan", "step_item");
