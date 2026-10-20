@@ -41,6 +41,32 @@ for i in 0..arr.len() {
             .collect();
         kept.push(lifecycle.clone());
         e.put_string("tags", &kept.join(","));
+        // Re-approval hook (convergence guard): moving an item TO `accepted`
+        // is the human re-authorization. If its step_log has reached the cap
+        // (i.e. step_item refused it with needs_reapproval), reset the log so
+        // the agent may step it again. A normal accept leaves a non-exhausted
+        // log untouched (history preserved). The reset itself is recorded in
+        // the journal via the label below.
+        if lifecycle == "accepted" && e.has("step_log") {
+            let prior = match e.try_get_array("step_log") { Ok(a) => a.len() as i64, Err(_) => 0 };
+            let mut cap: i64 = 20;
+            let g = flowlang::datastore::DataStore::globals();
+            if let Ok(sys) = g.try_get_object("system") {
+                if let Ok(apps) = sys.try_get_object("apps") {
+                    if let Ok(agent) = apps.try_get_object("agent") {
+                        if let Ok(rt) = agent.try_get_object("runtime") {
+                            if let Ok(v) = rt.try_get_string("MAX_PLAN_STEPS") {
+                                if let Ok(p) = v.trim().parse::<i64>() { if p > 0 { cap = p.min(1000); } }
+                            }
+                        }
+                    }
+                }
+            }
+            if prior >= cap {
+                e.put_array("step_log", ndata::dataarray::DataArray::new());
+                e.put_int("steps_reset", prior);
+            }
+        }
         found = true;
         break;
     }

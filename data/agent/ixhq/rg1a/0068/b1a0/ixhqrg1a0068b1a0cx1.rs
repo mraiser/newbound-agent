@@ -255,6 +255,7 @@ for lib in libs {
                         it.put_string("lib", &lib);
                         it.put_string("domain", &name);
                         it.put_string("claim", &claim);
+                        it.put_string("stage", stage);
                         it.put_string("why", &format!("plan item ({}) - active intent in kb.plan, surfaced never auto-executed", stage));
                         n_plan += 1;
                         items.push((pr, t0, it));

@@ -43,6 +43,7 @@ fn ensure_exec_state(g: &mut DataObject) -> DataObject {
         ex.put_int("drive", 4);
         ex.put_int("next_act_time", 0);
         ex.put_int("acts_total", 0);
+        ex.put_int("plan_steps", 0);
         ex.put_int("work_depth", 0);
         ex.put_int("salience_calls", 0);
         ex.put_int("escalations", 0);
@@ -70,6 +71,25 @@ fn salience_on() -> bool {
         let g = a.try_get_object("agent").ok()?;
         let r = g.try_get_object("runtime").ok()?;
         r.try_get_string("SALIENCE").ok()
+    })().map(|v| {
+        let v = v.trim().to_lowercase();
+        v == "on" || v == "true" || v == "1" || v == "yes"
+    }).unwrap_or(false)
+}
+// PLAN_AUTONOMY (kb.plan GATED plan-item autonomy, P-b): the gate for the
+// executive acting on ACCEPTED plan items. DEFAULT OFF - absent or any value
+// other than on/true/1/yes means plan items are only ever SURFACED, never
+// stepped (exactly the pre-autonomy behavior). The human move_item to
+// `accepted` is the authorization; this flag is the owner's kill-switch on
+// top of it. Read live from the agent runtime settings each tick, so it can
+// be flipped without a restart.
+fn plan_autonomy_on() -> bool {
+    (|| -> Option<String> {
+        let s = DataStore::globals().try_get_object("system").ok()?;
+        let a = s.try_get_object("apps").ok()?;
+        let g = a.try_get_object("agent").ok()?;
+        let r = g.try_get_object("runtime").ok()?;
+        r.try_get_string("PLAN_AUTONOMY").ok()
     })().map(|v| {
         let v = v.trim().to_lowercase();
         v == "on" || v == "true" || v == "1" || v == "yes"
@@ -522,6 +542,39 @@ std::thread::spawn(move || {
                                     }
                                 }
                                 act.put_string("action", &action);
+                            } else if kind == "plan" && plan_autonomy_on()
+                                && it.try_get_string("stage").map(|s| s == "accepted").unwrap_or(false) {
+                                // GATED plan-item autonomy (P-b): the item is
+                                // `accepted` (a signed work order) and the
+                                // owner has armed PLAN_AUTONOMY. Spend this
+                                // tick's drive unit on ONE bounded step via
+                                // agent.plan.step_item - it re-gates on
+                                // accepted, re-checks the source hash, runs
+                                // the structured step panic-contained, and
+                                // journals to the item's step_log. The drive
+                                // unit was already charged above (next_act_time
+                                // advanced), so plans can never starve the
+                                // garden. Default off => the else branch
+                                // surfaces exactly as before.
+                                ex.put_string("phase", "acting");
+                                let stepd = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                                    let cmd = Command::lookup("agent", "plan", "step_item");
+                                    let mut args = DataObject::new();
+                                    args.put_string("claim", &it.get_string("claim"));
+                                    args.put_string("base", "");
+                                    args.put_string("nn_sessionid", "");
+                                    cmd.execute(args)
+                                }));
+                                let mut action = "step_failed".to_string();
+                                if let Ok(Ok(rr)) = stepd {
+                                    if rr.has("a") {
+                                        let aa = rr.get_object("a");
+                                        if aa.has("action") { action = aa.get_string("action"); }
+                                        if aa.has("home") { act.put_string("step_home", &aa.get_string("home")); }
+                                    }
+                                }
+                                act.put_string("action", &action);
+                                ex.put_int("plan_steps", if ex.has("plan_steps") { ex.get_int("plan_steps") + 1 } else { 1 });
                             } else {
                                 act.put_string("action", "surfaced");
                             }

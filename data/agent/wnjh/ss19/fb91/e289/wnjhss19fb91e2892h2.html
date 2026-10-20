@@ -131,6 +131,13 @@
             <label class="lbl">acts/hr <input class="ag-drive" type="number" min="0" value="4"></label>
             <button class="ag-mind-btn" data-act="set-drive">set</button>
           </span>
+          <span class="ag-btnrow">
+            <button class="ag-mind-btn" data-act="plan-toggle"
+              title="toggle PLAN_AUTONOMY - when armed the executive may take ONE bounded journaled step per drive unit on ACCEPTED kb.plan items (default off = plan items are only surfaced)">plan autonomy…</button>
+            <label class="lbl">max steps/item <input class="ag-plansteps" type="number" min="1" value="20"></label>
+            <button class="ag-mind-btn" data-act="set-plansteps"
+              title="set MAX_PLAN_STEPS - the convergence guard: how many autonomous steps one accepted plan item may take before it needs human re-approval">set</button>
+          </span>
           <pre class="ag-mind-note lbl" data-note="loop"></pre>
         </div>
         <div class="ag-card" data-card="judge">
