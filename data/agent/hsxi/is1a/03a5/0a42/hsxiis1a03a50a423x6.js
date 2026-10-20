@@ -7,7 +7,7 @@
 var me = this;
 var ME = document.getElementById(me.UUID);
 
-var LIFECYCLES = ['proposed', 'accepted', 'in-progress', 'done', 'abandoned'];
+var LIFECYCLES = ['proposed', 'accepted', 'in-progress', 'completed', 'done', 'abandoned'];
 var boardHash = '';
 var dragClaim = null;
 
