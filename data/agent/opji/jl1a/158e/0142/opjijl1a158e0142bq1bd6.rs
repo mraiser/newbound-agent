@@ -127,25 +127,49 @@ if prior >= cap {
 }
 out.put_int("steps_taken", prior);
 out.put_int("max_steps", cap);
-// (2) ELIGIBILITY: a structured step field, not prose.
-if !e.has("step") {
-    out.put_string("status", "ok");
-    out.put_string("action", "surfaced");
-    out.put_string("msg", "no structured `step` field ({lib,ctl,cmd,args}) - pure-prose intent is not machine-actionable in v1");
-    return out;
-}
-let step = match e.try_get_object("step") {
-    Ok(s) => s,
-    Err(_) => {
-        out.put_string("status", "err");
-        out.put_string("msg", "`step` field is present but not an object {lib,ctl,cmd,args}");
-        return out;
+// (2) THE GOAL: the item's claim + detail is the objective. v1 demanded a
+// pre-authored structured `step` {lib,ctl,cmd,args} and refused pure prose
+// (surfaced, never executed) - but a pre-authored step only captures work
+// already so well-understood it's basically done, so the ladder was empty for
+// every novel item. The owner (2026-... ) ruled the ban on executive reasoning
+// was a lobotomy, not a guardrail: the EXECUTIVE reasons about the MEANS via
+// tool_loop; the human's `accepted` tag owns the WHAT (intent). The guardrails
+// live in the substrate (per-call mutating gate, TOOL_BUDGET, MAX_PLAN_STEPS,
+// this journaled step_log), NOT in refusing to think.
+let goal = claim.clone();
+let detail = e.try_get_string("detail").unwrap_or_default();
+let mut prior_steps = String::new();
+if e.has("step_log") {
+    if let Ok(sl) = e.try_get_array("step_log") {
+        let n = sl.len();
+        if n > 0 {
+            let mut parts = Vec::new();
+            // most recent few, so the loop knows what it already tried
+            let starti = if n > 4 { n - 4 } else { 0 };
+            for i in starti..n {
+                if let Ok(le) = sl.try_get_object(i) {
+                    let home = le.try_get_string("home").unwrap_or_default();
+                    let ok = le.try_get_boolean("ok").unwrap_or(false);
+                    let res = le.try_get_string("result").unwrap_or_default();
+                    let res: String = res.chars().take(200).collect();
+                    parts.push(format!("- [{}] {} -> {}", if ok { "ok" } else { "err" }, home, res));
+                }
+            }
+            prior_steps = parts.join("\n");
+        }
     }
-};
-if !step.has("lib") || !step.has("ctl") || !step.has("cmd") {
-    out.put_string("status", "err");
-    out.put_string("msg", "`step` must name lib, ctl, and cmd");
-    return out;
+}
+let mut prompt = format!(
+    "You are the executive's plan-step engine. Advance ONE accepted plan item toward completion. \
+Think, then act via the available tools. Prefer a single concrete, verifiable increment over a sweep. \
+If the item is already complete, verify it and say DONE. If you are blocked, say what you need.\n\n\
+GOAL: {}\n", goal);
+if !detail.trim().is_empty() {
+    let d: String = detail.chars().take(3000).collect();
+    prompt.push_str(&format!("\nDETAIL:\n{}\n", d));
+}
+if !prior_steps.is_empty() {
+    prompt.push_str(&format!("\nPRIOR STEPS (do not repeat without new information):\n{}\n", prior_steps));
 }
 // (6) STALE LOOP: re-check the source pointer's hash before acting.
 if e.has("source") {
@@ -168,22 +192,22 @@ if e.has("source") {
         }
     }
 }
-// Execute the ONE bounded step, panic-contained.
-let slib = step.get_string("lib");
-let sctl = step.get_string("ctl");
-let scmd = step.get_string("cmd");
-let sargs = if step.has("args") {
-    match step.try_get_object("args") { Ok(a) => a, Err(_) => DataObject::new() }
-} else { DataObject::new() };
+// Reason + act, panic-contained: ONE bounded autonomous turn via tool_loop.
 let now = flowlang::flowlang::system::time::time();
 let ran = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-    let cmd = flowlang::command::Command::lookup(&slib, &sctl, &scmd);
-    cmd.execute(sargs.deep_copy())
+    let cmd = flowlang::command::Command::lookup("agent", "llm", "tool_loop");
+    let mut a = DataObject::new();
+    a.put_string("prompt", &prompt);
+    cmd.execute(a)
 }));
 let (ok_step, result_json) = match ran {
-    Ok(Ok(rr)) => (true, rr.to_string()),
+    Ok(Ok(rr)) => {
+        let answer = rr.try_get_string("msg").unwrap_or_default();
+        let answer = if answer.is_empty() { rr.to_string() } else { answer };
+        (true, answer)
+    }
     Ok(Err(pe)) => (false, format!("{{\"error\":\"{}\"}}", esc(&format!("{:?}", pe)))),
-    Err(_) => (false, "{\"error\":\"panic during step execution\"}".to_string()),
+    Err(_) => (false, "{\"error\":\"panic during executive reasoning\"}".to_string()),
 };
 // (5) Append to the entry's step_log and write the facet back journaled.
 let mut log = if e.has("step_log") {
@@ -191,7 +215,7 @@ let mut log = if e.has("step_log") {
 } else { DataArray::new() };
 let mut entry_log = DataObject::new();
 entry_log.put_int("time", now);
-entry_log.put_string("home", &format!("{}.{}.{}", slib, sctl, scmd));
+entry_log.put_string("home", "agent.llm.tool_loop");
 entry_log.put_boolean("ok", ok_step);
 entry_log.put_string("result", &result_json);
 entry_log.put_string("author", "executive");
