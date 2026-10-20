@@ -151,20 +151,31 @@ if e.has("step_log") {
     if let Ok(sl) = e.try_get_array("step_log") {
         let n = sl.len();
         if n > 0 {
+            // Feed the LATEST [budget checkpoint] IN FULL - it is the rolling
+            // thread the next turn resumes from, and truncating it reintroduces
+            // the amnesia we just fixed (the checkpoint is length-bounded at
+            // generation, ~1500 chars, by tool_loop's summary prompt - so the
+            // bound lives at the source, not a blind cut here). Ordinary steps
+            // stay terse one-liners (200 chars); older checkpoints are
+            // superseded by the newest and drop out.
+            let mut latest_ckpt: i64 = -1;
+            for i in 0..n {
+                if let Ok(le) = sl.try_get_object(i) {
+                    if le.try_get_string("result").unwrap_or_default().starts_with("[budget checkpoint") {
+                        latest_ckpt = i as i64;
+                    }
+                }
+            }
             let mut parts = Vec::new();
-            // most recent few, so the loop knows what it already tried. A
-            // [budget checkpoint] entry carries the model's own PROGRESS/NEXT/
-            // BLOCKERS summary - feed it back more fully (800 chars) so the
-            // next tick RESUMES where the last ran out of budget instead of
-            // restarting from scratch; ordinary steps stay terse (200).
-            let starti = if n > 4 { n - 4 } else { 0 };
-            for i in starti..n {
+            for i in 0..n {
                 if let Ok(le) = sl.try_get_object(i) {
                     let home = le.try_get_string("home").unwrap_or_default();
                     let ok = le.try_get_boolean("ok").unwrap_or(false);
                     let res = le.try_get_string("result").unwrap_or_default();
-                    let cap = if res.starts_with("[budget checkpoint") { 800 } else { 200 };
-                    let res: String = res.chars().take(cap).collect();
+                    let is_ckpt = res.starts_with("[budget checkpoint");
+                    let keep = (i as i64 == latest_ckpt) || (!is_ckpt && (i as i64) >= n as i64 - 3);
+                    if !keep { continue; }
+                    let res: String = if i as i64 == latest_ckpt { res } else { res.chars().take(200).collect() };
                     parts.push(format!("- [{}] {} -> {}", if ok { "ok" } else { "err" }, home, res));
                 }
             }
