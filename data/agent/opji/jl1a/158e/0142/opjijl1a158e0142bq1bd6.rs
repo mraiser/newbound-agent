@@ -291,16 +291,18 @@ if !write_ok {
     if pw.has("msg") { out.put_string("write_msg", &pw.get_string("msg")); }
     return out;
 }
-// COMPLETION TRANSITION: the step_log is journaled; now act on the model's
-// declared status. This is what ends the loop - without it a finished item
-// stays `accepted` and gets re-proved at full budget every 15 min forever.
-// Trust boundary (owner): `accepted` is human-only, but `done` is a VERIFIED
-// claim - the model must have verified, and the transition rides the same
-// journaled move_item a human drag uses (revertible, base-hashed). DONE ->
-// move_item(done): epistemic_work then drops it, the loop ENDS. BLOCKED ->
-// surface once; the item stays accepted but the next tick's prompt carries the
-// blocker so the agent addresses it instead of re-proving. IN_PROGRESS ->
-// nothing; normal continuation under MAX_PLAN_STEPS.
+// COMPLETION TRANSITION: the step_log (and, on DONE, the done tag) is journaled
+// in the single atomic write above; now report the model's declared status.
+// This is what ends the loop - without it a finished item stays `accepted` and
+// gets re-proved at full budget every 15 min forever. Trust boundary (owner):
+// `accepted` is human-only, but `done` is a VERIFIED claim - the model must
+// have produced a VERIFIED: evidence line (a bare DONE is parsed as
+// IN_PROGRESS by tool_loop), and the transition rides the same journaled,
+// base-hashed write a human kanban drag uses (revertible). DONE -> done tag ->
+// epistemic_work drops it, the loop ENDS. BLOCKED -> surface once; the item
+// stays accepted but the blocker rides the next prompt so the agent addresses
+// it instead of re-proving. IN_PROGRESS -> normal continuation under
+// MAX_PLAN_STEPS.
 out.put_string("loop_status", &tl_status);
 out.put_string("status", "ok");
 if tl_status == "DONE" {
