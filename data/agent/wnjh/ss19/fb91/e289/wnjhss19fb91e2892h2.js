@@ -1242,7 +1242,7 @@ async function init(host) {
     }, 5000);
     const kv = (n) => host.querySelector(`[data-kv="${n}"]`);
 
-    const [exR, snR, svR, trR, slR, hvR, cmR] = await Promise.all([
+    const [exR, snR, svR, trR, slR, hvR, cmR, gsR] = await Promise.all([
       invoke("agent", "executive", "status", {}),
       invoke("agent", "sensor", "status", {}),
       invoke("agent", "model", "service_status", {}),
@@ -1250,11 +1250,23 @@ async function init(host) {
       invoke("agent", "executive", "salience_log", {}),
       invoke("agent", "model", "harvest_report", { window_days: 7 }),
       invoke("agent", "committer", "status", {}),
+      invoke("agent", "model", "get_settings", {}),
     ]);
     const ex = mEnv(exR) || {}, sn = mEnv(snR) || {}, sv = mEnv(svR) || {};
     const tr = mEnv(trR) || {}, sl = mEnv(slR) || {};
     const hv = mEnv(hvR) || {};
     const cm = mEnv(cmR) || {};
+    // plan autonomy (kb.plan GATED plan-item autonomy): read the LIVE effective
+    // values off get_settings - PLAN_AUTONOMY gates the executive stepping
+    // ACCEPTED items; MAX_PLAN_STEPS is the per-item convergence guard.
+    const gs = mEnv(gsR) || {};
+    const gsVal = (k, dflt) => {
+      const row = (gs.settings || []).find((s) => s.key === k);
+      const v = row && String(row.value || "").trim();
+      return v || dflt;
+    };
+    const planAutonomyOn = ["on", "true", "1", "yes"].includes(gsVal("PLAN_AUTONOMY", "off").toLowerCase());
+    const maxPlanSteps = gsVal("MAX_PLAN_STEPS", "20");
 
     // the harvest - what the week grew (H6). Claims by domain, the
     // banks, the garden's acts, the syspack gauge - and the owner's
@@ -1320,6 +1332,7 @@ async function init(host) {
     kv("loop").innerHTML =
       mChip(ex.running ? `executive ${ex.phase || "on"}` : "executive stopped", ex.running ? "ok" : "off") +
       mChip(sn.running ? "sensor on" : "sensor stopped", sn.running ? "ok" : "off") +
+      mChip(planAutonomyOn ? "plan autonomy ARMED" : "plan autonomy off", planAutonomyOn ? "warn" : "off") +
       mKv([
         ["perceived", ex.perceived_total ?? "—"],
         ["salience calls", ex.salience_calls ?? "—"],
@@ -1328,6 +1341,7 @@ async function init(host) {
         ["unparseable verdicts", ex.unparsed_verdicts ?? 0, (ex.unparsed_verdicts ?? 0) > 0 ? "warn" : ""],
         ["drive (acts/hr)", ex.drive ?? "—"],
         ["epistemic acts", ex.acts_total ?? "—"],
+        ["plan steps", `${ex.plan_steps ?? 0} (cap ${maxPlanSteps}/item)`],
         ["steer fast / deep", `${ex.fast_skips ?? 0} / ${ex.deep_orients ?? 0}`],
         ["last verdict", ctx.salience != null
           ? `${ctx.salience}${ctx.steer ? ` [${ctx.steer}]` : ""} — ${(ctx.salience_why || "").slice(0, 56)}`
@@ -1335,6 +1349,9 @@ async function init(host) {
       ]);
     host.querySelector('[data-act="exec-toggle"]').textContent = ex.running ? "stop executive" : "start executive";
     host.querySelector('[data-act="sensor-toggle"]').textContent = sn.running ? "stop sensor" : "start sensor";
+    host.querySelector('[data-act="plan-toggle"]').textContent = planAutonomyOn ? "stop plan autonomy" : "start plan autonomy";
+    if (document.activeElement !== host.querySelector(".ag-plansteps"))
+      host.querySelector(".ag-plansteps").value = maxPlanSteps;
 
     // the judge
     const mode = sv.mode || "down";
@@ -1535,6 +1552,25 @@ async function init(host) {
       if (isNaN(n) || n < 0) { mindNote("loop", "drive must be a number ≥ 0", true); return; }
       const r = mEnv(await invoke("agent", "executive", "set_drive", { acts_per_hour: n }));
       mindNote("loop", r && r.status === "ok" ? `drive set to ${n}/hr` : "set_drive failed", !(r && r.status === "ok"));
+      loadMind();
+    });
+    act("plan-toggle").addEventListener("click", async () => {
+      const gs = mEnv(await invoke("agent", "model", "get_settings", {}));
+      const row = ((gs && gs.settings) || []).find((s) => s.key === "PLAN_AUTONOMY");
+      const cur = row ? String(row.value || "").trim().toLowerCase() : "off";
+      const on = ["on", "true", "1", "yes"].includes(cur);
+      // armed -> disarm (set off); disarmed -> arm (set on). set_setting updates
+      // the LIVE globals + persists botd.properties.
+      const next = on ? "off" : "on";
+      const r = mEnv(await invoke("agent", "model", "set_setting", { key: "PLAN_AUTONOMY", value: next }));
+      mindNote("loop", r && r.status === "ok" ? `plan autonomy ${next}` : "set_setting failed", !(r && r.status === "ok"));
+      loadMind();
+    });
+    act("set-plansteps").addEventListener("click", async () => {
+      const n = parseInt(host.querySelector(".ag-plansteps").value, 10);
+      if (isNaN(n) || n < 1) { mindNote("loop", "max steps must be a number ≥ 1", true); return; }
+      const r = mEnv(await invoke("agent", "model", "set_setting", { key: "MAX_PLAN_STEPS", value: String(n) }));
+      mindNote("loop", r && r.status === "ok" ? `max plan steps set to ${n}/item` : "set_setting failed", !(r && r.status === "ok"));
       loadMind();
     });
     act("commit-toggle").addEventListener("click", async () => {
