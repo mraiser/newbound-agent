@@ -152,14 +152,19 @@ if e.has("step_log") {
         let n = sl.len();
         if n > 0 {
             let mut parts = Vec::new();
-            // most recent few, so the loop knows what it already tried
+            // most recent few, so the loop knows what it already tried. A
+            // [budget checkpoint] entry carries the model's own PROGRESS/NEXT/
+            // BLOCKERS summary - feed it back more fully (800 chars) so the
+            // next tick RESUMES where the last ran out of budget instead of
+            // restarting from scratch; ordinary steps stay terse (200).
             let starti = if n > 4 { n - 4 } else { 0 };
             for i in starti..n {
                 if let Ok(le) = sl.try_get_object(i) {
                     let home = le.try_get_string("home").unwrap_or_default();
                     let ok = le.try_get_boolean("ok").unwrap_or(false);
                     let res = le.try_get_string("result").unwrap_or_default();
-                    let res: String = res.chars().take(200).collect();
+                    let cap = if res.starts_with("[budget checkpoint") { 800 } else { 200 };
+                    let res: String = res.chars().take(cap).collect();
                     parts.push(format!("- [{}] {} -> {}", if ok { "ok" } else { "err" }, home, res));
                 }
             }
