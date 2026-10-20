@@ -209,8 +209,17 @@ let ran = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
 }));
 let (ok_step, result_json) = match ran {
     Ok(Ok(rr)) => {
-        let answer = rr.try_get_string("msg").unwrap_or_default();
-        let answer = if answer.is_empty() { rr.to_string() } else { answer };
+        // Log the FINAL ANSWER, bounded - never the full messages transcript
+        // (a 143KB tool_loop dump per step would bloat kb.plan and poison every
+        // later read). FLAT may nest under "a"; pull msg from either level.
+        let mut answer = rr.try_get_string("msg").unwrap_or_default();
+        if answer.is_empty() {
+            if let Ok(a) = rr.try_get_object("a") {
+                answer = a.try_get_string("msg").unwrap_or_default();
+            }
+        }
+        if answer.is_empty() { answer = rr.to_string(); }
+        let answer: String = answer.chars().take(1500).collect();
         (true, answer)
     }
     Ok(Err(pe)) => (false, format!("{{\"error\":\"{}\"}}", esc(&format!("{:?}", pe)))),
