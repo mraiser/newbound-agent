@@ -287,8 +287,13 @@ for lib in libs {
                     let toks: Vec<&str> = tags.split(',').map(|t| t.trim()).collect();
                     let has_tag = |s: &str| toks.iter().any(|t| *t == s);
                     if !has_tag("done") && !has_tag("abandoned") {
-                        let (pr, stage) = if has_tag("in-progress") { (2i64, "in-progress") }
-                            else if has_tag("accepted") { (2i64, "accepted") }
+                        // Decoupled (P-b follow-up): an `accepted` plan item is a SIGNED WORK
+                        // ORDER - the human re-authorization - so it must never be held hostage
+                        // behind same-priority `review` items (seniority tie-break starved it).
+                        // Give accepted/in-progress their own lane ABOVE review; `proposed`
+                        // (un-approved intent) stays BELOW review, surfaced only.
+                        let (pr, stage) = if has_tag("accepted") { (4i64, "accepted") }
+                            else if has_tag("in-progress") { (3i64, "in-progress") }
                             else { (1i64, "proposed") };
                         let mut it = DataObject::new();
                         it.put_string("kind", "plan");
