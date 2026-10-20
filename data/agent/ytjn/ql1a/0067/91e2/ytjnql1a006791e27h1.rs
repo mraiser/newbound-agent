@@ -333,6 +333,16 @@ if !draft_conf_ok {
 }
 
 let ctlid = lookup_ctl_id(&lib, &domain);
+// kb.plan is a WORK BOARD, not a belief domain. Adjudication rewrites the whole
+// facet against a canonical belief-field model (claim/detail/tags/...) that
+// knows nothing of lifecycle tokens or step_log - running it here STRIPS the
+// lifecycle tag (accepted/in-progress/completed/done) and WIPES step_log, which
+// is exactly what clobbered the floweditor3d item out of `in-progress` and left
+// it gate-refused (observed live, 2026-10-21). Plan entries move only via
+// agent.plan.move_item / step_item. Refuse, never clobber.
+if lib == "kb" && domain == "plan" {
+    return err("kb.plan is a work board, not a belief domain - adjudication would destroy lifecycle tags and step_log. Plan entries move via agent.plan.move_item / step_item, not memory adjudication.".to_string());
+}
 let store = DataStore::new();
 if !store.exists(&lib, &ctlid) {
     return err(format!("Domain control '{}' not found in library '{}'", domain, lib));
