@@ -33,6 +33,32 @@ fn esc(s: &str) -> String {
     }
     out
 }
+// MAX_PLAN_STEPS (convergence guard): the most autonomous steps the agent may
+// take on ONE accepted plan item before it must hand back to a human for
+// re-approval. This is deliberately SEPARATE from TOOL_BUDGET: that is a
+// per-turn chatTurn round limit (conversational tool calls); this is a
+// per-item bound on background initiative. Read from agent runtime settings;
+// absent, non-numeric, or <=0 falls back to 20, capped at 1000 as a guard
+// (same shape as get_tool_budget). Read live so the owner can tune it without
+// a restart.
+fn max_plan_steps() -> i64 {
+    let mut n: i64 = 20;
+    let g = flowlang::datastore::DataStore::globals();
+    if let Ok(sys) = g.try_get_object("system") {
+        if let Ok(apps) = sys.try_get_object("apps") {
+            if let Ok(agent) = apps.try_get_object("agent") {
+                if let Ok(rt) = agent.try_get_object("runtime") {
+                    if let Ok(v) = rt.try_get_string("MAX_PLAN_STEPS") {
+                        if let Ok(p) = v.trim().parse::<i64>() {
+                            if p > 0 { n = p.min(1000); }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    n
+}
 let mut out = DataObject::new();
 let api = crate::api::new();
 let r = api.dev.code.read_control_facet("kb".to_string(), "plan".to_string(), "memory".to_string());
@@ -81,6 +107,26 @@ if !has_tag("accepted") {
     out.put_string("action", "gated");
     return out;
 }
+// (1b) CONVERGENCE GUARD: bound the autonomous steps on this one item. The
+// count of prior steps is the entry's step_log length; at/over MAX_PLAN_STEPS
+// the agent stops and hands the item back to a human (re-accept via
+// move_item, which resets an exhausted log). This runs BEFORE eligibility so
+// an exhausted item reports needs_reapproval regardless of its step field -
+// the guard is about the item's autonomy budget, not its actionability.
+let prior = if e.has("step_log") {
+    match e.try_get_array("step_log") { Ok(a) => a.len() as i64, Err(_) => 0 }
+} else { 0 };
+let cap = max_plan_steps();
+if prior >= cap {
+    out.put_string("status", "ok");
+    out.put_string("action", "needs_reapproval");
+    out.put_int("steps_taken", prior);
+    out.put_int("max_steps", cap);
+    out.put_string("msg", "convergence guard: this item has reached MAX_PLAN_STEPS - a human must re-approve (re-accept) it before the agent steps it again");
+    return out;
+}
+out.put_int("steps_taken", prior);
+out.put_int("max_steps", cap);
 // (2) ELIGIBILITY: a structured step field, not prose.
 if !e.has("step") {
     out.put_string("status", "ok");
