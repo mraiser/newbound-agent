@@ -220,7 +220,7 @@ loop {
         messages.push_object({
             let mut m = DataObject::new();
             m.put_string("role", "user");
-            m.put_string("content", "You are OUT of tool budget for this turn. Do NOT call any more tools. Reply with ONLY plain text, no tool calls - a checkpoint another run can resume from, in exactly this shape:\nPROGRESS: what you learned, decided, and changed (be specific: files/commands touched, key findings).\nNEXT: the single next action to take.\nBLOCKERS: anything preventing completion, or 'none'.");
+            m.put_string("content", "You are OUT of tool budget for this turn. Do NOT call any more tools. Reply with ONLY plain text, no tool calls - a checkpoint another run can resume from, in exactly this shape:\nPROGRESS: what you learned, decided, and changed (be specific: files/commands touched, key findings).\nNEXT: the single next action to take.\nBLOCKERS: anything preventing completion, or 'none'.\nKeep the WHOLE checkpoint under ~1500 characters - this is the only context the next turn gets, so every word must earn its place. Compress; do not truncate mid-thought.");
             m
         });
         let sum = chat_llm(messages.clone(), tools.clone());
