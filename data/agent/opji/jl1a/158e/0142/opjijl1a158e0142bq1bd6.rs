@@ -186,7 +186,11 @@ if e.has("step_log") {
 let mut prompt = format!(
     "You are the executive's plan-step engine. Advance ONE accepted plan item toward completion. \
 Think, then act via the available tools. Prefer a single concrete, verifiable increment over a sweep. \
-If the item is already complete, verify it and say DONE. If you are blocked, say what you need.\n\n\
+When you finish, END your reply with a status line in EXACTLY this form (last line, no tool call after):\n\
+STATUS: DONE  - the item is complete AND you verified it against the goal with a concrete check you actually ran (build/invoke/parity/test). Name that check on the line above, e.g. 'VERIFIED: <the exact command you ran and its result>'. A DONE with no VERIFIED evidence is treated as IN_PROGRESS.\n\
+STATUS: IN_PROGRESS  - you made progress but the item is not done yet.\n\
+STATUS: BLOCKED  - you cannot proceed; say what you need above.\n\
+Only claim DONE when you actually verified completion against the goal, not when you merely believe it.\n\n\
 GOAL: {}\n", goal);
 if !detail.trim().is_empty() {
     let d: String = detail.chars().take(3000).collect();    prompt.push_str(&format!("\nDETAIL:\n{}\n", d));
@@ -223,23 +227,26 @@ let ran = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
     a.put_string("prompt", &prompt);
     cmd.execute(a)
 }));
-let (ok_step, result_json) = match ran {
+let (ok_step, result_json, tl_status) = match ran {
     Ok(Ok(rr)) => {
         // Log the FINAL ANSWER, bounded - never the full messages transcript
         // (a 143KB tool_loop dump per step would bloat kb.plan and poison every
-        // later read). FLAT may nest under "a"; pull msg from either level.
+        // later read). FLAT may nest under "a"; pull msg + status from either.
         let mut answer = rr.try_get_string("msg").unwrap_or_default();
-        if answer.is_empty() {
+        let mut st = rr.try_get_string("status").unwrap_or_default();
+        if answer.is_empty() || st.is_empty() {
             if let Ok(a) = rr.try_get_object("a") {
-                answer = a.try_get_string("msg").unwrap_or_default();
+                if answer.is_empty() { answer = a.try_get_string("msg").unwrap_or_default(); }
+                if st.is_empty() { st = a.try_get_string("status").unwrap_or_default(); }
             }
         }
         if answer.is_empty() { answer = rr.to_string(); }
+        if st.is_empty() { st = "IN_PROGRESS".to_string(); }
         let answer: String = answer.chars().take(1500).collect();
-        (true, answer)
+        (true, answer, st)
     }
-    Ok(Err(pe)) => (false, format!("{{\"error\":\"{}\"}}", esc(&format!("{:?}", pe)))),
-    Err(_) => (false, "{\"error\":\"panic during executive reasoning\"}".to_string()),
+    Ok(Err(pe)) => (false, format!("{{\"error\":\"{}\"}}", esc(&format!("{:?}", pe))), "ERROR".to_string()),
+    Err(_) => (false, "{\"error\":\"panic during executive reasoning\"}".to_string(), "ERROR".to_string()),
 };
 // (5) Append to the entry's step_log and write the facet back journaled.
 let mut log = if e.has("step_log") {
@@ -253,11 +260,29 @@ entry_log.put_string("result", &result_json);
 entry_log.put_string("author", "executive");
 log.push_object(entry_log);
 e.put_array("step_log", log);
+// COMPLETION TRANSITION, ATOMIC: on a VERIFIED DONE, apply the lifecycle change
+// (strip `accepted`, add `done`) to the SAME entry before the ONE write below,
+// so the step_log and the done tag land in a single journaled patch - no
+// two-write window for stale_base to slip through (owner: a finished item must
+// not stay accepted and get re-proved at full budget every 15 min). The trust
+// boundary holds: `accepted` is human-only, `done` is a verified claim, and the
+// transition is journaled + revertible exactly like a human's kanban drag.
 let short: String = claim.chars().take(50).collect();
-let label = format!("plan step: '{}' -> {}", short, if ok_step { "ok" } else { "err" });
+let mut label = format!("plan step: '{}' -> {}", short, if ok_step { "ok" } else { "err" });
+if tl_status == "DONE" {
+    let lifecycles = ["proposed","accepted","in-progress","done","abandoned"];
+    let tags = e.try_get_string("tags").unwrap_or_default();
+    let mut kept: Vec<String> = tags.split(',')
+        .map(|t| t.trim().to_string())
+        .filter(|t| !t.is_empty() && !lifecycles.contains(&t.as_str()))
+        .collect();
+    kept.push("done".to_string());
+    e.put_string("tags", &kept.join(","));
+    label = format!("plan done (verified): '{}'", short);
+}
 let pw = api.dev.code.patch_control_facet(
     "kb".to_string(), "plan".to_string(), "memory".to_string(),
-    "".to_string(), arr.to_string(), hash.clone(), label, "executive".to_string(), nn_sessionid);
+    "".to_string(), arr.to_string(), hash.clone(), label, "executive".to_string(), nn_sessionid.clone());
 let write_ok = pw.try_get_boolean("ok").unwrap_or(false)
     || pw.try_get_string("status").map(|s| s == "ok").unwrap_or(false);
 if !write_ok {
@@ -266,8 +291,30 @@ if !write_ok {
     if pw.has("msg") { out.put_string("write_msg", &pw.get_string("msg")); }
     return out;
 }
+// COMPLETION TRANSITION: the step_log is journaled; now act on the model's
+// declared status. This is what ends the loop - without it a finished item
+// stays `accepted` and gets re-proved at full budget every 15 min forever.
+// Trust boundary (owner): `accepted` is human-only, but `done` is a VERIFIED
+// claim - the model must have verified, and the transition rides the same
+// journaled move_item a human drag uses (revertible, base-hashed). DONE ->
+// move_item(done): epistemic_work then drops it, the loop ENDS. BLOCKED ->
+// surface once; the item stays accepted but the next tick's prompt carries the
+// blocker so the agent addresses it instead of re-proving. IN_PROGRESS ->
+// nothing; normal continuation under MAX_PLAN_STEPS.
+out.put_string("loop_status", &tl_status);
 out.put_string("status", "ok");
-out.put_string("action", if ok_step { "stepped" } else { "step_failed" });
+if tl_status == "DONE" {
+    // The done tag was applied atomically in the write above; epistemic_work
+    // now drops the item and the loop ENDS.
+    out.put_string("action", if write_ok { "completed" } else { "stepped" });
+    out.put_boolean("moved_to_done", write_ok);
+} else if tl_status == "BLOCKED" {
+    // Surface once; the blocker rides the next prompt so the agent addresses it
+    // rather than re-proving. Item stays accepted.
+    out.put_string("action", "blocked");
+} else {
+    out.put_string("action", if ok_step { "stepped" } else { "step_failed" });
+}
 out.put_boolean("ok", ok_step);
 out.put_string("home", "agent.llm.tool_loop");
 out.put_string("result", &result_json);
