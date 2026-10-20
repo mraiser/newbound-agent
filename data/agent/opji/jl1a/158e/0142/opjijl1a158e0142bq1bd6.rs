@@ -105,13 +105,19 @@ if idx < 0 {
     return out;
 }
 let mut e = arr.get_object(idx as usize);
-// (1) GATE on the accepted lifecycle token.
+// (1) GATE: `accepted` OR `in-progress`. Both are human-authorized - an item
+// must have been `accepted` (a human act) before it could ever reach
+// `in-progress`, so the agent never self-promotes into either. `accepted` =
+// signed but not yet started; `in-progress` = the agent is actively working it.
+// proposed stays human-only; completed/done/abandoned are settled (terminal for
+// the loop) and are refused.
 let tags = e.try_get_string("tags").unwrap_or_default().to_lowercase();
 let toks: Vec<&str> = tags.split(',').map(|t| t.trim()).collect();
 let has_tag = |s: &str| toks.iter().any(|t| *t == s);
-if !has_tag("accepted") {
+let was_accepted = has_tag("accepted");
+if !was_accepted && !has_tag("in-progress") {
     out.put_string("status", "err");
-    out.put_string("msg", "gate: only `accepted` plan items are steppable - proposed stays human-only and the agent never self-promotes");
+    out.put_string("msg", "gate: only `accepted` or `in-progress` plan items are steppable - proposed stays human-only and the agent never self-promotes");
     out.put_string("action", "gated");
     return out;
 }
@@ -260,25 +266,33 @@ entry_log.put_string("result", &result_json);
 entry_log.put_string("author", "executive");
 log.push_object(entry_log);
 e.put_array("step_log", log);
-// COMPLETION TRANSITION, ATOMIC: on a VERIFIED DONE, apply the lifecycle change
-// (strip `accepted`, add `done`) to the SAME entry before the ONE write below,
-// so the step_log and the done tag land in a single journaled patch - no
-// two-write window for stale_base to slip through (owner: a finished item must
-// not stay accepted and get re-proved at full budget every 15 min). The trust
-// boundary holds: `accepted` is human-only, `done` is a verified claim, and the
-// transition is journaled + revertible exactly like a human's kanban drag.
+// LIFECYCLE TRANSITIONS, ATOMIC with the step_log write (one journaled patch,
+// no two-write stale_base window). Both move the item within the agent's
+// VERIFIED authority; `done` (human-confirmed) stays human-only:
+//   accepted -> in-progress : the first real step - the board now tells the
+//     truth "the agent is on it", not the lie "approved but untouched".
+//   * -> completed : a VERIFIED DONE (VERIFIED: evidence required) - the agent
+//     finished, but a HUMAN hasn't seen it yet. Terminal for the loop (no
+//     re-run), visibly awaiting confirmation. Crossing completed -> done is a
+//     human kanban act, the same trust boundary as `accepted` itself.
 let short: String = claim.chars().take(50).collect();
 let mut label = format!("plan step: '{}' -> {}", short, if ok_step { "ok" } else { "err" });
-if tl_status == "DONE" {
-    let lifecycles = ["proposed","accepted","in-progress","done","abandoned"];
+let lifecycles = ["proposed","accepted","in-progress","completed","done","abandoned"];
+let mut set_lifecycle = |e: &mut DataObject, to: &str| {
     let tags = e.try_get_string("tags").unwrap_or_default();
     let mut kept: Vec<String> = tags.split(',')
         .map(|t| t.trim().to_string())
         .filter(|t| !t.is_empty() && !lifecycles.contains(&t.as_str()))
         .collect();
-    kept.push("done".to_string());
+    kept.push(to.to_string());
     e.put_string("tags", &kept.join(","));
-    label = format!("plan done (verified): '{}'", short);
+};
+if tl_status == "DONE" {
+    set_lifecycle(&mut e, "completed");
+    label = format!("plan completed (verified, awaiting review): '{}'", short);
+} else if was_accepted {
+    set_lifecycle(&mut e, "in-progress");
+    label = format!("plan started (in-progress): '{}'", short);
 }
 let pw = api.dev.code.patch_control_facet(
     "kb".to_string(), "plan".to_string(), "memory".to_string(),
@@ -306,13 +320,14 @@ if !write_ok {
 out.put_string("loop_status", &tl_status);
 out.put_string("status", "ok");
 if tl_status == "DONE" {
-    // The done tag was applied atomically in the write above; epistemic_work
-    // now drops the item and the loop ENDS.
-    out.put_string("action", if write_ok { "completed" } else { "stepped" });
-    out.put_boolean("moved_to_done", write_ok);
+    // The `completed` tag was applied atomically in the write above - the agent
+    // finished with verified evidence, epistemic_work drops it, the loop ENDS,
+    // and the item now awaits HUMAN confirmation (completed -> done).
+    out.put_string("action", "completed");
+    out.put_boolean("moved_to_completed", write_ok);
 } else if tl_status == "BLOCKED" {
     // Surface once; the blocker rides the next prompt so the agent addresses it
-    // rather than re-proving. Item stays accepted.
+    // rather than re-proving. Item stays in-progress.
     out.put_string("action", "blocked");
 } else {
     out.put_string("action", if ok_step { "stepped" } else { "step_failed" });
