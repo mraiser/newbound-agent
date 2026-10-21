@@ -355,7 +355,7 @@ if claim.is_empty() {
     return err("entry.claim must not be empty".to_string());
 }
 entry.put_string("claim", &claim);
-for k in ["detail", "tags", "confidence"] {
+for k in ["detail", "tags", "confidence", "parent"] {
     if entry.has(k) && entry.try_get_string(k).is_err() {
         return err(format!("entry.{} must be a string", k));
     }
@@ -484,9 +484,22 @@ let ctlid = lookup_ctl_id(&lib, &domain);
 // deposit. The archivist's sweep kept filing session-observations and
 // just-fixed-bug reports here (observed live 2026-10-21), polluting the board
 // and, via adjudicate, clobbering lifecycle/step_log. Route facts to a
-// reference domain or the month bucket; refuse plan deposits here.
-if lib == "kb" && domain == "plan" {
-    return err("kb.plan is a work board, not a memory domain - file facts into a reference domain (platform-api/workflow/frontend) or the month bucket. New plan items are created by a human or agent.plan.add_item, not by memory deposit.".to_string());
+// reference domain or the month bucket.
+//
+// The gate is INTENT, not the destination (owner, 2026-10): admit only a
+// GENUINE TODO - one that came in through the todo front-door and is marked
+// `work:true` by agent.plan.add_item. Insights/sweep deposits carry no such
+// flag, so they are still refused here. This keeps the archivist from adding
+// insights as tasks while un-breaking agent.plan.add_item, which the blunt
+// domain check had been rejecting along with the sweep.
+let is_plan = lib == "kb" && domain == "plan";
+let is_genuine_todo = entry.try_get_boolean("work").unwrap_or(false);
+if is_plan && !is_genuine_todo {
+    return err("kb.plan is a work board, not a memory domain - file facts into a reference domain (platform-api/workflow/frontend) or the month bucket. New plan items are created by a human or agent.plan.add_item (which marks them work:true), not by memory deposit.".to_string());
+}
+if is_plan {
+    // Genuine todo admitted. The `work:true` marker is accurate board metadata
+    // (this IS a work item) and self-describing, so it rides the entry.
 }
 let store = DataStore::new();
 if !store.exists(&lib, &ctlid) {
