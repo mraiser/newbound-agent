@@ -298,7 +298,7 @@ if claim.is_empty() {
     return err("entry.claim must not be empty".to_string());
 }
 entry.put_string("claim", &claim);
-for k in ["detail", "tags", "confidence"] {
+for k in ["detail", "tags", "confidence", "parent"] {
     if entry.has(k) && entry.try_get_string(k).is_err() {
         return err(format!("entry.{} must be a string", k));
     }
