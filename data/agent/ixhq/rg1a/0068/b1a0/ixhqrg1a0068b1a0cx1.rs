@@ -245,6 +245,19 @@ for lib in libs {
                     let tags = tags.to_lowercase();
                     let toks: Vec<&str> = tags.split(',').map(|t| t.trim()).collect();
                     let has_tag = |s: &str| toks.iter().any(|t| *t == s);
+                    // (A) SUB-ITEMS: if this entry is a PARENT (another entry
+                    // points at it via `parent`), the children are the unit of
+                    // work - surface THEM, not the container. The parent only
+                    // reports done once all its children are done (step_item's
+                    // rollup), so it has no independent queue presence while it
+                    // has children; it re-surfaces here only if childless.
+                    let mut is_parent = false;
+                    for k in 0..a.len() {
+                        if k == j { continue; }
+                        let sib = a.get_object(k);
+                        if sib.try_get_string("parent").unwrap_or_default() == claim { is_parent = true; break; }
+                    }
+                    if is_parent { continue; }
                     // Loop-terminal states: `done` (human-confirmed), `abandoned`,
                     // and `completed` (agent VERIFIED done, awaiting human review)
                     // are all settled for the work queue - the loop must not

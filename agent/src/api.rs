@@ -835,12 +835,21 @@ pub mod agent {
             ::flowlang::rustcmd::RustCmd::new("ijyjoz1a03a510268ta").execute(d).expect("Rust command execution failed").get_object("a")
         }
 
-        pub fn add_item(claim: String, detail: String, nn_sessionid: String) -> DataObject {
+        pub fn add_item(claim: String, detail: String, parent: String, nn_sessionid: String) -> DataObject {
             let mut d = DataObject::new();
             d.put_string("claim", &claim);
             d.put_string("detail", &detail);
+            d.put_string("parent", &parent);
             d.put_string("nn_sessionid", &nn_sessionid);
             ::flowlang::rustcmd::RustCmd::new("uyunpg1a03a5137c3yc").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn step_item(claim: String, base: String, nn_sessionid: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("claim", &claim);
+            d.put_string("base", &base);
+            d.put_string("nn_sessionid", &nn_sessionid);
+            ::flowlang::rustcmd::RustCmd::new("opjijl1a158e0142bq1bd6").execute(d).expect("Rust command execution failed").get_object("a")
         }
 
     }
@@ -1012,6 +1021,13 @@ pub mod agent {
             let d = DataObject::new();
             ::flowlang::rustcmd::RustCmd::new("zwullg1a10191fcd8p1a84").execute(d).expect("Rust command execution failed").get_object("a")
         }
+
+    }
+    pub mod stage {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
 
     }
 }
@@ -1231,13 +1247,6 @@ pub mod app {
         use ::ndata::data::Data;
 
     }
-    pub mod scenegraph {
-        use ::ndata::dataobject::DataObject;
-        use ::ndata::dataarray::DataArray;
-        use ::ndata::databytes::DataBytes;
-        use ::ndata::data::Data;
-
-    }
     pub mod select {
         use ::ndata::dataobject::DataObject;
         use ::ndata::dataarray::DataArray;
@@ -1303,13 +1312,6 @@ pub mod app {
         }
 
     }
-    pub mod sceneplayer {
-        use ::ndata::dataobject::DataObject;
-        use ::ndata::dataarray::DataArray;
-        use ::ndata::databytes::DataBytes;
-        use ::ndata::data::Data;
-
-    }
     pub mod sceneexpr {
         use ::ndata::dataobject::DataObject;
         use ::ndata::dataarray::DataArray;
@@ -1338,20 +1340,6 @@ pub mod app {
         use ::ndata::data::Data;
 
     }
-    pub mod scenerun {
-        use ::ndata::dataobject::DataObject;
-        use ::ndata::dataarray::DataArray;
-        use ::ndata::databytes::DataBytes;
-        use ::ndata::data::Data;
-
-    }
-    pub mod forcelayout {
-        use ::ndata::dataobject::DataObject;
-        use ::ndata::dataarray::DataArray;
-        use ::ndata::databytes::DataBytes;
-        use ::ndata::data::Data;
-
-    }
     pub mod tokens {
         use ::ndata::dataobject::DataObject;
         use ::ndata::dataarray::DataArray;
@@ -1367,6 +1355,13 @@ pub mod app {
 
     }
     pub mod home {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+    }
+    pub mod scenehost {
         use ::ndata::dataobject::DataObject;
         use ::ndata::dataarray::DataArray;
         use ::ndata::databytes::DataBytes;
@@ -2458,6 +2453,34 @@ pub mod dev {
             d.put_string("message", &message);
             ::flowlang::rustcmd::RustCmd::new("slhoyo1a0740a96d8s3").execute(d).expect("Rust command execution failed").get_object("a")
         }
+
+    }
+    pub mod flownode {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+    }
+    pub mod flowspike {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+    }
+    pub mod flowview3d {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+    }
+    pub mod flowedit3d {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
 
     }
 }
@@ -5014,13 +5037,6 @@ pub mod kb {
         use ::ndata::data::Data;
 
     }
-    pub mod m2026_07 {
-        use ::ndata::dataobject::DataObject;
-        use ::ndata::dataarray::DataArray;
-        use ::ndata::databytes::DataBytes;
-        use ::ndata::data::Data;
-
-    }
     pub mod doctrine {
         use ::ndata::dataobject::DataObject;
         use ::ndata::dataarray::DataArray;
@@ -5028,14 +5044,7 @@ pub mod kb {
         use ::ndata::data::Data;
 
     }
-    pub mod nebula {
-        use ::ndata::dataobject::DataObject;
-        use ::ndata::dataarray::DataArray;
-        use ::ndata::databytes::DataBytes;
-        use ::ndata::data::Data;
-
-    }
-    pub mod camera {
+    pub mod plan {
         use ::ndata::dataobject::DataObject;
         use ::ndata::dataarray::DataArray;
         use ::ndata::databytes::DataBytes;
@@ -5990,6 +5999,53 @@ pub mod scratch {
         use ::ndata::databytes::DataBytes;
         use ::ndata::data::Data;
 
+        pub fn plan_decomposition_progress() -> DataObject {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("sivsol1a15e9cc3e9k322b").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+    }
+    pub mod stageclock {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+    }
+    pub mod behavpeer_model {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+    }
+    pub mod comp_peer {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+    }
+    pub mod comp_app {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+    }
+    pub mod plan_autonomy_progress {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+    }
+    pub mod flow3d_progress {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
     }
 }
 
@@ -6508,6 +6564,7 @@ pub struct old_agent_plan {}
 pub struct old_agent_browser {}
 pub struct old_agent_browser_builder {}
 pub struct old_agent_committer {}
+pub struct old_agent_stage {}
 pub struct old_app_api {}
 pub struct old_app_app {}
 pub struct old_app_appcard {}
@@ -6516,23 +6573,20 @@ pub struct old_app_dial {}
 pub struct old_app_list {}
 pub struct old_app_list_item {}
 pub struct old_app_login {}
-pub struct old_app_scenegraph {}
 pub struct old_app_select {}
 pub struct old_app_service {}
 pub struct old_app_shape {}
 pub struct old_app_ui {}
 pub struct old_app_ui_reference {}
 pub struct old_app_util {}
-pub struct old_app_sceneplayer {}
 pub struct old_app_sceneexpr {}
 pub struct old_app_scenetokens {}
 pub struct old_app_scenedoc {}
 pub struct old_app_sceneproject {}
-pub struct old_app_scenerun {}
-pub struct old_app_forcelayout {}
 pub struct old_app_tokens {}
 pub struct old_app_webgl {}
 pub struct old_app_home {}
+pub struct old_app_scenehost {}
 pub struct old_camera_camera {}
 pub struct old_camera_camera_settings {}
 pub struct old_camera_dvr {}
@@ -6564,6 +6618,10 @@ pub struct old_dev_facets {}
 pub struct old_dev_code {}
 pub struct old_dev_viewctx {}
 pub struct old_dev_git {}
+pub struct old_dev_flownode {}
+pub struct old_dev_flowspike {}
+pub struct old_dev_flowview3d {}
+pub struct old_dev_flowedit3d {}
 pub struct old_dudeapi_dudeapi {}
 pub struct old_fillmore_fillmore {}
 pub struct old_fillmore_queue {}
@@ -6647,10 +6705,8 @@ pub struct old_img2mhm_solve {}
 pub struct old_kb_platform_api {}
 pub struct old_kb_workflow {}
 pub struct old_kb_frontend {}
-pub struct old_kb_m2026_07 {}
 pub struct old_kb_doctrine {}
-pub struct old_kb_nebula {}
-pub struct old_kb_camera {}
+pub struct old_kb_plan {}
 pub struct old_minifig_minifig {}
 pub struct old_nebula_lighthouse {}
 pub struct old_nebula_nebula {}
@@ -6702,6 +6758,12 @@ pub struct old_scratch_scratch {}
 pub struct old_scratch_stripe {}
 pub struct old_scratch_users {}
 pub struct old_scratch_skills {}
+pub struct old_scratch_stageclock {}
+pub struct old_scratch_behavpeer_model {}
+pub struct old_scratch_comp_peer {}
+pub struct old_scratch_comp_app {}
+pub struct old_scratch_plan_autonomy_progress {}
+pub struct old_scratch_flow3d_progress {}
 pub struct old_security_security {}
 pub struct old_storage_storage {}
 pub struct old_trainmore_common {}
@@ -6741,6 +6803,7 @@ pub struct old_agent {
     pub browser: old_agent_browser,
     pub browser_builder: old_agent_browser_builder,
     pub committer: old_agent_committer,
+    pub stage: old_agent_stage,
 }
 pub struct old_app {
     pub api: old_app_api,
@@ -6751,23 +6814,20 @@ pub struct old_app {
     pub list: old_app_list,
     pub list_item: old_app_list_item,
     pub login: old_app_login,
-    pub scenegraph: old_app_scenegraph,
     pub select: old_app_select,
     pub service: old_app_service,
     pub shape: old_app_shape,
     pub ui: old_app_ui,
     pub ui_reference: old_app_ui_reference,
     pub util: old_app_util,
-    pub sceneplayer: old_app_sceneplayer,
     pub sceneexpr: old_app_sceneexpr,
     pub scenetokens: old_app_scenetokens,
     pub scenedoc: old_app_scenedoc,
     pub sceneproject: old_app_sceneproject,
-    pub scenerun: old_app_scenerun,
-    pub forcelayout: old_app_forcelayout,
     pub tokens: old_app_tokens,
     pub webgl: old_app_webgl,
     pub home: old_app_home,
+    pub scenehost: old_app_scenehost,
 }
 pub struct old_camera {
     pub camera: old_camera_camera,
@@ -6803,6 +6863,10 @@ pub struct old_dev {
     pub code: old_dev_code,
     pub viewctx: old_dev_viewctx,
     pub git: old_dev_git,
+    pub flownode: old_dev_flownode,
+    pub flowspike: old_dev_flowspike,
+    pub flowview3d: old_dev_flowview3d,
+    pub flowedit3d: old_dev_flowedit3d,
 }
 pub struct old_dudeapi {
     pub dudeapi: old_dudeapi_dudeapi,
@@ -6904,10 +6968,8 @@ pub struct old_kb {
     pub platform_api: old_kb_platform_api,
     pub workflow: old_kb_workflow,
     pub frontend: old_kb_frontend,
-    pub m2026_07: old_kb_m2026_07,
     pub doctrine: old_kb_doctrine,
-    pub nebula: old_kb_nebula,
-    pub camera: old_kb_camera,
+    pub plan: old_kb_plan,
 }
 pub struct old_minifig {
     pub minifig: old_minifig_minifig,
@@ -6973,6 +7035,12 @@ pub struct old_scratch {
     pub stripe: old_scratch_stripe,
     pub users: old_scratch_users,
     pub skills: old_scratch_skills,
+    pub stageclock: old_scratch_stageclock,
+    pub behavpeer_model: old_scratch_behavpeer_model,
+    pub comp_peer: old_scratch_comp_peer,
+    pub comp_app: old_scratch_comp_app,
+    pub plan_autonomy_progress: old_scratch_plan_autonomy_progress,
+    pub flow3d_progress: old_scratch_flow3d_progress,
 }
 pub struct old_security {
     pub security: old_security_security,
@@ -7050,6 +7118,7 @@ pub const fn new() -> api {
             browser: old_agent_browser {},
             browser_builder: old_agent_browser_builder {},
             committer: old_agent_committer {},
+            stage: old_agent_stage {},
         },
         app: old_app {
             api: old_app_api {},
@@ -7060,23 +7129,20 @@ pub const fn new() -> api {
             list: old_app_list {},
             list_item: old_app_list_item {},
             login: old_app_login {},
-            scenegraph: old_app_scenegraph {},
             select: old_app_select {},
             service: old_app_service {},
             shape: old_app_shape {},
             ui: old_app_ui {},
             ui_reference: old_app_ui_reference {},
             util: old_app_util {},
-            sceneplayer: old_app_sceneplayer {},
             sceneexpr: old_app_sceneexpr {},
             scenetokens: old_app_scenetokens {},
             scenedoc: old_app_scenedoc {},
             sceneproject: old_app_sceneproject {},
-            scenerun: old_app_scenerun {},
-            forcelayout: old_app_forcelayout {},
             tokens: old_app_tokens {},
             webgl: old_app_webgl {},
             home: old_app_home {},
+            scenehost: old_app_scenehost {},
         },
         camera: old_camera {
             camera: old_camera_camera {},
@@ -7112,6 +7178,10 @@ pub const fn new() -> api {
             code: old_dev_code {},
             viewctx: old_dev_viewctx {},
             git: old_dev_git {},
+            flownode: old_dev_flownode {},
+            flowspike: old_dev_flowspike {},
+            flowview3d: old_dev_flowview3d {},
+            flowedit3d: old_dev_flowedit3d {},
         },
         dudeapi: old_dudeapi {
             dudeapi: old_dudeapi_dudeapi {},
@@ -7213,10 +7283,8 @@ pub const fn new() -> api {
             platform_api: old_kb_platform_api {},
             workflow: old_kb_workflow {},
             frontend: old_kb_frontend {},
-            m2026_07: old_kb_m2026_07 {},
             doctrine: old_kb_doctrine {},
-            nebula: old_kb_nebula {},
-            camera: old_kb_camera {},
+            plan: old_kb_plan {},
         },
         minifig: old_minifig {
             minifig: old_minifig_minifig {},
@@ -7282,6 +7350,12 @@ pub const fn new() -> api {
             stripe: old_scratch_stripe {},
             users: old_scratch_users {},
             skills: old_scratch_skills {},
+            stageclock: old_scratch_stageclock {},
+            behavpeer_model: old_scratch_behavpeer_model {},
+            comp_peer: old_scratch_comp_peer {},
+            comp_app: old_scratch_comp_app {},
+            plan_autonomy_progress: old_scratch_plan_autonomy_progress {},
+            flow3d_progress: old_scratch_flow3d_progress {},
         },
         security: old_security {
             security: old_security_security {},
@@ -7755,8 +7829,12 @@ impl old_agent_plan {
         self::agent::plan::move_item(claim, lifecycle, base, nn_sessionid)
     }
     #[deprecated(note = "use api::agent::plan::add_item instead")]
-    pub fn add_item(&self, claim: String, detail: String, nn_sessionid: String) -> DataObject {
-        self::agent::plan::add_item(claim, detail, nn_sessionid)
+    pub fn add_item(&self, claim: String, detail: String, parent: String, nn_sessionid: String) -> DataObject {
+        self::agent::plan::add_item(claim, detail, parent, nn_sessionid)
+    }
+    #[deprecated(note = "use api::agent::plan::step_item instead")]
+    pub fn step_item(&self, claim: String, base: String, nn_sessionid: String) -> DataObject {
+        self::agent::plan::step_item(claim, base, nn_sessionid)
     }
 }
 impl old_agent_browser {
@@ -10113,6 +10191,12 @@ impl old_scratch_users {
     #[deprecated(note = "use api::scratch::users::list_users instead")]
     pub fn list_users(&self) -> DataArray {
         self::scratch::users::list_users()
+    }
+}
+impl old_scratch_skills {
+    #[deprecated(note = "use api::scratch::skills::plan_decomposition_progress instead")]
+    pub fn plan_decomposition_progress(&self) -> DataObject {
+        self::scratch::skills::plan_decomposition_progress()
     }
 }
 impl old_security_security {

@@ -193,6 +193,33 @@ if prior >= cap {
 }
 out.put_int("steps_taken", prior);
 out.put_int("max_steps", cap);
+// (A) SUB-ITEM DECOMPOSITION: a PARENT (an entry other items point to via
+// `parent`) is a container, not a unit of work - its phases are its CHILDREN,
+// each accepted/stepped on its own. Refuse to step a parent that still has
+// unfinished children so the loop drives the children instead; when every
+// child is terminal (completed/done) the parent itself becomes steppable so it
+// can be verified whole and closed (the rollup also fires when the LAST child
+// completes, below). Terminal-for-rollup = completed | done (both mean the
+// work is finished; done is only the human's confirm on top of completed).
+{
+    let mut unfinished: i64 = 0;
+    for i in 0..arr.len() {
+        if i as i64 == idx { continue; }
+        let c = arr.get_object(i);
+        if c.try_get_string("parent").unwrap_or_default() != claim { continue; }
+        let ct = c.try_get_string("tags").unwrap_or_default().to_lowercase();
+        let ctoks: Vec<&str> = ct.split(',').map(|t| t.trim()).collect();
+        let child_done = ctoks.iter().any(|t| *t == "completed" || *t == "done");
+        if !child_done { unfinished += 1; }
+    }
+    if unfinished > 0 {
+        out.put_string("status", "ok");
+        out.put_string("action", "gated");
+        out.put_int("children_open", unfinished);
+        out.put_string("msg", "this is a PARENT with unfinished child phases - the children are the unit of work; accept and step each child, and the parent closes once they are all done");
+        return out;
+    }
+}
 // (2) THE GOAL: the item's claim + detail is the objective. v1 demanded a
 // pre-authored structured `step` {lib,ctl,cmd,args} and refused pure prose
 // (surfaced, never executed) - but a pre-authored step only captures work
@@ -250,8 +277,15 @@ STATUS: IN_PROGRESS  - you made progress but the item is not done yet.\n\
 STATUS: BLOCKED  - you cannot proceed; say what you need above.\n\
 Only claim DONE when you actually verified completion against the goal, not when you merely believe it.\n\n\
 GOAL: {}\n", goal);
+// (B) STOP TRUNCATING DETAIL (owner, 2026-10): the floweditor3d postmortem -
+// a phased plan whose `detail` was cut at 3000 chars dropped the LATER phases
+// from the step prompt, so the deciding step could not see the remaining work
+// and the goal-scope gate alone can't fix what it can't read. Carry the FULL
+// detail; the bound lives at the source (the human-authored item), not a blind
+// cut here. A phased plan should be DECOMPOSED into child items (A), whose
+// per-phase detail rides each child's own step prompt in full.
 if !detail.trim().is_empty() {
-    let d: String = detail.chars().take(3000).collect();    prompt.push_str(&format!("\nDETAIL:\n{}\n", d));
+    prompt.push_str(&format!("\nDETAIL:\n{}\n", detail));
 }
 if !prior_steps.is_empty() {
     prompt.push_str(&format!("\nPRIOR STEPS (do not repeat without new information):\n{}\n", prior_steps));
@@ -287,9 +321,14 @@ let ran = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
 }));
 let (ok_step, result_json, tl_status) = match ran {
     Ok(Ok(rr)) => {
-        // Log the FINAL ANSWER, bounded - never the full messages transcript
-        // (a 143KB tool_loop dump per step would bloat kb.plan and poison every
-        // later read). FLAT may nest under "a"; pull msg + status from either.
+        // Log the FINAL ANSWER in FULL (owner, 2026-10) - never the messages
+        // transcript (a 143KB tool_loop dump per step would bloat kb.plan and
+        // poison every later read; that guard stands). The old 1500-char cap
+        // dropped exactly the context the next step needed: the phase ledger
+        // and the verification detail. Older entries are re-truncated to 200
+        // chars when re-fed as PRIOR STEPS, and the kanban `latest` pulse
+        // stays at 240, so prompt + card size remain bounded. FLAT may nest
+        // under "a"; pull msg + status from either.
         let mut answer = rr.try_get_string("msg").unwrap_or_default();
         let mut st = rr.try_get_string("status").unwrap_or_default();
         if answer.is_empty() || st.is_empty() {
@@ -300,7 +339,6 @@ let (ok_step, result_json, tl_status) = match ran {
         }
         if answer.is_empty() { answer = rr.to_string(); }
         if st.is_empty() { st = "IN_PROGRESS".to_string(); }
-        let answer: String = answer.chars().take(1500).collect();
         (true, answer, st)
     }
     Ok(Err(pe)) => (false, format!("{{\"error\":\"{}\"}}", esc(&format!("{:?}", pe))), "ERROR".to_string()),
@@ -320,12 +358,14 @@ log.push_object(entry_log);
 e.put_array("step_log", log);
 // ROLLING-LATEST (owner, 2026-10-21): the human had NO window into the loop
 // except asking the agent - the card showed claim+detail+tags, none of which
-// change as work progresses. Write a bounded `latest` field each step: the
-// headline of what just happened, OVERWRITTEN (never grows; step_log remains
-// the full append-only journal). The kanban card renders it, so progress is
-// visible at a glance without opening the archive. Prefer the model's own
-// "## Summary" section; fall back to the head of the final answer. Single
-// line, ~240 chars - a pulse, not a dump.
+// change as work progresses. Write a `latest` field each step: what just
+// happened, OVERWRITTEN (never grows; step_log remains the full append-only
+// journal). The kanban card renders it, so progress is visible at a glance.
+// FULL ENTRY (owner, 2026-10-22): keep the WHOLE body, multi-line, no 240-char
+// cap, no line-flattening - the flat one-line pulse was useless; the human
+// wants to read the entire step. Prefer the model's own "## Summary" section;
+// fall back to the whole final answer. Only the STATUS/VERIFIED trailer lines
+// are stripped (they are markers, not prose).
 {
     let full = result_json.trim();
     let body = if let Some(pos) = full.find("## Summary") {
@@ -333,18 +373,16 @@ e.put_array("step_log", log);
     } else {
         full
     };
-    // strip the STATUS/VERIFIED trailer lines so `latest` is prose, not markers
+    // keep every line, multi-line; drop only the STATUS:/VERIFIED: trailer lines
     let mut note = String::new();
     for ln in body.lines() {
-        let t = ln.trim();
-        if t.starts_with("STATUS:") || t.starts_with("VERIFIED:") { continue; }
-        let t = t.trim_start_matches('#').trim_start_matches('*').trim();
-        if t.is_empty() { continue; }
-        if !note.is_empty() { note.push(' '); }
+        let t = ln.trim_end();
+        let tt = t.trim_start();
+        if tt.starts_with("STATUS:") || tt.starts_with("VERIFIED:") { continue; }
         note.push_str(t);
-        if note.len() > 240 { break; }
+        note.push('\n');
     }
-    let note: String = note.chars().take(240).collect();
+    let note = note.trim().to_string();
     let mut latest = DataObject::new();
     latest.put_int("time", now);
     latest.put_string("status", &tl_status);
@@ -378,6 +416,40 @@ if tl_status == "DONE" {
 } else if was_accepted {
     set_lifecycle(&mut e, "in-progress");
     label = format!("plan started (in-progress): '{}'", short);
+}
+// (A) PARENT ROLLUP, ATOMIC with this write: when the item that just completed
+// is a CHILD (it carries `parent`) and that was its LAST unfinished sibling,
+// the parent has no remaining work - mark the parent `completed` in the SAME
+// journaled patch so a parent is done only when all its children are done.
+// The parent tags the array index (entry ordering is stable within a single
+// in-memory rewrite), so we recompute over the array AFTER this child's tag
+// change is already reflected in `arr`.
+let mut rolled_parent = String::new();
+if tl_status == "DONE" && e.has("parent") {
+    let p = e.get_string("parent");
+    if !p.is_empty() {
+        let mut pidx: i64 = -1;
+        let mut all_done = true;
+        for i in 0..arr.len() {
+            let c = arr.get_object(i);
+            if c.try_get_string("claim").unwrap_or_default() == p { pidx = i as i64; continue; }
+            if c.try_get_string("parent").unwrap_or_default() != p { continue; }
+            let ct = c.try_get_string("tags").unwrap_or_default().to_lowercase();
+            let ctoks: Vec<&str> = ct.split(',').map(|t| t.trim()).collect();
+            let cd = ctoks.iter().any(|t| *t == "completed" || *t == "done");
+            if !cd { all_done = false; }
+        }
+        if pidx >= 0 && all_done {
+            let mut pe = arr.get_object(pidx as usize);
+            let ptags = pe.try_get_string("tags").unwrap_or_default().to_lowercase();
+            let ptoks: Vec<&str> = ptags.split(',').map(|t| t.trim()).collect();
+            if !ptoks.iter().any(|t| *t == "completed" || *t == "done") {
+                set_lifecycle(&mut pe, "completed");
+                rolled_parent = p.clone();
+                label = format!("plan completed (verified): '{}' -> parent '{}' completed (all children done)", short, p);
+            }
+        }
+    }
 }
 let pw = api.dev.code.patch_control_facet(
     "kb".to_string(), "plan".to_string(), "memory".to_string(),
@@ -418,6 +490,7 @@ if tl_status == "DONE" {
     out.put_string("action", if ok_step { "stepped" } else { "step_failed" });
 }
 out.put_boolean("ok", ok_step);
+if !rolled_parent.is_empty() { out.put_string("rolled_up_parent", &rolled_parent); }
 out.put_string("home", "agent.llm.tool_loop");
 out.put_string("result", &result_json);
 out.put_int("time", now);
