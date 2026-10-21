@@ -462,10 +462,24 @@ if declared_done {
              thing the goal names, or verifies a spike/gate rather than the end state, is NOT satisfied.\n\
              Answer with exactly one word on the first line: SATISFIED or PARTIAL.",
             goal, final_answer.chars().take(2500).collect::<String>());
-        crate::agent::llm::ask_llm::ask_llm(gprompt, ndata::data::Data::DString(
-            "You are a strict completion gate. Answer with exactly one word: SATISFIED or PARTIAL.".to_string()))
+        // ask_llm returns FLAT: the text lands under "a" ({a:"SATISFIED"}), so
+        // pull it back out - matching on the raw JSON would never see the word.
+        let raw = crate::agent::llm::ask_llm::ask_llm(gprompt, ndata::data::Data::DString(
+            "You are a strict completion gate. Answer with exactly one word: SATISFIED or PARTIAL.".to_string()));
+        raw
     };
-    let v = verdict.trim().to_uppercase();
+    // Normalize: strip the FLAT {"a":"..."} wrapper if present, then read the word.
+    let v = {
+        let t = verdict.trim();
+        let inner = if t.starts_with('{') {
+            // {"a":"SATISFIED"} -> SATISFIED ; fall back to the raw text otherwise
+            match ndata::dataobject::DataObject::try_from_string(t) {
+                Ok(o) => o.try_get_string("a").unwrap_or_else(|_| t.to_string()),
+                Err(_) => t.to_string(),
+            }
+        } else { t.to_string() };
+        inner.trim().trim_matches('"').to_uppercase()
+    };
     if v.starts_with("SATISFIED") {
         status = "DONE".to_string();
     } else {
