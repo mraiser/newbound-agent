@@ -415,6 +415,7 @@ if final_answer.starts_with("[budget checkpoint") {
     status = "IN_PROGRESS".to_string();
 }
 let has_evidence = final_answer.contains("VERIFIED:");
+let mut declared_done = false;
 for line in final_answer.lines() {
     let t = line.trim();
     if let Some(rest) = t.strip_prefix("STATUS:") {
@@ -422,10 +423,54 @@ for line in final_answer.lines() {
         // DONE requires a VERIFIED: evidence line (the executive prompt's
         // contract); a bare DONE claim with no check actually run is treated
         // as IN_PROGRESS so an unverified claim can't prematurely close an item.
-        if v.starts_with("DONE") && has_evidence { status = "DONE".to_string(); }
+        if v.starts_with("DONE") && has_evidence { declared_done = true; }
         else if v.starts_with("BLOCKED") { status = "BLOCKED".to_string(); }
         else if v.starts_with("IN_PROGRESS") { status = "IN_PROGRESS".to_string(); }
         break;
+    }
+}
+// GOAL-SCOPE GATE (owner, 2026-10): a VERIFIED: line only proves the model ran
+// *a* check - not that the check satisfies the item's GOAL. The loop's observed
+// failure mode is premature closure on a PHASE-scoped increment ("P3 complete
+// and verified") accepted as the whole multi-phase GOAL. Before accepting DONE,
+// grade the evidence against the goal with ONE bounded model call. FAIL CLOSED:
+// any grader error, non-SATISFIED answer, or empty goal parses as IN_PROGRESS,
+// never DONE - an ambiguous completion can always be re-stepped, a false DONE
+// silently ends the loop. Skipped entirely unless a DONE is even claimed, so
+// IN_PROGRESS/BLOCKED turns never pay for it.
+if declared_done {
+    let goal = {
+        // the item's claim rides the user prompt as "GOAL: <claim>"; recover it
+        // so the grader judges against the goal, not the increment.
+        let mut g = String::new();
+        if let Some(i) = prompt.find("GOAL:") {
+            let rest = &prompt[i + 5..];
+            let end = rest.find("\n\n").unwrap_or(rest.len());
+            g = rest[..end].trim().to_string();
+        }
+        if g.is_empty() { g = prompt.chars().take(600).collect(); }
+        g
+    };
+    let verdict = {
+        let gprompt = format!(
+            "You are a strict completion gate for an autonomous work item.\n\
+             GOAL (the whole thing that must be true to call the item done):\n{}\n\n\
+             The worker declared DONE and gave this completion report and VERIFIED evidence:\n{}\n\n\
+             Decide ONLY whether the report's verified evidence demonstrates the WHOLE GOAL is satisfied - \
+             not merely that one phase, increment, or sub-part of it is done. \
+             A report that completes P3 of a P0-P4 plan, or builds a parallel artifact without changing the \
+             thing the goal names, or verifies a spike/gate rather than the end state, is NOT satisfied.\n\
+             Answer with exactly one word on the first line: SATISFIED or PARTIAL.",
+            goal, final_answer.chars().take(2500).collect::<String>());
+        crate::agent::llm::ask_llm::ask_llm(gprompt, ndata::data::Data::DString(
+            "You are a strict completion gate. Answer with exactly one word: SATISFIED or PARTIAL.".to_string()))
+    };
+    let v = verdict.trim().to_uppercase();
+    if v.starts_with("SATISFIED") {
+        status = "DONE".to_string();
+    } else {
+        // PARTIAL, ERROR:, or anything else -> keep the loop going.
+        status = "IN_PROGRESS".to_string();
     }
 }
 
