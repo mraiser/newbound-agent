@@ -286,7 +286,12 @@ for lib in libs {
                     let tags = tags.to_lowercase();
                     let toks: Vec<&str> = tags.split(',').map(|t| t.trim()).collect();
                     let has_tag = |s: &str| toks.iter().any(|t| *t == s);
-                    if !has_tag("done") && !has_tag("abandoned") {
+                    // Loop-terminal states: `done` (human-confirmed), `abandoned`,
+                    // and `completed` (agent VERIFIED done, awaiting human review)
+                    // are all settled for the work queue - the loop must not
+                    // re-queue them. `completed` still matters for VISIBILITY
+                    // (a human should see it), but it is not epistemic work.
+                    if !has_tag("done") && !has_tag("abandoned") && !has_tag("completed") {
                         // Decoupled (P-b follow-up): an `accepted` plan item is a SIGNED WORK
                         // ORDER - the human re-authorization - so it must never be held hostage
                         // behind same-priority `review` items (seniority tie-break starved it).

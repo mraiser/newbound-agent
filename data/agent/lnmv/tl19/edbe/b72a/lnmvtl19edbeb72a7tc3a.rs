@@ -176,7 +176,32 @@ messages.push_object(m);
 
 let mut final_answer = String::new();
 let mut iterations = 0;
-let max_iterations = 24;
+// The round limit is the agent's TOOL_BUDGET (runtime/agent/botd.properties,
+// system.apps.agent.runtime) - the SAME knob the chat agentloop uses, so the
+// executive's reasoning and the chat agent run on one setting, not a hardcoded
+// 24 (owner, 2026-08: a 16x mismatch let real plan work die at 24 while
+// TOOL_BUDGET=400 sat unused). Read LIVE per call so a botd.properties edit
+// takes effect without a restart; floor 24 so a tiny/absent value can't make
+// the cap trivially trippable; capped 1000 as a guard.
+let max_iterations: i64 = {
+    let mut b: i64 = 24;
+    let system = DataStore::globals().get_object("system");
+    if system.has("apps") {
+        let apps = system.get_object("apps");
+        if apps.has("agent") {
+            let agent = apps.get_object("agent");
+            if agent.has("runtime") {
+                let rt = agent.get_object("runtime");
+                if rt.has("TOOL_BUDGET") {
+                    if let Ok(n) = rt.get_string("TOOL_BUDGET").trim().parse::<i64>() {
+                        if n > 0 { b = n.min(1000); }
+                    }
+                }
+            }
+        }
+    }
+    b.max(24)
+};
 let mut dirty = String::new();    // "lib-ctl-cmd" modified but not yet executed
 let mut nudged = false;           // one verify-nudge per dirty cycle
 let mut last_sig = String::new(); // repeated-identical-call detection
@@ -187,7 +212,28 @@ let mut last_err_head = String::new();
 
 loop {
     if iterations >= max_iterations {
-        final_answer = "Error: Maximum tool loop iterations exceeded.".to_string();
+        // Budget exhausted: do NOT discard the work. Ask the model to compress
+        // its own progress into a resumable checkpoint (one bounded extra
+        // turn), so step_item can journal WHERE IT GOT TO and the next tick
+        // resumes instead of restarting from scratch (owner, 2026-08: the cap
+        // was a 15-minute amnesia loop - same reads, same cap, same error).
+        messages.push_object({
+            let mut m = DataObject::new();
+            m.put_string("role", "user");
+            m.put_string("content", "You are OUT of tool budget for this turn. Do NOT call any more tools. Reply with ONLY plain text, no tool calls - a checkpoint another run can resume from, in exactly this shape:\nPROGRESS: what you learned, decided, and changed (be specific: files/commands touched, key findings).\nNEXT: the single next action to take.\nBLOCKERS: anything preventing completion, or 'none'.\nKeep the WHOLE checkpoint under ~1500 characters - this is the only context the next turn gets, so every word must earn its place. Compress; do not truncate mid-thought.");
+            m
+        });
+        let sum = chat_llm(messages.clone(), tools.clone());
+        let txt = if sum.get_string("kind") == "text" {
+            sum.get_string("content")
+        } else {
+            String::new()
+        };
+        final_answer = if txt.trim().is_empty() {
+            "Error: tool budget exhausted and no progress summary could be produced.".to_string()
+        } else {
+            format!("[budget checkpoint - incomplete, resume next turn]\n{}", txt.trim())
+        };
         break;
     }
     iterations += 1;
@@ -358,7 +404,33 @@ let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
     let _ = logcmd.execute(la);
 }));
 
+// Parse the model's completion status out of the final answer's STATUS: marker
+// (the executive prompt instructs DONE/IN_PROGRESS/BLOCKED). This is the signal
+// step_item uses to close the loop: DONE -> verify + move_item(done), BLOCKED
+// -> surface once (never a silent 15-min re-prove). Default: a budget checkpoint
+// is incomplete; a clean text finish with no marker is IN_PROGRESS (the item
+// stays accepted and keeps being stepped).
+let mut status = "IN_PROGRESS".to_string();
+if final_answer.starts_with("[budget checkpoint") {
+    status = "IN_PROGRESS".to_string();
+}
+let has_evidence = final_answer.contains("VERIFIED:");
+for line in final_answer.lines() {
+    let t = line.trim();
+    if let Some(rest) = t.strip_prefix("STATUS:") {
+        let v = rest.trim().to_uppercase();
+        // DONE requires a VERIFIED: evidence line (the executive prompt's
+        // contract); a bare DONE claim with no check actually run is treated
+        // as IN_PROGRESS so an unverified claim can't prematurely close an item.
+        if v.starts_with("DONE") && has_evidence { status = "DONE".to_string(); }
+        else if v.starts_with("BLOCKED") { status = "BLOCKED".to_string(); }
+        else if v.starts_with("IN_PROGRESS") { status = "IN_PROGRESS".to_string(); }
+        break;
+    }
+}
+
 let mut response = DataObject::new();
 response.put_string("msg", &final_answer);
+response.put_string("status", &status);
 response.put_array("messages", messages);
 response

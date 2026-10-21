@@ -7,7 +7,7 @@
 var me = this;
 var ME = document.getElementById(me.UUID);
 
-var LIFECYCLES = ['proposed', 'accepted', 'in-progress', 'done', 'abandoned'];
+var LIFECYCLES = ['proposed', 'accepted', 'in-progress', 'completed', 'done', 'abandoned'];
 var boardHash = '';
 var dragClaim = null;
 
@@ -23,6 +23,17 @@ function lifecycleOf(tags) {
     if (toks.indexOf(LIFECYCLES[i]) >= 0) return LIFECYCLES[i];
   }
   return 'proposed'; // untagged entries surface here; a move normalizes them
+}
+
+function relTime(ms) {
+  var d = Date.now() - ms;
+  if (d < 0) d = 0;
+  var m = Math.floor(d / 60000);
+  if (m < 1) return 'just now';
+  if (m < 60) return m + 'm ago';
+  var h = Math.floor(m / 60);
+  if (h < 24) return h + 'h ago';
+  return Math.floor(h / 24) + 'd ago';
 }
 
 function card(e) {
@@ -46,6 +57,19 @@ function card(e) {
   if (extra.length) bits.push(extra.join(' · '));
   meta.textContent = bits.join('  ·  ');
   el.appendChild(meta);
+
+  // rolling-latest: the agent's most recent step headline (written by step_item
+  // each tick). The live pulse of the card - progress visible without opening
+  // step_log. Show status + relative time + the note.
+  if (e.latest && e.latest.note) {
+    var lt = document.createElement('div');
+    lt.className = 'pl-card-latest';
+    var when = e.latest.time ? relTime(e.latest.time) : '';
+    var st = e.latest.status ? e.latest.status.toLowerCase().replace(/_/g, ' ') : '';
+    lt.textContent = (st ? st : 'update') + (when ? ' · ' + when : '') + ' — ' + e.latest.note;
+    lt.title = 'latest step (of ' + (e.step_log ? e.step_log.length : 0) + ') — ' + (e.latest.note || '');
+    el.appendChild(lt);
+  }
 
   if (e.detail) {
     var d = document.createElement('div');
