@@ -311,6 +311,45 @@ if e.has("source") {
         }
     }
 }
+// START TRANSITION (owner, 2026-10): accepted -> in-progress at the START of
+// the turn, not the end. A tool_loop turn can run for minutes and the human
+// has no window into the executive - an item that stayed `accepted` for the
+// whole time it was being worked told the kanban board a lie ("approved but
+// untouched"). Flip the lifecycle FIRST, in its own journaled, base-hashed
+// write, so the card moves to in-progress the moment the agent picks it up.
+// On a failed write (stale_base) we abort BEFORE spending the turn - never
+// force. The post-turn write re-reads the board (FRESH BASE, below), so this
+// extra write never strands the step_log on a stale hash.
+fn with_lifecycle(tags: &str, to: &str) -> String {
+    let lc = ["proposed","accepted","in-progress","completed","done","abandoned"];
+    let mut kept: Vec<String> = tags.split(',')
+        .map(|t| t.trim().to_string())
+        .filter(|t| !t.is_empty() && !lc.contains(&t.as_str()))
+        .collect();
+    kept.push(to.to_string());
+    kept.join(",")
+}
+if was_accepted {
+    let nt = with_lifecycle(&e.try_get_string("tags").unwrap_or_default(), "in-progress");
+    e.put_string("tags", &nt);
+    let short0: String = claim.chars().take(50).collect();
+    let sw = api.dev.code.patch_control_facet(
+        "kb".to_string(), "plan".to_string(), "memory".to_string(),
+        "".to_string(), arr.to_string(), hash.clone(),
+        format!("plan started (in-progress): '{}'", short0),
+        "executive".to_string(), nn_sessionid.clone());
+    let sok = sw.try_get_boolean("ok").unwrap_or(false)
+        || sw.try_get_string("status").map(|s| s == "ok").unwrap_or(false);
+    if !sok {
+        out.put_string("status", "err");
+        out.put_string("action", "start_failed");
+        out.put_string("msg", "could not move the item to in-progress before the turn (likely stale_base) - re-read the board and retry; the turn was NOT run");
+        if sw.has("msg") { out.put_string("write_msg", &sw.get_string("msg")); }
+        if sw.has("current_hash") { out.put_string("current_hash", &sw.get_string("current_hash")); }
+        return out;
+    }
+    out.put_boolean("moved_to_in_progress", true);
+}
 // Reason + act, panic-contained: ONE bounded autonomous turn via tool_loop.
 let now = flowlang::flowlang::system::time::time();
 let ran = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
@@ -343,6 +382,41 @@ let (ok_step, result_json, tl_status) = match ran {
     }
     Ok(Err(pe)) => (false, format!("{{\"error\":\"{}\"}}", esc(&format!("{:?}", pe))), "ERROR".to_string()),
     Err(_) => (false, "{\"error\":\"panic during executive reasoning\"}".to_string(), "ERROR".to_string()),
+};
+// FRESH BASE after the turn: the turn can run for minutes, the start
+// transition above already changed the board hash, and the turn itself (or a
+// human dragging a card) may write kb.plan meanwhile. Re-read the board,
+// re-locate this entry by claim, and journal the step onto the CURRENT state
+// under the CURRENT hash. The final write is still base-hashed, so a write
+// racing THIS read still aborts - we never force.
+let r2 = api.dev.code.read_control_facet("kb".to_string(), "plan".to_string(), "memory".to_string());
+let hash = r2.get_string("hash");
+let parsed2 = match DataObject::try_from_string(&format!("{{\"a\": {} }}", r2.get_string("source"))) {
+    Ok(o) => o,
+    Err(_) => {
+        out.put_string("status", "err");
+        out.put_string("msg", "step ran but kb.plan no longer parses as a JSON array - step_log not written");
+        out.put_string("result", &result_json);
+        return out;
+    }
+};
+let arr = parsed2.get_array("a");
+let mut fidx: i64 = -1;
+for i in 0..arr.len() {
+    if arr.get_object(i).try_get_string("claim").unwrap_or_default() == claim { fidx = i as i64; break; }
+}
+if fidx < 0 {
+    out.put_string("status", "err");
+    out.put_string("msg", "step ran but the plan entry vanished from kb.plan during the turn - step_log not written");
+    out.put_string("result", &result_json);
+    return out;
+}
+let mut e = arr.get_object(fidx as usize);
+// Is the item still live in the agent's lane (a human may have moved it
+// mid-turn)? Only a live item may be auto-completed below.
+let live_now = {
+    let t = e.try_get_string("tags").unwrap_or_default().to_lowercase();
+    t.split(',').map(|x| x.trim()).any(|x| x == "accepted" || x == "in-progress")
 };
 // (5) Append to the entry's step_log and write the facet back journaled.
 let mut log = if e.has("step_log") {
@@ -389,11 +463,12 @@ e.put_array("step_log", log);
     latest.put_string("note", &note);
     e.put_object("latest", latest);
 }
-// LIFECYCLE TRANSITIONS, ATOMIC with the step_log write (one journaled patch,
-// no two-write stale_base window). Both move the item within the agent's
-// VERIFIED authority; `done` (human-confirmed) stays human-only:
-//   accepted -> in-progress : the first real step - the board now tells the
-//     truth "the agent is on it", not the lie "approved but untouched".
+// LIFECYCLE TRANSITIONS on the post-turn write (onto the FRESH board state).
+// Both lifecycle moves are within the agent's authority; `done`
+// (human-confirmed) stays human-only:
+//   accepted -> in-progress : now made at the START of the turn (its own
+//     journaled write, START TRANSITION above) - the board tells the truth
+//     "the agent is on it" WHILE it works, not only after the turn ends.
 //   * -> completed : a VERIFIED DONE (VERIFIED: evidence required) - the agent
 //     finished, but a HUMAN hasn't seen it yet. Terminal for the loop (no
 //     re-run), visibly awaiting confirmation. Crossing completed -> done is a
@@ -411,12 +486,17 @@ let mut set_lifecycle = |e: &mut DataObject, to: &str| {
     e.put_string("tags", &kept.join(","));
 };
 if tl_status == "DONE" {
-    set_lifecycle(&mut e, "completed");
-    label = format!("plan completed (verified, awaiting review): '{}'", short);
-} else if was_accepted {
-    set_lifecycle(&mut e, "in-progress");
-    label = format!("plan started (in-progress): '{}'", short);
+    if live_now {
+        set_lifecycle(&mut e, "completed");
+        label = format!("plan completed (verified, awaiting review): '{}'", short);
+    } else {
+        // A human moved the card out of the agent's lane mid-turn - their
+        // lifecycle wins; journal the step but do not override it.
+        label = format!("plan step: '{}' -> DONE claimed, but the item left accepted/in-progress mid-turn; lifecycle left as the human set it", short);
+    }
 }
+// accepted -> in-progress is no longer done here: it happens at the START of
+// the turn (START TRANSITION above) so the board is truthful while we work.
 // (A) PARENT ROLLUP, ATOMIC with this write: when the item that just completed
 // is a CHILD (it carries `parent`) and that was its LAST unfinished sibling,
 // the parent has no remaining work - mark the parent `completed` in the SAME
