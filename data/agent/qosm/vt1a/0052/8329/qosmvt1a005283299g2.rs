@@ -543,9 +543,13 @@ std::thread::spawn(move || {
                                 }
                                 act.put_string("action", &action);
                             } else if kind == "plan" && plan_autonomy_on()
-                                && it.try_get_string("stage").map(|s| s == "accepted").unwrap_or(false) {
+                                && it.try_get_string("stage").map(|s| s == "accepted" || s == "in-progress").unwrap_or(false) {
                                 // GATED plan-item autonomy (P-b): the item is
-                                // `accepted` (a signed work order) and the
+                                // `accepted` OR `in-progress` (both human-authorized,
+                                // matching step_item's gate - an in-progress item is
+                                // one the agent already started and must be allowed to
+                                // CONTINUE; gating on accepted alone stranded it as
+                                // "surfaced" forever once it left accepted) and the
                                 // owner has armed PLAN_AUTONOMY. Spend this
                                 // tick's drive unit on ONE bounded REASONING
                                 // turn via agent.plan.step_item - it re-gates
