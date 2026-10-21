@@ -235,9 +235,14 @@ let ran = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
 }));
 let (ok_step, result_json, tl_status) = match ran {
     Ok(Ok(rr)) => {
-        // Log the FINAL ANSWER, bounded - never the full messages transcript
-        // (a 143KB tool_loop dump per step would bloat kb.plan and poison every
-        // later read). FLAT may nest under "a"; pull msg + status from either.
+        // Log the FINAL ANSWER in FULL (owner, 2026-10) - never the messages
+        // transcript (a 143KB tool_loop dump per step would bloat kb.plan and
+        // poison every later read; that guard stands). The old 1500-char cap
+        // dropped exactly the context the next step needed: the phase ledger
+        // and the verification detail. Older entries are re-truncated to 200
+        // chars when re-fed as PRIOR STEPS, and the kanban `latest` pulse
+        // stays at 240, so prompt + card size remain bounded. FLAT may nest
+        // under "a"; pull msg + status from either.
         let mut answer = rr.try_get_string("msg").unwrap_or_default();
         let mut st = rr.try_get_string("status").unwrap_or_default();
         if answer.is_empty() || st.is_empty() {
@@ -248,7 +253,6 @@ let (ok_step, result_json, tl_status) = match ran {
         }
         if answer.is_empty() { answer = rr.to_string(); }
         if st.is_empty() { st = "IN_PROGRESS".to_string(); }
-        let answer: String = answer.chars().take(1500).collect();
         (true, answer, st)
     }
     Ok(Err(pe)) => (false, format!("{{\"error\":\"{}\"}}", esc(&format!("{:?}", pe))), "ERROR".to_string()),
