@@ -272,12 +272,14 @@ log.push_object(entry_log);
 e.put_array("step_log", log);
 // ROLLING-LATEST (owner, 2026-10-21): the human had NO window into the loop
 // except asking the agent - the card showed claim+detail+tags, none of which
-// change as work progresses. Write a bounded `latest` field each step: the
-// headline of what just happened, OVERWRITTEN (never grows; step_log remains
-// the full append-only journal). The kanban card renders it, so progress is
-// visible at a glance without opening the archive. Prefer the model's own
-// "## Summary" section; fall back to the head of the final answer. Single
-// line, ~240 chars - a pulse, not a dump.
+// change as work progresses. Write a `latest` field each step: what just
+// happened, OVERWRITTEN (never grows; step_log remains the full append-only
+// journal). The kanban card renders it, so progress is visible at a glance.
+// FULL ENTRY (owner, 2026-10-22): keep the WHOLE body, multi-line, no 240-char
+// cap, no line-flattening - the flat one-line pulse was useless; the human
+// wants to read the entire step. Prefer the model's own "## Summary" section;
+// fall back to the whole final answer. Only the STATUS/VERIFIED trailer lines
+// are stripped (they are markers, not prose).
 {
     let full = result_json.trim();
     let body = if let Some(pos) = full.find("## Summary") {
@@ -285,18 +287,16 @@ e.put_array("step_log", log);
     } else {
         full
     };
-    // strip the STATUS/VERIFIED trailer lines so `latest` is prose, not markers
+    // keep every line, multi-line; drop only the STATUS:/VERIFIED: trailer lines
     let mut note = String::new();
     for ln in body.lines() {
-        let t = ln.trim();
-        if t.starts_with("STATUS:") || t.starts_with("VERIFIED:") { continue; }
-        let t = t.trim_start_matches('#').trim_start_matches('*').trim();
-        if t.is_empty() { continue; }
-        if !note.is_empty() { note.push(' '); }
+        let t = ln.trim_end();
+        let tt = t.trim_start();
+        if tt.starts_with("STATUS:") || tt.starts_with("VERIFIED:") { continue; }
         note.push_str(t);
-        if note.len() > 240 { break; }
+        note.push('\n');
     }
-    let note: String = note.chars().take(240).collect();
+    let note = note.trim().to_string();
     let mut latest = DataObject::new();
     latest.put_int("time", now);
     latest.put_string("status", &tl_status);

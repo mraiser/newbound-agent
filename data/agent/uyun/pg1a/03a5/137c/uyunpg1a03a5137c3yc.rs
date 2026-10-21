@@ -28,5 +28,10 @@ entry.put_string("claim", claim.trim());
 if !detail.trim().is_empty() { entry.put_string("detail", detail.trim()); }
 entry.put_string("tags", "plan,proposed");
 entry.put_string("confidence", "medium");
+// Mark this as a GENUINE TODO (owner, 2026-10): the archivist.remember guard
+// refuses kb.plan deposits to stop the insight-sweep polluting the board, and
+// it admits ONLY entries flagged work:true. agent.plan.add_item is the todo
+// front-door, so it stamps the flag; insights never carry it and stay refused.
+entry.put_boolean("work", true);
 let api = crate::api::new();
 api.agent.archivist.remember("kb".to_string(), "plan".to_string(), entry, author)
