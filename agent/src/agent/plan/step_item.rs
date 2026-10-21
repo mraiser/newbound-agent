@@ -318,6 +318,39 @@ entry_log.put_string("result", &result_json);
 entry_log.put_string("author", "executive");
 log.push_object(entry_log);
 e.put_array("step_log", log);
+// ROLLING-LATEST (owner, 2026-10-21): the human had NO window into the loop
+// except asking the agent - the card showed claim+detail+tags, none of which
+// change as work progresses. Write a bounded `latest` field each step: the
+// headline of what just happened, OVERWRITTEN (never grows; step_log remains
+// the full append-only journal). The kanban card renders it, so progress is
+// visible at a glance without opening the archive. Prefer the model's own
+// "## Summary" section; fall back to the head of the final answer. Single
+// line, ~240 chars - a pulse, not a dump.
+{
+    let full = result_json.trim();
+    let body = if let Some(pos) = full.find("## Summary") {
+        full[pos + "## Summary".len()..].trim()
+    } else {
+        full
+    };
+    // strip the STATUS/VERIFIED trailer lines so `latest` is prose, not markers
+    let mut note = String::new();
+    for ln in body.lines() {
+        let t = ln.trim();
+        if t.starts_with("STATUS:") || t.starts_with("VERIFIED:") { continue; }
+        let t = t.trim_start_matches('#').trim_start_matches('*').trim();
+        if t.is_empty() { continue; }
+        if !note.is_empty() { note.push(' '); }
+        note.push_str(t);
+        if note.len() > 240 { break; }
+    }
+    let note: String = note.chars().take(240).collect();
+    let mut latest = DataObject::new();
+    latest.put_int("time", now);
+    latest.put_string("status", &tl_status);
+    latest.put_string("note", &note);
+    e.put_object("latest", latest);
+}
 // LIFECYCLE TRANSITIONS, ATOMIC with the step_log write (one journaled patch,
 // no two-write stale_base window). Both move the item within the agent's
 // VERIFIED authority; `done` (human-confirmed) stays human-only:
