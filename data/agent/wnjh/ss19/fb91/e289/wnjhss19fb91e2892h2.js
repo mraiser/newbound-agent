@@ -292,7 +292,7 @@ async function init(host) {
     }
     const body = document.createElement("div");
     body.className = "ag-cell-body";
-    renderRich(body, entry.text ?? "");
+    renderRich(body, entry.text ?? "", entry.kind === "agent");
     div.appendChild(body);
     if (entry.kind === "stage") {
       // a mount note. Replay never re-runs a control's code on its own: once
@@ -411,8 +411,9 @@ async function init(host) {
     });
   }
 
-  /** think-folds + fenced code; everything else stays text. */
-  function renderRich(el, raw) {
+  /** think-folds + fenced code; agent prose (md=true) gets light markdown,
+   *  everything else stays text. */
+  function renderRich(el, raw, md) {
     let text = String(raw);
     const think = text.match(/<think>([\s\S]*?)<\/think>/);
     if (think) {
@@ -431,12 +432,92 @@ async function init(host) {
         const pre = document.createElement("pre");
         pre.textContent = part.replace(/^[a-z:.\-\d]*\n/i, "");
         el.appendChild(pre);
+      } else if (md) {
+        const html = mdBlocks(part);
+        if (!html) return;
+        const d = document.createElement("div");
+        d.className = "ag-md";
+        d.innerHTML = html;
+        el.appendChild(d);
       } else {
         const p = document.createElement("div");
         p.textContent = part.trim();
         el.appendChild(p);
       }
     });
+  }
+
+  // ── light markdown (agent prose only) ────────────────────────────────
+  // ESCAPE FIRST, then a small safe subset: headings, lists (nested by
+  // indent; ordered lists keep their start so a fence mid-list doesn't
+  // renumber), quotes, rules, GFM tables, paragraphs; inline code, bold,
+  // italic, strike, links (http(s) / relative / #anchor only). Raw HTML
+  // from the model never reaches the DOM.
+  const mdEsc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  const mdEmph = (t) => t
+    .replace(/\*\*(\S(?:[^*\n]*?\S)?)\*\*/g, "<strong>$1</strong>")
+    .replace(/(^|\W)__(\S(?:[^_\n]*?\S)?)__(?!\w)/g, "$1<strong>$2</strong>")
+    .replace(/~~(\S(?:[^~\n]*?\S)?)~~/g, "<del>$1</del>")
+    .replace(/(^|[^*\w])\*(\S(?:[^*\n]*?\S)?)\*(?![*\w])/g, "$1<em>$2</em>")
+    .replace(/(^|\W)_(\S(?:[^_\n]*?\S)?)_(?!\w)/g, "$1<em>$2</em>");
+  function mdInline(s) {
+    const stash = []; // code spans + links are held out of the emphasis pass
+    const hold = (h) => "\u0001" + (stash.push(h) - 1) + "\u0001";
+    let t = mdEsc(s).replace(/`([^`\n]+)`/g, (_, c) => hold("<code>" + c + "</code>"));
+    t = t.replace(/\[([^\]\n]+)\]\(([^)\s]+)\)/g, (m, txt, url) =>
+      /^(https?:\/\/|\/|\.\.?\/|#)/i.test(url)
+        ? hold(`<a href="${url}" target="_blank" rel="noopener">${mdEmph(txt)}</a>`) : m);
+    t = mdEmph(t);
+    for (let n = 0; n < 3 && t.includes("\u0001"); n++)
+      t = t.replace(/\u0001(\d+)\u0001/g, (_, k) => stash[+k]);
+    return t;
+  }
+  function mdBlocks(text) {
+    const lines = text.replace(/\r\n?/g, "\n").split("\n");
+    const isSep = (l) => l.includes("|") && /^\s*\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)*\|?\s*$/.test(l);
+    const cells = (l) => l.trim().replace(/^\||\|$/g, "").split("|").map((c) => c.trim());
+    let html = "", para = [], quote = [], gap = false;
+    const lists = []; // open lists, innermost last: {tag, indent}
+    const flushPara = () => { if (para.length) html += "<p>" + para.map(mdInline).join("<br>") + "</p>"; para = []; };
+    const flushQuote = () => { if (quote.length) html += "<blockquote>" + quote.map(mdInline).join("<br>") + "</blockquote>"; quote = []; };
+    const closeLists = () => { while (lists.length) html += "</li></" + lists.pop().tag + ">"; };
+    const flush = () => { flushPara(); flushQuote(); closeLists(); };
+    for (let i = 0; i < lines.length; i++) {
+      const ln = lines[i];
+      let m;
+      if (!ln.trim()) { flushPara(); flushQuote(); gap = true; continue; }
+      if (/^\s{0,3}([-*_])(\s*\1){2,}\s*$/.test(ln)) { flush(); html += "<hr>"; gap = false; continue; }
+      if ((m = ln.match(/^\s{0,3}(#{1,6})\s+(.*?)(?:\s+#+)?\s*$/))) {
+        flush(); const n = m[1].length; html += `<h${n}>${mdInline(m[2])}</h${n}>`; gap = false; continue;
+      }
+      if (ln.includes("|") && isSep(lines[i + 1] ?? "")) {
+        flush();
+        const al = cells(lines[i + 1]).map((c) => c.endsWith(":") ? (c.startsWith(":") ? "center" : "right") : "");
+        const row = (l, tg) => "<tr>" + cells(l).map((c, k) =>
+          `<${tg}${al[k] ? ` style="text-align:${al[k]}"` : ""}>${mdInline(c)}</${tg}>`).join("") + "</tr>";
+        let t = "<div class=\"ag-md-table\"><table><thead>" + row(ln, "th") + "</thead><tbody>";
+        for (i += 2; i < lines.length && lines[i].includes("|") && lines[i].trim(); i++) t += row(lines[i], "td");
+        i--; html += t + "</tbody></table></div>"; gap = false; continue;
+      }
+      if ((m = ln.match(/^\s{0,3}>\s?(.*)$/))) { flushPara(); closeLists(); quote.push(m[1]); gap = false; continue; }
+      if ((m = ln.match(/^(\s*)([-*+]|(\d{1,9})[.)])\s+(.*)$/))) {
+        flushPara(); flushQuote();
+        const indent = m[1].replace(/\t/g, "    ").length, tag = m[3] ? "ol" : "ul";
+        const start = m[3] && +m[3] !== 1 ? ` start="${+m[3]}"` : "";
+        while (lists.length && lists[lists.length - 1].indent > indent + 1) html += "</li></" + lists.pop().tag + ">";
+        const top = lists[lists.length - 1];
+        if (!top || indent >= top.indent + 2) { html += `<${tag}${start}><li>`; lists.push({ tag, indent }); }
+        else if (top.tag !== tag) { html += `</li></${lists.pop().tag}><${tag}${start}><li>`; lists.push({ tag, indent }); }
+        else html += "</li><li>";
+        html += mdInline(m[4]); gap = false; continue;
+      }
+      if (lists.length && /^\s/.test(ln)) { html += (gap ? "<br><br>" : "<br>") + mdInline(ln.trim()); gap = false; continue; }
+      closeLists(); flushQuote();
+      para.push(ln.trim()); gap = false;
+    }
+    flush();
+    return html;
   }
 
   function pushCell(entry) {
