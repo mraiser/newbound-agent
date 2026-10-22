@@ -415,13 +415,23 @@ async function chatTurn({ messages, tools, execTool, onRound, venue = "", entity
   // curriculum as a stable prefix, so server-side prefix caching still
   // hits. The venue's own array is never mutated; the merged copy lives
   // only for the duration of the call.
+  // Thinking blocks are signed against the conversation they were made in,
+  // system prompt included, and that prompt differs on every turn (a fresh
+  // pack per ask, a refreshed memory:index, the owner addendum). Replaying
+  // an EARLIER turn's block is a 400: "Invalid signature in thinking block
+  // ... The system prompt differs from the one this block was created with."
+  // Only this call's own tool loop ran under this exact prompt, so blocks
+  // from before turnStart are left out of the copy that is sent. The venue's
+  // array (and the session store) keep them untouched.
   const convo = () => {
-    if (!pack) return messages;
-    if (messages[0]?.role === "system") {
-      return [{ ...messages[0], content: messages[0].content + "\n\n" + pack.block },
-              ...messages.slice(1)];
+    const base = messages.map((m, i) => (i < turnStart && m?.thinking_blocks)
+      ? (({ thinking_blocks, ...rest }) => rest)(m) : m);
+    if (!pack) return base;
+    if (base[0]?.role === "system") {
+      return [{ ...base[0], content: base[0].content + "\n\n" + pack.block },
+              ...base.slice(1)];
     }
-    return [{ role: "system", content: pack.block }, ...messages];
+    return [{ role: "system", content: pack.block }, ...base];
   };
   for (let round = 0; round < MAX_ROUNDS; round++) {
     const r = await chatLlm(convo(), tools);
