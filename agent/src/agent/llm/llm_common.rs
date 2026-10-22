@@ -163,15 +163,16 @@ pub fn message_images(m: &DataObject) -> Vec<(String, String)> {
 // A tool answering with a JSON ARRAY (search_commands does) therefore took
 // down the whole chat_llm call. Wrapping in {"a": ...} before parsing makes
 // it total, and is already the house idiom (see dev.code.remember).
-pub fn parse_json(s: &str) -> Option<Data> {
-    DataObject::try_from_string(&format!("{{\"a\":{}}}", s))
-        .ok().map(|w| w.get_property("a"))
-}
+// The wrapper must OUTLIVE the read of "a". get_property hands back an
+// UNCOUNTED ref (ndata clones the Data, no incr), and a dropped handle is
+// only queued - the next gc() on ANY thread frees it. The old parse_json
+// returned "a" after its wrapper dropped, so .object() could incr a freed
+// slot: "Heap::incr: Invalid index" mid-turn, likelier the more tool calls
+// the history replays (args_to_object runs once per replayed call).
+// try_get_object takes the counted handle while the wrapper still lives.
 pub fn obj_from_str(s: &str) -> Option<DataObject> {
-    match parse_json(s) {
-        Some(d) if d.is_object() => Some(d.object()),
-        _ => None,
-    }
+    let w = DataObject::try_from_string(&format!("{{\"a\":{}}}", s)).ok()?;
+    w.try_get_object("a").ok()
 }
 pub fn args_to_object(s: &str) -> DataObject {
     obj_from_str(s).unwrap_or_else(DataObject::new)
