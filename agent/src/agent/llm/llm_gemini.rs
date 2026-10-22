@@ -118,9 +118,14 @@ pub fn build_gemini_payload(messages: &DataArray, tools: &DataArray,
             // (search_commands) or with plain text gets WRAPPED rather than
             // dropped — and an array keeps its STRUCTURE instead of being
             // flattened to a string, so the model can still read the rows.
-            let inner = match parse_json(&content) {
-                Some(d) if d.is_object() => d.object(),
-                Some(d) => { let mut w = DataObject::new(); w.set_property("result", d); w },
+            let inner = match DataObject::try_from_string(&format!("{{\"a\":{}}}", content)).ok() {
+                // Read "a" while the wrapper is ALIVE. get_property returns an
+                // uncounted ref; handing it out after the wrapper drops lets
+                // any thread's gc() free it first (Heap::incr: Invalid index).
+                Some(wr) => match wr.try_get_object("a") {
+                    Ok(o) => o,
+                    Err(_) => { let mut w = DataObject::new(); w.set_property("result", wr.get_property("a")); w },
+                },
                 None => { let mut w = DataObject::new(); w.put_string("result", &content); w }
             };
             let mut fr = DataObject::new();
