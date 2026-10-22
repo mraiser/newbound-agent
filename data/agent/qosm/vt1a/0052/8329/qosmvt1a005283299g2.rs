@@ -542,43 +542,17 @@ std::thread::spawn(move || {
                                     }
                                 }
                                 act.put_string("action", &action);
-                            } else if kind == "plan" && plan_autonomy_on()
-                                && it.try_get_string("stage").map(|s| s == "accepted" || s == "in-progress").unwrap_or(false) {
-                                // GATED plan-item autonomy (P-b): the item is
-                                // `accepted` OR `in-progress` (both human-authorized,
-                                // matching step_item's gate - an in-progress item is
-                                // one the agent already started and must be allowed to
-                                // CONTINUE; gating on accepted alone stranded it as
-                                // "surfaced" forever once it left accepted) and the
-                                // owner has armed PLAN_AUTONOMY. Spend this
-                                // tick's drive unit on ONE bounded REASONING
-                                // turn via agent.plan.step_item - it re-gates
-                                // on accepted, re-checks the source hash, then
-                                // hands the item to tool_loop to think + act,
-                                // journaling the outcome to the item's
-                                // step_log. The drive unit was already charged
-                                // above (next_act_time advanced), so plans can
-                                // never starve the garden. Default off => the
-                                // else branch surfaces exactly as before.
-                                ex.put_string("phase", "acting");
-                                let stepd = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                                    let cmd = Command::lookup("agent", "plan", "step_item");
-                                    let mut args = DataObject::new();
-                                    args.put_string("claim", &it.get_string("claim"));
-                                    args.put_string("base", "");
-                                    args.put_string("nn_sessionid", "");
-                                    cmd.execute(args)
-                                }));
-                                let mut action = "step_failed".to_string();
-                                if let Ok(Ok(rr)) = stepd {
-                                    if rr.has("a") {
-                                        let aa = rr.get_object("a");
-                                        if aa.has("action") { action = aa.get_string("action"); }
-                                        if aa.has("home") { act.put_string("step_home", &aa.get_string("home")); }
-                                    }
-                                }
-                                act.put_string("action", &action);
-                                ex.put_int("plan_steps", if ex.has("plan_steps") { ex.get_int("plan_steps") + 1 } else { 1 });
+                            } else if kind == "plan" {
+                                // Plan items are NOT stepped here any more (owner,
+                                // 2026-10): agent.plan.worker_start runs kb.plan
+                                // autonomy on its own thread - gated by
+                                // PLAN_AUTONOMY alone, paced by the LLM, idle when
+                                // the board is empty - so drive no longer has to
+                                // be cranked for plans and a minutes-long step no
+                                // longer blocks perception. The executive only
+                                // surfaces them, as it always did when unarmed.
+                                let _ = plan_autonomy_on;
+                                act.put_string("action", "surfaced");
                             } else {
                                 act.put_string("action", "surfaced");
                             }

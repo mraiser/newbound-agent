@@ -11,6 +11,48 @@ var LIFECYCLES = ['proposed', 'accepted', 'in-progress', 'completed', 'done', 'a
 var boardHash = '';
 var dragClaim = null;
 
+// LIVE UPDATE: the board polls the cheap board_hash probe (just kb.plan's
+// facet hash, no entries) every POLL_MS while it is actually on screen, and
+// reloads the full board only when the hash moves - so a step_item tick, a
+// move from another tab, or an add_item lands within a few seconds without
+// shipping the whole facet each tick. A re-render that would land mid-drag
+// is deferred to dragend; expanded details survive a re-render.
+var POLL_MS = 3000;
+var pollTimer = null;
+var probing = false;
+var loading = false;
+var reloadPending = false;
+var openClaims = {};
+
+function onScreen() {
+  if (!ME || !ME.isConnected) return false;
+  if (document.visibilityState === 'hidden') return false;
+  return ME.offsetParent !== null || ME.getClientRects().length > 0;
+}
+
+function refreshTimes() {
+  var lts = ME.querySelectorAll('.pl-card-latest[data-time]');
+  for (var i = 0; i < lts.length; i++) {
+    var lt = lts[i];
+    var t = Number(lt.dataset.time);
+    if (!t) continue;
+    lt.textContent = lt.dataset.st + ' · ' + relTime(t) + ' — ' + lt.dataset.note;
+  }
+}
+
+function probe() {
+  if (!ME.isConnected) { if (pollTimer) clearInterval(pollTimer); pollTimer = null; return; }
+  if (probing || loading || !onScreen()) return;
+  refreshTimes();
+  probing = true;
+  send_board_hash(function (r) {
+    probing = false;
+    if (r && r.status === 'ok' && (r.hash || '') !== boardHash) {
+      if (dragClaim !== null) reloadPending = true; else load();
+    }
+  });
+}
+
 function note(txt, isErr) {
   var n = ME.querySelector('.pl-note');
   n.textContent = txt || '';
@@ -67,6 +109,11 @@ function card(e) {
     var when = e.latest.time ? relTime(e.latest.time) : '';
     var st = e.latest.status ? e.latest.status.toLowerCase().replace(/_/g, ' ') : '';
     lt.textContent = (st ? st : 'update') + (when ? ' · ' + when : '') + ' — ' + e.latest.note;
+    if (e.latest.time) {
+      lt.dataset.time = String(e.latest.time);
+      lt.dataset.st = st ? st : 'update';
+      lt.dataset.note = e.latest.note;
+    }
     lt.title = 'latest step (of ' + (e.step_log ? e.step_log.length : 0) + ') — ' + (e.latest.note || '');
     el.appendChild(lt);
   }
@@ -75,9 +122,12 @@ function card(e) {
     var d = document.createElement('div');
     d.className = 'pl-card-detail';
     d.textContent = e.detail;
-    d.hidden = true;
+    d.hidden = !openClaims[e.claim || ''];
     el.appendChild(d);
-    el.addEventListener('click', function () { d.hidden = !d.hidden; });
+    el.addEventListener('click', function () {
+      d.hidden = !d.hidden;
+      if (d.hidden) delete openClaims[e.claim || '']; else openClaims[e.claim || ''] = true;
+    });
     el.title = 'click to show/hide detail — drag to change lifecycle';
   } else {
     el.title = 'drag to change lifecycle';
@@ -92,6 +142,7 @@ function card(e) {
   el.addEventListener('dragend', function () {
     dragClaim = null;
     el.classList.remove('dragging');
+    if (reloadPending) { reloadPending = false; setTimeout(load, 0); }
   });
   return el;
 }
@@ -151,17 +202,36 @@ function render(entries) {
 }
 
 function load() {
+  if (loading) { reloadPending = true; return; }
+  loading = true;
   send_board(function (r) {
+    loading = false;
     if (r && r.status === 'ok') {
       boardHash = r.hash || '';
       render(r.entries || []);
     } else {
       note((r && r.msg) || 'load failed', true);
     }
+    if (reloadPending && dragClaim === null) { reloadPending = false; load(); }
+  });
+}
+
+function startLive() {
+  if (!pollTimer) pollTimer = setInterval(probe, POLL_MS);
+  // the plan pane starts hidden inside the chat's tab strip: probe the moment
+  // it (or the browser tab) comes back on screen instead of waiting a tick
+  if (window.IntersectionObserver) {
+    new IntersectionObserver(function (ents) {
+      for (var i = 0; i < ents.length; i++) if (ents[i].isIntersecting) { probe(); break; }
+    }).observe(ME);
+  }
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'visible') probe();
   });
 }
 
 me.ready = function () {
+  startLive();
   ME.querySelector('.pl-refresh').addEventListener('click', function () { note(''); load(); });
   ME.querySelector('.pl-add').addEventListener('submit', function (ev) {
     ev.preventDefault();
