@@ -1323,7 +1323,7 @@ async function init(host) {
     }, 5000);
     const kv = (n) => host.querySelector(`[data-kv="${n}"]`);
 
-    const [exR, snR, svR, trR, slR, hvR, cmR, gsR] = await Promise.all([
+    const [exR, snR, svR, trR, slR, hvR, cmR, gsR, pwR] = await Promise.all([
       invoke("agent", "executive", "status", {}),
       invoke("agent", "sensor", "status", {}),
       invoke("agent", "model", "service_status", {}),
@@ -1332,14 +1332,17 @@ async function init(host) {
       invoke("agent", "model", "harvest_report", { window_days: 7 }),
       invoke("agent", "committer", "status", {}),
       invoke("agent", "model", "get_settings", {}),
+      invoke("agent", "plan", "worker_status", {}),
     ]);
     const ex = mEnv(exR) || {}, sn = mEnv(snR) || {}, sv = mEnv(svR) || {};
     const tr = mEnv(trR) || {}, sl = mEnv(slR) || {};
     const hv = mEnv(hvR) || {};
     const cm = mEnv(cmR) || {};
     // plan autonomy (kb.plan GATED plan-item autonomy): read the LIVE effective
-    // values off get_settings - PLAN_AUTONOMY gates the executive stepping
-    // ACCEPTED items; MAX_PLAN_STEPS is the per-item convergence guard.
+    // values off get_settings - PLAN_AUTONOMY arms the plan worker
+    // (agent.plan.worker_start, its own thread, not the executive's drive);
+    // MAX_PLAN_STEPS is the per-item convergence guard; PLAN_STEPS_PER_HOUR
+    // an optional sliding-hour cap (unset/0 = unlimited).
     const gs = mEnv(gsR) || {};
     const gsVal = (k, dflt) => {
       const row = (gs.settings || []).find((s) => s.key === k);
@@ -1348,6 +1351,8 @@ async function init(host) {
     };
     const planAutonomyOn = ["on", "true", "1", "yes"].includes(gsVal("PLAN_AUTONOMY", "off").toLowerCase());
     const maxPlanSteps = gsVal("MAX_PLAN_STEPS", "20");
+    const planPerHour = gsVal("PLAN_STEPS_PER_HOUR", "0");
+    const pw = mEnv(pwR) || {};
 
     // the harvest - what the week grew (H6). Claims by domain, the
     // banks, the garden's acts, the syspack gauge - and the owner's
@@ -1413,16 +1418,25 @@ async function init(host) {
     kv("loop").innerHTML =
       mChip(ex.running ? `executive ${ex.phase || "on"}` : "executive stopped", ex.running ? "ok" : "off") +
       mChip(sn.running ? "sensor on" : "sensor stopped", sn.running ? "ok" : "off") +
-      mChip(planAutonomyOn ? "plan autonomy ARMED" : "plan autonomy off", planAutonomyOn ? "warn" : "off") +
+      mChip(!planAutonomyOn ? "plan autonomy off"
+        : (pw.alive ? `plan worker ${pw.phase || "on"}` : "plan worker NOT RUNNING"),
+        !planAutonomyOn ? "off" : (pw.alive ? "warn" : "err")) +
       mKv([
         ["perceived", ex.perceived_total ?? "—"],
         ["salience calls", ex.salience_calls ?? "—"],
         ["escalations / audits", `${ex.escalations ?? 0} / ${ex.audits ?? 0}`],
         ["disagreements", ex.disagreements ?? 0, (ex.disagreements ?? 0) > 0 ? "warn" : ""],
         ["unparseable verdicts", ex.unparsed_verdicts ?? 0, (ex.unparsed_verdicts ?? 0) > 0 ? "warn" : ""],
-        ["drive (acts/hr)", ex.drive ?? "—"],
+        ["drive (memory acts/hr)", ex.drive ?? "—"],
         ["epistemic acts", ex.acts_total ?? "—"],
-        ["plan steps", `${ex.plan_steps ?? 0} (cap ${maxPlanSteps}/item)`],
+        ["plan worker", pw.phase === "stepping"
+          ? `stepping: ${(pw.current || "").slice(0, 60)}`
+          : pw.phase === "rate_limited" ? `rate limited until ${new Date(pw.resume_at).toLocaleTimeString()}`
+          : (pw.phase || "not started")],
+        ["plan turns", `${pw.turns_total ?? 0} total · ${pw.turns_last_hour ?? 0} this hour · ${Number(pw.per_hour) > 0 ? `cap ${pw.per_hour}/hr` : "no hourly cap"} · ${maxPlanSteps} steps/item`],
+        ["plan queue", `${pw.eligible ?? 0} ready · ${(pw.parked || []).length} parked · ${(pw.awaiting_reapproval || []).length} need re-approval`,
+          ((pw.parked || []).length + (pw.awaiting_reapproval || []).length) > 0 ? "warn" : ""],
+        ["last plan step", pw.last ? `${pw.last.action} — ${(pw.last.claim || "").slice(0, 56)}` : "none"],
         ["steer fast / deep", `${ex.fast_skips ?? 0} / ${ex.deep_orients ?? 0}`],
         ["last verdict", ctx.salience != null
           ? `${ctx.salience}${ctx.steer ? ` [${ctx.steer}]` : ""} — ${(ctx.salience_why || "").slice(0, 56)}`
@@ -1433,6 +1447,8 @@ async function init(host) {
     host.querySelector('[data-act="plan-toggle"]').textContent = planAutonomyOn ? "stop plan autonomy" : "start plan autonomy";
     if (document.activeElement !== host.querySelector(".ag-plansteps"))
       host.querySelector(".ag-plansteps").value = maxPlanSteps;
+    if (document.activeElement !== host.querySelector(".ag-planrate"))
+      host.querySelector(".ag-planrate").value = planPerHour;
 
     // the judge
     const mode = sv.mode || "down";
@@ -1644,6 +1660,12 @@ async function init(host) {
       // the LIVE globals + persists botd.properties.
       const next = on ? "off" : "on";
       const r = mEnv(await invoke("agent", "model", "set_setting", { key: "PLAN_AUTONOMY", value: next }));
+      // The plan worker follows PLAN_AUTONOMY live; arming only has to make
+      // sure its thread exists (the worker_boot timer normally starts it).
+      if (next === "on" && r && r.status === "ok") {
+        const ws = mEnv(await invoke("agent", "plan", "worker_status", {}));
+        if (!ws || !ws.alive) await invoke("agent", "plan", "worker_start", {});
+      }
       mindNote("loop", r && r.status === "ok" ? `plan autonomy ${next}` : "set_setting failed", !(r && r.status === "ok"));
       loadMind();
     });
@@ -1652,6 +1674,16 @@ async function init(host) {
       if (isNaN(n) || n < 1) { mindNote("loop", "max steps must be a number ≥ 1", true); return; }
       const r = mEnv(await invoke("agent", "model", "set_setting", { key: "MAX_PLAN_STEPS", value: String(n) }));
       mindNote("loop", r && r.status === "ok" ? `max plan steps set to ${n}/item` : "set_setting failed", !(r && r.status === "ok"));
+      loadMind();
+    });
+    act("set-planrate").addEventListener("click", async () => {
+      const n = parseInt(host.querySelector(".ag-planrate").value, 10);
+      if (isNaN(n) || n < 0) { mindNote("loop", "plan steps/hr must be a number ≥ 0 (0 = unlimited)", true); return; }
+      // 0 removes the key: unlimited is the default, not a stored value.
+      const r = mEnv(await invoke("agent", "model", "set_setting", { key: "PLAN_STEPS_PER_HOUR", value: n > 0 ? String(n) : "" }));
+      mindNote("loop", r && r.status === "ok"
+        ? (n > 0 ? `plan worker capped at ${n} steps/hr` : "plan worker hourly cap removed (unlimited)")
+        : "set_setting failed", !(r && r.status === "ok"));
       loadMind();
     });
     act("commit-toggle").addEventListener("click", async () => {

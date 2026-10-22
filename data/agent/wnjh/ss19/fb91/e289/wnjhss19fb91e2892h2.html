@@ -128,15 +128,18 @@
           <span class="ag-btnrow">
             <button class="ag-mind-btn" data-act="exec-toggle">executive…</button>
             <button class="ag-mind-btn" data-act="sensor-toggle">sensor…</button>
-            <label class="lbl">acts/hr <input class="ag-drive" type="number" min="0" value="4"></label>
+            <label class="lbl" title="executive drive: idle memory-upkeep acts per hour (reverify, connect, wonder, distill). Plan items do not use it - they have their own worker.">acts/hr <input class="ag-drive" type="number" min="0" value="4"></label>
             <button class="ag-mind-btn" data-act="set-drive">set</button>
           </span>
           <span class="ag-btnrow">
             <button class="ag-mind-btn" data-act="plan-toggle"
-              title="toggle PLAN_AUTONOMY - when armed the executive may take ONE bounded journaled step per drive unit on ACCEPTED kb.plan items (default off = plan items are only surfaced)">plan autonomy…</button>
+              title="toggle PLAN_AUTONOMY (persists across restarts) - when armed the plan worker steps accepted / in-progress kb.plan items back to back on its own thread, and goes quiet (no LLM calls) when none are eligible">plan autonomy…</button>
             <label class="lbl">max steps/item <input class="ag-plansteps" type="number" min="1" value="20"></label>
             <button class="ag-mind-btn" data-act="set-plansteps"
               title="set MAX_PLAN_STEPS - the convergence guard: how many autonomous steps one accepted plan item may take before it needs human re-approval">set</button>
+            <label class="lbl">plan steps/hr <input class="ag-planrate" type="number" min="0" value="0" title="0 = unlimited"></label>
+            <button class="ag-mind-btn" data-act="set-planrate"
+              title="set PLAN_STEPS_PER_HOUR - a sliding-hour cap on the plan worker's reasoning turns; 0 = unlimited (the default)">set</button>
           </span>
           <pre class="ag-mind-note lbl" data-note="loop"></pre>
         </div>
