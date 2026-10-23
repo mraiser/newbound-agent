@@ -117,7 +117,7 @@ let has_tag = |s: &str| toks.iter().any(|t| *t == s);
 let was_accepted = has_tag("accepted");
 if !was_accepted && !has_tag("in-progress") {
     out.put_string("status", "err");
-    out.put_string("msg", "gate: only `accepted` or `in-progress` plan items are steppable - proposed stays human-only and the agent never self-promotes");
+    out.put_string("msg", "gate: only `accepted` or `in-progress` plan items are steppable - proposed stays human-only and the agent never self-promotes; a `blocked` item waits for a human to move it back to accepted");
     out.put_string("action", "gated");
     return out;
 }
@@ -222,7 +222,7 @@ Think, then act via the available tools. Prefer a single concrete, verifiable in
 When you finish, END your reply with a status line in EXACTLY this form (last line, no tool call after):\n\
 STATUS: DONE  - the item is complete AND you verified it against the goal with a concrete check you actually ran (build/invoke/parity/test). Name that check on the line above, e.g. 'VERIFIED: <the exact command you ran and its result>'. A DONE with no VERIFIED evidence is treated as IN_PROGRESS.\n\
 STATUS: IN_PROGRESS  - you made progress but the item is not done yet.\n\
-STATUS: BLOCKED  - you cannot proceed; say what you need above.\n\
+STATUS: BLOCKED  - you cannot proceed without a human (a decision, access, credentials, hardware, an external dependency). Say exactly what you need above. This MOVES the item to the board's BLOCKED column: the plan loop stops stepping it and goes on to the next task until a human unblocks it, so use BLOCKED instead of describing a blocker under IN_PROGRESS - and do not use it for problems you could still work around yourself.\n\
 Only claim DONE when you actually verified completion against the goal, not when you merely believe it.\n\n\
 GOAL: {}\n", goal);
 // (B) STOP TRUNCATING DETAIL (owner, 2026-10): the floweditor3d postmortem -
@@ -306,7 +306,7 @@ if e.has("source") {
 // force. The post-turn write re-reads the board (FRESH BASE, below), so this
 // extra write never strands the step_log on a stale hash.
 fn with_lifecycle(tags: &str, to: &str) -> String {
-    let lc = ["proposed","accepted","in-progress","completed","done","abandoned"];
+    let lc = ["proposed","accepted","in-progress","blocked","completed","done","abandoned"];
     let mut kept: Vec<String> = tags.split(',')
         .map(|t| t.trim().to_string())
         .filter(|t| !t.is_empty() && !lc.contains(&t.as_str()))
@@ -477,7 +477,7 @@ if ok_step && !notes_presented.is_empty() {
 //     human kanban act, the same trust boundary as `accepted` itself.
 let short: String = claim.chars().take(50).collect();
 let mut label = format!("plan step: '{}' -> {}", short, if ok_step { "ok" } else { "err" });
-let lifecycles = ["proposed","accepted","in-progress","completed","done","abandoned"];
+let lifecycles = ["proposed","accepted","in-progress","blocked","completed","done","abandoned"];
 let mut set_lifecycle = |e: &mut DataObject, to: &str| {
     let tags = e.try_get_string("tags").unwrap_or_default();
     let mut kept: Vec<String> = tags.split(',')
@@ -487,6 +487,7 @@ let mut set_lifecycle = |e: &mut DataObject, to: &str| {
     kept.push(to.to_string());
     e.put_string("tags", &kept.join(","));
 };
+let mut moved_to_blocked = false;
 if tl_status == "DONE" {
     if live_now {
         set_lifecycle(&mut e, "completed");
@@ -495,6 +496,22 @@ if tl_status == "DONE" {
         // A human moved the card out of the agent's lane mid-turn - their
         // lifecycle wins; journal the step but do not override it.
         label = format!("plan step: '{}' -> DONE claimed, but the item left accepted/in-progress mid-turn; lifecycle left as the human set it", short);
+    }
+} else if tl_status == "BLOCKED" {
+    //   * -> blocked (2026-10): the agent cannot proceed without a human. The
+    //     card MOVES to the kanban's `blocked` column in this same atomic
+    //     write, instead of only saying so in the log while the item sat
+    //     in-progress - a blocked item is not steppable (gate) and not
+    //     eligible for the plan worker, so the loop stops spending turns on it
+    //     and goes on to the next unblocked item. The blocker text rides
+    //     `latest` (visible on the card) and step_log; a human unblocks by
+    //     moving the card back to accepted, and the next step reads it.
+    if live_now {
+        set_lifecycle(&mut e, "blocked");
+        moved_to_blocked = true;
+        label = format!("plan blocked (needs a human): '{}'", short);
+    } else {
+        label = format!("plan step: '{}' -> BLOCKED claimed, but the item left accepted/in-progress mid-turn; lifecycle left as the human set it", short);
     }
 }
 // accepted -> in-progress is no longer done here: it happens at the START of
@@ -565,9 +582,12 @@ if tl_status == "DONE" {
     out.put_string("action", "completed");
     out.put_boolean("moved_to_completed", write_ok);
 } else if tl_status == "BLOCKED" {
-    // Surface once; the blocker rides the next prompt so the agent addresses it
-    // rather than re-proving. Item stays in-progress.
+    // The `blocked` tag was applied atomically in the write above (when the
+    // item was still in the agent's lane): the card sits in the kanban's
+    // blocked column, the gate refuses it, and the worker moves on to the
+    // next unblocked item until a human moves it back to accepted.
     out.put_string("action", "blocked");
+    out.put_boolean("moved_to_blocked", moved_to_blocked);
 } else {
     out.put_string("action", if ok_step { "stepped" } else { "step_failed" });
 }

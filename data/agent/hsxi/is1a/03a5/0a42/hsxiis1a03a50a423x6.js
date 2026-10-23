@@ -7,7 +7,10 @@
 var me = this;
 var ME = document.getElementById(me.UUID);
 
-var LIFECYCLES = ['proposed', 'accepted', 'in-progress', 'completed', 'done', 'abandoned'];
+// `blocked`: the agent hit a wall it needs a human for (step_item moves the
+// card here on STATUS: BLOCKED). The plan loop skips it; drag it back to
+// accepted once the blocker is resolved and the agent picks it up again.
+var LIFECYCLES = ['proposed', 'accepted', 'in-progress', 'blocked', 'completed', 'done', 'abandoned'];
 var boardHash = '';
 var dragClaim = null;
 
@@ -174,9 +177,12 @@ function card(e) {
   var ta = document.createElement('textarea');
   ta.className = 'pl-noteform-text';
   ta.rows = 2;
-  ta.placeholder = lifecycleOf(e.tags) === 'in-progress'
+  var lc = lifecycleOf(e.tags);
+  ta.placeholder = lc === 'in-progress'
     ? 'add a note — the agent reads it on its next step (ctrl+enter)'
-    : 'add a note to this item (ctrl+enter)';
+    : lc === 'blocked'
+      ? 'answer the blocker here, then drag the card back to accepted (ctrl+enter)'
+      : 'add a note to this item (ctrl+enter)';
   ta.setAttribute('aria-label', 'Add a note to this plan item');
   ta.value = drafts[key] || '';
   var nb = document.createElement('button');
@@ -216,7 +222,9 @@ function card(e) {
         delete drafts[key];
         ta.value = '';
         openClaims[key] = true;
-        note(r.lifecycle === 'in-progress' ? 'note added — the agent picks it up on its next step' : 'note added');
+        note(r.lifecycle === 'in-progress' ? 'note added — the agent picks it up on its next step'
+          : r.lifecycle === 'blocked' ? 'note added — drag the card back to accepted to unblock it'
+          : 'note added');
         load();
       } else {
         note((r && r.msg) || 'add note failed', true);
