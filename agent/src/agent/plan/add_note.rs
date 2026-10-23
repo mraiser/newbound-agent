@@ -120,7 +120,7 @@ for _attempt in 0..4 {
         count = notes.len() as i64;
         if !e.has("notes") { e.put_array("notes", notes); }
         let tags = e.try_get_string("tags").unwrap_or_default().to_lowercase();
-        for l in ["proposed", "accepted", "in-progress", "completed", "done", "abandoned"] {
+        for l in ["proposed", "accepted", "in-progress", "blocked", "completed", "done", "abandoned"] {
             if tags.split(',').any(|t| t.trim() == l) { lifecycle = l.to_string(); }
         }
         found = true;

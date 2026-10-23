@@ -50,11 +50,14 @@ pub fn execute(o: DataObject) -> DataObject {
 }
 
 pub fn move_item(claim: String, lifecycle: String, base: String, nn_sessionid: String) -> DataObject {
-let lifecycles = ["proposed", "accepted", "in-progress", "completed", "done", "abandoned"];
+// `blocked` (2026-10): the agent cannot proceed without a human. Not steppable
+// (step_item's gate), not eligible for the plan worker - the loop moves on to
+// the next unblocked item. A human unblocks by moving it back to accepted.
+let lifecycles = ["proposed", "accepted", "in-progress", "blocked", "completed", "done", "abandoned"];
 let mut out = DataObject::new();
 if !lifecycles.contains(&lifecycle.as_str()) {
     out.put_string("status", "err");
-    out.put_string("msg", "lifecycle must be one of proposed/accepted/in-progress/done/abandoned");
+    out.put_string("msg", "lifecycle must be one of proposed/accepted/in-progress/blocked/completed/done/abandoned");
     return out;
 }
 let api = crate::api::new();

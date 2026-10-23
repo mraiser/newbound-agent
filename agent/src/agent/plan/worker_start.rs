@@ -230,7 +230,9 @@ fn run(gen: i64) {
                 if claim.trim().is_empty() { continue; }
                 let t = tagset(e);
                 let has = |s: &str| t.iter().any(|x| x == s);
-                if has("done") || has("completed") || has("abandoned") { continue; }
+                // `blocked` waits for a human (moved back to accepted) - never
+                // spend a turn on it; go on to the next unblocked item.
+                if has("done") || has("completed") || has("abandoned") || has("blocked") { continue; }
                 let prog = has("in-progress");
                 if !prog && !has("accepted") { continue; }
                 let open_children = entries.iter().filter(|c| {

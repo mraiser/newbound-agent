@@ -18,6 +18,11 @@
   display: flex; flex-direction: column; gap: 8px; }
 .pl-col[data-lifecycle="done"] .pl-card,
 .pl-col[data-lifecycle="abandoned"] .pl-card { opacity: .55; }
+/* blocked: the agent needs a human - the plan loop skips these */
+.pl-col[data-lifecycle="blocked"] .pl-col-h { color: var(--bad, #c0564f); }
+.pl-col[data-lifecycle="blocked"] .pl-card { border-left: 3px solid var(--bad, #c0564f); }
+.pl-col[data-lifecycle="blocked"] .pl-card-latest { color: var(--bad, #c0564f);
+  border-left-color: var(--bad, #c0564f); }
 
 .pl-card { border: 1px solid var(--line); border-radius: 8px; padding: 7px 9px;
   background: var(--bg); cursor: grab; font-size: .88em; }
