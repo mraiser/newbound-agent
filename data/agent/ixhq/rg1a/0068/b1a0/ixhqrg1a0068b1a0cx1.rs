@@ -269,7 +269,10 @@ for lib in libs {
                         // behind same-priority `review` items (seniority tie-break starved it).
                         // Give accepted/in-progress their own lane ABOVE review; `proposed`
                         // (un-approved intent) stays BELOW review, surfaced only.
-                        let (pr, stage) = if has_tag("accepted") { (4i64, "accepted") }
+                        // `blocked` (agent hit a wall, waits for a human) is surfaced
+                        // only, like proposed - never a work order until re-accepted.
+                        let (pr, stage) = if has_tag("blocked") { (1i64, "blocked") }
+                            else if has_tag("accepted") { (4i64, "accepted") }
                             else if has_tag("in-progress") { (3i64, "in-progress") }
                             else { (1i64, "proposed") };
                         let mut it = DataObject::new();
