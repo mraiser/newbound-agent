@@ -23,6 +23,13 @@ var probing = false;
 var loading = false;
 var reloadPending = false;
 var openClaims = {};
+var drafts = {}; // claim -> half-typed note text, survives a live re-render
+
+// a note textarea with focus defers live reloads (a re-render would steal it)
+function typing() {
+  var a = document.activeElement;
+  return !!(a && a.classList && a.classList.contains('pl-noteform-text') && ME.contains(a));
+}
 
 function onScreen() {
   if (!ME || !ME.isConnected) return false;
@@ -48,7 +55,7 @@ function probe() {
   send_board_hash(function (r) {
     probing = false;
     if (r && r.status === 'ok' && (r.hash || '') !== boardHash) {
-      if (dragClaim !== null) reloadPending = true; else load();
+      if (dragClaim !== null || typing()) reloadPending = true; else load();
     }
   });
 }
@@ -118,20 +125,110 @@ function card(e) {
     el.appendChild(lt);
   }
 
+  // NOTES (agent.plan.add_note): the human's running guidance on an item.
+  // The count chip is always visible; an unseen note (no seen_at) is one the
+  // agent has not been shown yet - step_item flags it NEW in the next step
+  // prompt and stamps seen_at after that turn.
+  var key = e.claim || '';
+  var notes = Array.isArray(e.notes) ? e.notes.filter(function (n) { return n && n.text; }) : [];
+  var unseen = notes.filter(function (n) { return !n.seen_at; }).length;
+  if (notes.length) {
+    var nc = document.createElement('div');
+    nc.className = 'pl-card-notecount' + (unseen ? ' new' : '');
+    nc.textContent = '✎ ' + notes.length + (notes.length === 1 ? ' note' : ' notes') +
+      (unseen ? ' · ' + unseen + ' not yet seen by the agent' : '');
+    el.appendChild(nc);
+  }
+
+  // the expandable body: detail + notes + the add-note form
+  var body = document.createElement('div');
+  body.className = 'pl-card-body';
+  body.hidden = !openClaims[key];
   if (e.detail) {
     var d = document.createElement('div');
     d.className = 'pl-card-detail';
     d.textContent = e.detail;
-    d.hidden = !openClaims[e.claim || ''];
-    el.appendChild(d);
-    el.addEventListener('click', function () {
-      d.hidden = !d.hidden;
-      if (d.hidden) delete openClaims[e.claim || '']; else openClaims[e.claim || ''] = true;
-    });
-    el.title = 'click to show/hide detail — drag to change lifecycle';
-  } else {
-    el.title = 'drag to change lifecycle';
+    body.appendChild(d);
   }
+  if (notes.length) {
+    var nl = document.createElement('div');
+    nl.className = 'pl-notes';
+    notes.forEach(function (n) {
+      var row = document.createElement('div');
+      row.className = 'pl-notes-row' + (n.seen_at ? '' : ' new');
+      var nh = document.createElement('div');
+      nh.className = 'pl-notes-h';
+      nh.textContent = (n.author || 'owner') + (n.time ? ' · ' + relTime(n.time) : '') + ' · ' +
+        (n.seen_at ? 'seen by the agent ' + relTime(n.seen_at) : 'new — rides the next step');
+      var nt = document.createElement('div');
+      nt.className = 'pl-notes-t';
+      nt.textContent = n.text;
+      row.appendChild(nh);
+      row.appendChild(nt);
+      nl.appendChild(row);
+    });
+    body.appendChild(nl);
+  }
+  var nf = document.createElement('form');
+  nf.className = 'pl-noteform';
+  var ta = document.createElement('textarea');
+  ta.className = 'pl-noteform-text';
+  ta.rows = 2;
+  ta.placeholder = lifecycleOf(e.tags) === 'in-progress'
+    ? 'add a note — the agent reads it on its next step (ctrl+enter)'
+    : 'add a note to this item (ctrl+enter)';
+  ta.setAttribute('aria-label', 'Add a note to this plan item');
+  ta.value = drafts[key] || '';
+  var nb = document.createElement('button');
+  nb.type = 'submit';
+  nb.textContent = '+ note';
+  nf.appendChild(ta);
+  nf.appendChild(nb);
+  body.appendChild(nf);
+  el.appendChild(body);
+
+  // typing inside a draggable card: suspend drag while the textarea has focus
+  // (otherwise text selection turns into a card drag), keep the draft across
+  // re-renders, and defer live reloads until the textarea lets go.
+  ['click', 'mousedown', 'dragstart'].forEach(function (t) {
+    nf.addEventListener(t, function (ev) { ev.stopPropagation(); });
+  });
+  ta.addEventListener('focus', function () { el.draggable = false; });
+  ta.addEventListener('blur', function () {
+    el.draggable = true;
+    if (reloadPending && dragClaim === null) { reloadPending = false; setTimeout(load, 0); }
+  });
+  ta.addEventListener('input', function () {
+    if (ta.value) drafts[key] = ta.value; else delete drafts[key];
+  });
+  ta.addEventListener('keydown', function (ev) {
+    if (ev.key === 'Enter' && (ev.ctrlKey || ev.metaKey)) { ev.preventDefault(); nf.requestSubmit ? nf.requestSubmit() : nb.click(); }
+  });
+  nf.addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    var txt = ta.value.trim();
+    if (!txt) return;
+    nb.disabled = true;
+    note('adding note…');
+    send_add_note(key, txt, null, function (r) {
+      nb.disabled = false;
+      if (r && r.status === 'ok') {
+        delete drafts[key];
+        ta.value = '';
+        openClaims[key] = true;
+        note(r.lifecycle === 'in-progress' ? 'note added — the agent picks it up on its next step' : 'note added');
+        load();
+      } else {
+        note((r && r.msg) || 'add note failed', true);
+      }
+    });
+  });
+
+  el.addEventListener('click', function () {
+    body.hidden = !body.hidden;
+    if (body.hidden) delete openClaims[key]; else openClaims[key] = true;
+  });
+  el.title = 'click to show/hide ' + (e.detail ? 'detail & ' : '') + 'notes — drag to change lifecycle';
 
   el.addEventListener('dragstart', function (ev) {
     dragClaim = e.claim || '';
@@ -240,7 +337,7 @@ me.ready = function () {
     var claim = claimEl.value.trim();
     if (!claim) return;
     note('filing…');
-    send_add_item(claim, detailEl.value.trim(), null, function (r) {
+    send_add_item(claim, detailEl.value.trim(), '', null, function (r) {
       if (r && r.status === 'ok') { claimEl.value = ''; detailEl.value = ''; note(''); load(); }
       else note((r && r.msg) || 'add failed', true);
     });
