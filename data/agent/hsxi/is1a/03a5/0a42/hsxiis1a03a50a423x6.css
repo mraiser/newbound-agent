@@ -32,6 +32,28 @@
   white-space: pre-wrap; overflow-wrap: anywhere; border-top: 1px solid var(--line);
   padding-top: 6px; }
 .pl-card-detail[hidden] { display: none; }
+.pl-card-body[hidden] { display: none; }
+
+.pl-card-notecount { margin-top: 5px; font-size: .8em; color: var(--text-faint); }
+.pl-card-notecount.new { color: var(--accent, #f0a63c); }
+.pl-notes { margin-top: 6px; display: flex; flex-direction: column; gap: 5px;
+  border-top: 1px solid var(--line); padding-top: 6px; }
+.pl-notes-row { border-left: 2px solid var(--line); padding-left: 6px; }
+.pl-notes-row.new { border-left-color: var(--accent, #f0a63c); }
+.pl-notes-h { font-size: .78em; color: var(--text-faint); }
+.pl-notes-row.new .pl-notes-h { color: var(--accent, #f0a63c); }
+.pl-notes-t { font-size: .9em; color: var(--text-dim); white-space: pre-wrap;
+  overflow-wrap: anywhere; }
+.pl-noteform { margin-top: 6px; display: flex; gap: 6px; align-items: flex-end;
+  cursor: auto; }
+.pl-noteform-text { flex: 1; min-width: 0; resize: vertical; background: var(--panel);
+  color: var(--text); border: 1px solid var(--line); border-radius: 6px;
+  padding: 4px 7px; font: inherit; font-size: .9em; }
+.pl-noteform button { background: none; border: 1px solid var(--line); border-radius: 6px;
+  padding: 3px 8px; color: var(--text-dim); cursor: pointer; white-space: nowrap;
+  font-size: .85em; }
+.pl-noteform button:hover { color: var(--text); }
+.pl-noteform button:disabled { opacity: .5; cursor: default; }
 
 .pl-add { flex: none; display: flex; gap: 8px; }
 .pl-add input { flex: 1; min-width: 0; background: var(--bg); color: var(--text);
