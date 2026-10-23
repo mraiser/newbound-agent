@@ -569,10 +569,11 @@ if !write_ok {
 // have produced a VERIFIED: evidence line (a bare DONE is parsed as
 // IN_PROGRESS by tool_loop), and the transition rides the same journaled,
 // base-hashed write a human kanban drag uses (revertible). DONE -> done tag ->
-// epistemic_work drops it, the loop ENDS. BLOCKED -> surface once; the item
-// stays accepted but the blocker rides the next prompt so the agent addresses
-// it instead of re-proving. IN_PROGRESS -> normal continuation under
-// MAX_PLAN_STEPS.
+// epistemic_work drops it, the loop ENDS. BLOCKED -> the item MOVES to the
+// `blocked` lifecycle (kanban's blocked column) in the write above; the gate
+// refuses it and the plan worker skips it, so no further turns are spent until
+// a human moves it back to accepted (the next step then reads the blocker and
+// any notes). IN_PROGRESS -> normal continuation under MAX_PLAN_STEPS.
 out.put_string("loop_status", &tl_status);
 out.put_string("status", "ok");
 if tl_status == "DONE" {
