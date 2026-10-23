@@ -406,8 +406,9 @@ let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
 
 // Parse the model's completion status out of the final answer's STATUS: marker
 // (the executive prompt instructs DONE/IN_PROGRESS/BLOCKED). This is the signal
-// step_item uses to close the loop: DONE -> verify + move_item(done), BLOCKED
-// -> surface once (never a silent 15-min re-prove). Default: a budget checkpoint
+// step_item uses to close the loop: DONE -> verify + completed, BLOCKED
+// -> the item moves to the `blocked` lifecycle (the plan loop skips it until a
+// human re-accepts it - never a silent re-prove). Default: a budget checkpoint
 // is incomplete; a clean text finish with no marker is IN_PROGRESS (the item
 // stays accepted and keeps being stepped).
 let mut status = "IN_PROGRESS".to_string();
