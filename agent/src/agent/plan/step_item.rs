@@ -290,6 +290,43 @@ if !detail.trim().is_empty() {
 if !prior_steps.is_empty() {
     prompt.push_str(&format!("\nPRIOR STEPS (do not repeat without new information):\n{}\n", prior_steps));
 }
+// (C) HUMAN NOTES (agent.plan.add_note, from the kanban card): the owner's
+// running guidance on an item, appended between steps. EVERY note rides the
+// prompt in full (they are human-authored and bounded at the source, 8000
+// chars each); the ones this loop has not consumed yet (no `seen_at`) are
+// flagged NEW so a mid-flight correction is noticed on the very next trip to
+// the LLM instead of being buried under the original detail. The post-turn
+// write stamps seen_at on exactly the notes presented here (matched by time),
+// so a note added DURING the turn stays NEW for the following step.
+let mut notes_presented: Vec<i64> = Vec::new();
+let mut notes_new_count: i64 = 0;
+if let Ok(na) = e.try_get_array("notes") {
+    let mut lines_new: Vec<String> = Vec::new();
+    let mut lines_old: Vec<String> = Vec::new();
+    for i in 0..na.len() {
+        if let Ok(n) = na.try_get_object(i) {
+            let txt = n.try_get_string("text").unwrap_or_default();
+            if txt.trim().is_empty() { continue; }
+            let who = n.try_get_string("author").unwrap_or_default();
+            let t = n.try_get_int("time").unwrap_or(0);
+            notes_presented.push(t);
+            let body = txt.trim().replace('\n', "\n  ");
+            let line = format!("- ({}) {}", if who.is_empty() { "owner".to_string() } else { who }, body);
+            if n.has("seen_at") { lines_old.push(line); } else { lines_new.push(line); }
+        }
+    }
+    notes_new_count = lines_new.len() as i64;
+    if !lines_new.is_empty() || !lines_old.is_empty() {
+        prompt.push_str("\nHUMAN NOTES on this item (added by the owner from the plan board between steps; they refine the GOAL/DETAIL and OUTRANK them, and any prior step, where they conflict):\n");
+        if !lines_new.is_empty() {
+            prompt.push_str(&format!("NEW since your last step - read these first and act on them this step:\n{}\n", lines_new.join("\n")));
+        }
+        if !lines_old.is_empty() {
+            prompt.push_str(&format!("Earlier notes (seen on a prior step, still in force):\n{}\n", lines_old.join("\n")));
+        }
+    }
+}
+out.put_int("notes_new", notes_new_count);
 // (6) STALE LOOP: re-check the source pointer's hash before acting.
 if e.has("source") {
     if let Ok(srcptr) = e.try_get_object("source") {
@@ -428,8 +465,25 @@ entry_log.put_string("home", "agent.llm.tool_loop");
 entry_log.put_boolean("ok", ok_step);
 entry_log.put_string("result", &result_json);
 entry_log.put_string("author", "executive");
+entry_log.put_int("notes_presented", notes_presented.len() as i64);
+entry_log.put_int("notes_new", notes_new_count);
 log.push_object(entry_log);
 e.put_array("step_log", log);
+// (C) mark the notes this turn was SHOWN as consumed - only on a turn that
+// actually reached the model (ok_step); a failed/panicked turn leaves them NEW
+// so the retry still flags them. Matched by note time, so a note appended
+// mid-turn (re-read into this fresh entry) stays unseen for the next step.
+if ok_step && !notes_presented.is_empty() {
+    if let Ok(na) = e.try_get_array("notes") {
+        for i in 0..na.len() {
+            if let Ok(mut n) = na.try_get_object(i) {
+                if !n.has("seen_at") && notes_presented.contains(&n.try_get_int("time").unwrap_or(-1)) {
+                    n.put_int("seen_at", now);
+                }
+            }
+        }
+    }
+}
 // ROLLING-LATEST (owner, 2026-10-21): the human had NO window into the loop
 // except asking the agent - the card showed claim+detail+tags, none of which
 // change as work progresses. Write a `latest` field each step: what just

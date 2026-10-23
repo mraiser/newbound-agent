@@ -135,11 +135,34 @@ fn tagset(e: &DataObject) -> Vec<String> {
 }
 // Deterministic (DataObject key order is not): the fields a human changes.
 fn fingerprint(e: &DataObject) -> String {
-    format!("{}\u{1f}{}\u{1f}{}\u{1f}{}",
+    // notes count included: a human note (agent.plan.add_note) is a change to
+    // the entry, so it un-parks a blocked/parked item and the next step reads it
+    format!("{}\u{1f}{}\u{1f}{}\u{1f}{}\u{1f}{}",
         e.try_get_string("tags").unwrap_or_default(),
         e.try_get_string("detail").unwrap_or_default(),
         e.try_get_string("parent").unwrap_or_default(),
-        e.try_get_array("step_log").map(|a| a.len()).unwrap_or(0))
+        e.try_get_array("step_log").map(|a| a.len()).unwrap_or(0),
+        e.try_get_array("notes").map(|a| a.len()).unwrap_or(0))
+}
+// A human note the agent has NOT been shown yet: unseen (no seen_at) and newer
+// than the start of the last step (step_log entries carry the turn-start time).
+// The park fingerprint is taken AFTER a step, so a note typed DURING the turn
+// is already inside it - this catches that case and un-parks the item so the
+// note rides the very next prompt. A note that WAS presented to a failed turn
+// predates that step's start, so it never bypasses step_failed backoff.
+fn fresh_note(e: &DataObject) -> bool {
+    let notes = match e.try_get_array("notes") { Ok(a) => a, Err(_) => return false };
+    let last_step = e.try_get_array("step_log").ok()
+        .and_then(|sl| if sl.len() > 0 { sl.try_get_object(sl.len() - 1).ok() } else { None })
+        .and_then(|le| le.try_get_int("time").ok())
+        .unwrap_or(0);
+    for i in 0..notes.len() {
+        if let Ok(n) = notes.try_get_object(i) {
+            if n.has("seen_at") { continue; }
+            if n.try_get_int("time").unwrap_or(0) > last_step { return true; }
+        }
+    }
+    false
 }
 // The wrapper stays alive until the counted array handle is taken.
 fn parse_board(src: &str) -> Vec<DataObject> {
@@ -217,7 +240,7 @@ fn run(gen: i64) {
                 if open_children > 0 { continue; }
                 let steps = e.try_get_array("step_log").map(|a| a.len() as i64).unwrap_or(0);
                 if steps >= cap { awaiting.push_string(&claim); continue; }
-                let verdict = parked.get(&claim).map(|p| (p.fp != fingerprint(e), p.until > 0 && now >= p.until));
+                let verdict = parked.get(&claim).map(|p| (p.fp != fingerprint(e) || fresh_note(e), p.until > 0 && now >= p.until));
                 match verdict {
                     Some((true, _)) => { parked.remove(&claim); fails.remove(&claim); }
                     Some((false, true)) => { parked.remove(&claim); }
