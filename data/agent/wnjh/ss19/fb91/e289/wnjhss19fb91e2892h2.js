@@ -1434,7 +1434,7 @@ async function init(host) {
           : pw.phase === "rate_limited" ? `rate limited until ${new Date(pw.resume_at).toLocaleTimeString()}`
           : (pw.phase || "not started")],
         ["plan turns", `${pw.turns_total ?? 0} total · ${pw.turns_last_hour ?? 0} this hour · ${Number(pw.per_hour) > 0 ? `cap ${pw.per_hour}/hr` : "no hourly cap"} · ${maxPlanSteps} steps/item`],
-        ["plan queue", `${pw.eligible ?? 0} ready · ${(pw.parked || []).length} parked · ${(pw.awaiting_reapproval || []).length} need re-approval`,
+        ["plan queue", `${pw.eligible ?? 0} ready (${(pw.coordinating || []).length} coordinating) · ${(pw.waiting_for_children || []).length} waiting for active children · ${(pw.parked || []).length} parked · ${(pw.awaiting_reapproval || []).length} need re-approval`,
           ((pw.parked || []).length + (pw.awaiting_reapproval || []).length) > 0 ? "warn" : ""],
         ["last plan step", pw.last ? `${pw.last.action} — ${(pw.last.claim || "").slice(0, 56)}` : "none"],
         ["steer fast / deep", `${ex.fast_skips ?? 0} / ${ex.deep_orients ?? 0}`],
