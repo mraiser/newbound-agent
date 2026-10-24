@@ -202,15 +202,6 @@ fn run(gen: i64) {
             let mut cands: Vec<(u8, usize, String, bool)> = Vec::new();
             let mut awaiting = DataArray::new();
             let mut waiting_for_children = DataArray::new();
-            // A child whose lifecycle changed since the parent's last step is
-            // a coordination event - it wakes a parked parent. Terminal for
-            // coordination = completed | done | abandoned (an abandoned child
-            // carries an explicit human disposition and does not re-open the
-            // parent); proposed/accepted/in-progress/blocked are all OPEN.
-            let closed = |c: &DataObject| {
-                let t = tagset(c);
-                t.iter().any(|x| x == "completed" || x == "done" || x == "abandoned")
-            };
             for (i, e) in entries.iter().enumerate() {
                 let claim = e.try_get_string("claim").unwrap_or_default();
                 if claim.trim().is_empty() { continue; }
@@ -234,9 +225,6 @@ fn run(gen: i64) {
                 let is_coord = parent_is_coordination_task(&claim, &entries);
                 let steps = e.try_get_array("step_log").map(|a| a.len() as i64).unwrap_or(0);
                 if steps >= cap { awaiting.push_string(&claim); continue; }
-                if !is_coord && open_children > 0 {
-                    state().put_string("last_error", "inconsistent parent classification");
-                }
                 // Coordination must not STARVE the work it just authorized.
                 // A parent with an accepted/in-progress child has no board
                 // transition to make: that child is the next implementation

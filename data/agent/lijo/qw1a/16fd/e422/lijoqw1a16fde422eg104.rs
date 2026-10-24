@@ -11,6 +11,12 @@ fn entry(claim: &str, parent: &str, lifecycle: &str, steps: usize) -> DataObject
     e
 }
 let wait = crate::agent::plan::worker_start::parent_waits_for_active_child;
+let coordinating = crate::agent::plan::worker_start::parent_is_coordination_task;
+let mut classification_pass = true;
+classification_pass &= coordinating("p", &vec![entry("c", "p", "completed", 3)]);
+classification_pass &= coordinating("p", &vec![entry("c", "p", "done", 3)]);
+classification_pass &= !coordinating("p", &vec![entry("c", "p", "abandoned", 0)]);
+classification_pass &= !coordinating("childless", &vec![entry("c", "p", "proposed", 0)]);
 let cases = vec![
     ("proposed child leaves parent eligible", vec![entry("c", "p", "proposed", 0)], false),
     ("accepted child defers parent", vec![entry("c", "p", "accepted", 0)], true),
@@ -38,6 +44,12 @@ for (name, entries, expected) in cases {
 let mut out = DataObject::new();
 out.put_string("status", if passed == results.len() as i64 { "ok" } else { "err" });
 out.put_int("passed", passed);
-out.put_int("total", results.len() as i64);
+out.put_int("total", results.len() as i64 + 4);
+if classification_pass { passed += 4; } else {
+    out.put_string("status", "err");
+    out.put_string("msg", "parent coordination classification fixture failed");
+}
+out.put_int("passed", passed);
+out.put_boolean("closing_and_abandoned_classification_pass", classification_pass);
 out.put_array("results", results);
 out
