@@ -137,8 +137,24 @@ fn read_facet() -> (String, String) {
 }
 fn fp_now(claim: &str) -> String {
     let (_, src) = read_facet();
-    for e in parse_board(&src) {
-        if e.try_get_string("claim").unwrap_or_default() == claim { return fingerprint(&e); }
+    let entries = parse_board(&src);
+    for e in &entries {
+        if e.try_get_string("claim").unwrap_or_default() == claim {
+            // Include the lifecycles of this entry's CHILDREN (initials in
+            // board order): for a coordinator parent the fingerprint must
+            // capture the child states its own turn just set, so its own
+            // board edits never wake it - only a change it did not make (a
+            // child completing, a human re-accept) does.
+            let child_lcs: String = entries.iter().filter(|c| {
+                c.try_get_string("parent").unwrap_or_default() == claim
+            }).map(|c| {
+                let ct = tagset(c);
+                ["proposed","accepted","in-progress","blocked","completed","done","abandoned"]
+                    .iter().find(|l| ct.iter().any(|x| x == **l))
+                    .map(|s| s.chars().next().unwrap_or('?')).unwrap_or('?')
+            }).collect();
+            return format!("{}\u{1f}{}", fingerprint(e), child_lcs);
+        }
     }
     String::new()
 }
@@ -183,6 +199,15 @@ fn run(gen: i64) {
             let cap = max_steps();
             let mut cands: Vec<(u8, usize, String)> = Vec::new();
             let mut awaiting = DataArray::new();
+            // A child whose lifecycle changed since the parent's last step is
+            // a coordination event - it wakes a parked parent. Terminal for
+            // coordination = completed | done | abandoned (an abandoned child
+            // carries an explicit human disposition and does not re-open the
+            // parent); proposed/accepted/in-progress/blocked are all OPEN.
+            let closed = |c: &DataObject| {
+                let t = tagset(c);
+                t.iter().any(|x| x == "completed" || x == "done" || x == "abandoned")
+            };
             for (i, e) in entries.iter().enumerate() {
                 let claim = e.try_get_string("claim").unwrap_or_default();
                 if claim.trim().is_empty() { continue; }
@@ -193,14 +218,36 @@ fn run(gen: i64) {
                 if has("done") || has("completed") || has("abandoned") || has("blocked") { continue; }
                 let prog = has("in-progress");
                 if !prog && !has("accepted") { continue; }
+                // PARENT COORDINATION IS THE DEFAULT (owner, 2026-11): an
+                // accepted/in-progress parent is an executable coordination
+                // task - it stays eligible while ANY non-abandoned child is
+                // unfinished (proposed/accepted/in-progress/blocked), and the
+                // turn itself promotes the next child. The old
+                // `open_children > 0` exclusion is removed: it made the parent
+                // unsteppable exactly when it had work to direct.
                 let open_children = entries.iter().filter(|c| {
-                    c.try_get_string("parent").unwrap_or_default() == claim
-                        && !tagset(c).iter().any(|x| x == "completed" || x == "done")
+                    c.try_get_string("parent").unwrap_or_default() == claim && !closed(c)
                 }).count();
-                if open_children > 0 { continue; }
                 let steps = e.try_get_array("step_log").map(|a| a.len() as i64).unwrap_or(0);
                 if steps >= cap { awaiting.push_string(&claim); continue; }
-                let verdict = parked.get(&claim).map(|p| (p.fp != fingerprint(e) || fresh_note(e), p.until > 0 && now >= p.until));
+                // Park fingerprint: a coordinator's OWN board edits (it moved
+                // a child to accepted, noted a remedy) must not wake it an
+                // extra time - the post-step fp captures the child lifecycles
+                // it just set, so they match. A change NOT made by the
+                // coordinator - a child completing, a human re-accepting or
+                // blocking a child mid-turn - mismatches and un-parks it.
+                let verdict = parked.get(&claim).map(|p| {
+                    let child_lcs: String = entries.iter().filter(|c| {
+                        c.try_get_string("parent").unwrap_or_default() == claim
+                    }).map(|c| {
+                        let ct = tagset(c);
+                        ["proposed","accepted","in-progress","blocked","completed","done","abandoned"]
+                            .iter().find(|l| ct.iter().any(|x| x == **l))
+                            .map(|s| s.chars().next().unwrap_or('?')).unwrap_or('?')
+                    }).collect();
+                    let fp = format!("{}\u{1f}{}", fingerprint(e), child_lcs);
+                    (p.fp != fp || fresh_note(e), p.until > 0 && now >= p.until)
+                });
                 match verdict {
                     Some((true, _)) => { parked.remove(&claim); fails.remove(&claim); }
                     Some((false, true)) => { parked.remove(&claim); }
