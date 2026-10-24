@@ -9,9 +9,11 @@
 // makes NO LLM calls - it re-reads only the kb.plan facet hash every 5s and
 // re-evaluates the board when that hash moves or a parked item comes due.
 //
-// Eligible = accepted | in-progress, not a parent with open children, under
-// MAX_PLAN_STEPS (else listed as awaiting re-approval), not parked.
-// In-progress before accepted (finish what was started), then board order.
+// Eligible = accepted | in-progress, under MAX_PLAN_STEPS (else listed as
+// awaiting re-approval), not parked. A parent coordinates proposed/blocked/
+// newly completed children, but while an accepted/in-progress child can run
+// the parent waits and that child executes. In-progress before accepted,
+// then board order.
 //
 // Full speed needs a failure guard, or a stuck item retries at full speed:
 //   stepped / completed  -> next pass immediately
@@ -158,6 +160,18 @@ fn fp_now(claim: &str) -> String {
     }
     String::new()
 }
+// Pure eligibility rule, kept here with the worker so fixtures can include
+// this generated source and test the PRODUCTION predicate (not a copy).
+// Direct active children own implementation; unrelated active entries do not
+// defer a parent. Budget-exhausted active children still count: reapproval is
+// required rather than letting the parent bypass the guard.
+pub fn parent_waits_for_active_child(claim: &str, entries: &Vec<DataObject>) -> bool {
+    entries.iter().any(|c| {
+        if c.try_get_string("parent").unwrap_or_default() != claim { return false; }
+        let ct = tagset(c);
+        ct.iter().any(|x| x == "accepted" || x == "in-progress")
+    })
+}
 fn run(gen: i64) {
     let mut parked: HashMap<String, Park> = HashMap::new();
     let mut fails: HashMap<String, u32> = HashMap::new();
@@ -199,6 +213,7 @@ fn run(gen: i64) {
             let cap = max_steps();
             let mut cands: Vec<(u8, usize, String, bool)> = Vec::new();
             let mut awaiting = DataArray::new();
+            let mut waiting_for_children = DataArray::new();
             // A child whose lifecycle changed since the parent's last step is
             // a coordination event - it wakes a parked parent. Terminal for
             // coordination = completed | done | abandoned (an abandoned child
@@ -231,6 +246,20 @@ fn run(gen: i64) {
                 let is_coord = open_children > 0;
                 let steps = e.try_get_array("step_log").map(|a| a.len() as i64).unwrap_or(0);
                 if steps >= cap { awaiting.push_string(&claim); continue; }
+                // Coordination must not STARVE the work it just authorized.
+                // A parent with an accepted/in-progress child has no board
+                // transition to make: that child is the next implementation
+                // task. Skip the parent for THIS pass, not globally - when
+                // the child completes or blocks, the parent becomes eligible
+                // for the next coordination turn. This also prevents endless
+                // "confirmed stable" parent turns from consuming its
+                // MAX_PLAN_STEPS budget before the children can execute.
+                // Active-but-budget-exhausted children still defer the parent:
+                // that budget needs human reapproval, not a parent bypass.
+                if is_coord && parent_waits_for_active_child(&claim, &entries) {
+                    waiting_for_children.push_string(&claim);
+                    continue;
+                }
                 // Park fingerprint: a coordinator's OWN board edits (it moved
                 // a child to accepted, noted a remedy) must not wake it an
                 // extra time - the post-step fp captures the child lifecycles
@@ -271,6 +300,7 @@ fn run(gen: i64) {
             }
             w.put_array("parked", pk);
             w.put_array("awaiting_reapproval", awaiting);
+            w.put_array("waiting_for_children", waiting_for_children);
             w.put_int("eligible", cands.len() as i64);
             // Expose parent COORDINATION explicitly (owner acceptance #8): a
             // coordinating parent is eligible WORK, so eligible=0 with
