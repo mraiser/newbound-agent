@@ -197,7 +197,7 @@ fn run(gen: i64) {
             }
             let entries = parse_board(&src);
             let cap = max_steps();
-            let mut cands: Vec<(u8, usize, String)> = Vec::new();
+            let mut cands: Vec<(u8, usize, String, bool)> = Vec::new();
             let mut awaiting = DataArray::new();
             // A child whose lifecycle changed since the parent's last step is
             // a coordination event - it wakes a parked parent. Terminal for
@@ -228,6 +228,7 @@ fn run(gen: i64) {
                 let open_children = entries.iter().filter(|c| {
                     c.try_get_string("parent").unwrap_or_default() == claim && !closed(c)
                 }).count();
+                let is_coord = open_children > 0;
                 let steps = e.try_get_array("step_log").map(|a| a.len() as i64).unwrap_or(0);
                 if steps >= cap { awaiting.push_string(&claim); continue; }
                 // Park fingerprint: a coordinator's OWN board edits (it moved
@@ -254,7 +255,7 @@ fn run(gen: i64) {
                     Some((false, false)) => continue,
                     None => {}
                 }
-                cands.push((if prog { 0 } else { 1 }, i, claim));
+                cands.push((if prog { 0 } else { 1 }, i, claim, is_coord));
             }
             parked.retain(|k, _| entries.iter().any(|e| e.try_get_string("claim").unwrap_or_default() == *k));
             cands.sort();
@@ -271,6 +272,14 @@ fn run(gen: i64) {
             w.put_array("parked", pk);
             w.put_array("awaiting_reapproval", awaiting);
             w.put_int("eligible", cands.len() as i64);
+            // Expose parent COORDINATION explicitly (owner acceptance #8): a
+            // coordinating parent is eligible WORK, so eligible=0 with
+            // coordinating>0 is impossible - but the separate count keeps the
+            // kanban/status line honest about WHAT is eligible (an item being
+            // implemented vs a parent directing its children).
+            let mut coord = DataArray::new();
+            for c in cands.iter() { if c.3 { coord.push_string(&c.2); } }
+            w.put_array("coordinating", coord);
             if cands.is_empty() {
                 quiet_hash = hash;
                 recheck_at = next_due;
