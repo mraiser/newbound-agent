@@ -10,9 +10,7 @@ fn entry(claim: &str, parent: &str, lifecycle: &str, steps: usize) -> DataObject
     }
     e
 }
-fn wait(claim: &str, entries: &Vec<DataObject>) -> bool {
-    crate::agent::plan::worker_start::parent_waits_for_active_child(claim, entries)
-}
+let wait = crate::agent::plan::worker_start::parent_waits_for_active_child;
 let cases = vec![
     ("proposed child leaves parent eligible", vec![entry("c", "p", "proposed", 0)], false),
     ("accepted child defers parent", vec![entry("c", "p", "accepted", 0)], true),

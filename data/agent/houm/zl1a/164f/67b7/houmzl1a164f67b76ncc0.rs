@@ -160,18 +160,6 @@ fn fp_now(claim: &str) -> String {
     }
     String::new()
 }
-// Pure eligibility rule, kept here with the worker so fixtures can include
-// this generated source and test the PRODUCTION predicate (not a copy).
-// Direct active children own implementation; unrelated active entries do not
-// defer a parent. Budget-exhausted active children still count: reapproval is
-// required rather than letting the parent bypass the guard.
-pub fn parent_waits_for_active_child(claim: &str, entries: &Vec<DataObject>) -> bool {
-    entries.iter().any(|c| {
-        if c.try_get_string("parent").unwrap_or_default() != claim { return false; }
-        let ct = tagset(c);
-        ct.iter().any(|x| x == "accepted" || x == "in-progress")
-    })
-}
 fn run(gen: i64) {
     let mut parked: HashMap<String, Park> = HashMap::new();
     let mut fails: HashMap<String, u32> = HashMap::new();
@@ -240,12 +228,15 @@ fn run(gen: i64) {
                 // turn itself promotes the next child. The old
                 // `open_children > 0` exclusion is removed: it made the parent
                 // unsteppable exactly when it had work to direct.
-                let open_children = entries.iter().filter(|c| {
-                    c.try_get_string("parent").unwrap_or_default() == claim && !closed(c)
-                }).count();
-                let is_coord = open_children > 0;
+                // Completed/done children still require the parent's closing
+                // coordination/verification turn; only abandoned children are
+                // excluded from identifying a parent, matching step_item.
+                let is_coord = parent_is_coordination_task(&claim, &entries);
                 let steps = e.try_get_array("step_log").map(|a| a.len() as i64).unwrap_or(0);
                 if steps >= cap { awaiting.push_string(&claim); continue; }
+                if !is_coord && open_children > 0 {
+                    state().put_string("last_error", "inconsistent parent classification");
+                }
                 // Coordination must not STARVE the work it just authorized.
                 // A parent with an accepted/in-progress child has no board
                 // transition to make: that child is the next implementation
