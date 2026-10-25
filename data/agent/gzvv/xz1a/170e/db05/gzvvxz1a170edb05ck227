@@ -1,0 +1,1 @@
+{"data":{"attachmentkeynames":["rs"],"import":"use ndata::dataobject::DataObject;\nuse ndata::dataarray::DataArray;\nuse flowlang::flowlang::system::time::time;","params":[{"name":"input","type":"JSONObject"}],"returntype":"JSONObject","type":"rust"},"id":"gzvvxz1a170edb05ck227","readers":[],"time":1792896140261,"username":"system","writers":[]}

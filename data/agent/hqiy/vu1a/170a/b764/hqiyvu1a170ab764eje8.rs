@@ -59,8 +59,15 @@ for k in ["turn", "round", "max_rounds", "tool_calls", "errors"] {
 for k in ["failure_streak", "duplicate_streak"] {
     if event.has(k) { r.put_int(k, event.get_int(k)); }
 }
-for k in ["context", "handoff", "pending_tool"] {
+for k in ["context", "handoff", "pending_tool", "delivery"] {
     if let Ok(v) = event.try_get_object(k) { r.put_object(k, v); }
+}
+if kind == "context_delivered" {
+    let mut delivery = DataObject::new();
+    delivery.put_int("time", now); delivery.put_string("state", "provider_responded");
+    delivery.put_int("round", event.try_get_int("round").unwrap_or(1));
+    delivery.put_string("detail", &event.try_get_string("detail").unwrap_or_default());
+    r.put_object("delivery", delivery);
 }
 if kind == "tool_result" || kind == "tool_skipped" {
     r.remove_property("pending_tool");
