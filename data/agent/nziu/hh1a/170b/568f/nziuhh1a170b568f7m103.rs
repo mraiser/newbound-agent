@@ -27,8 +27,14 @@ for i in 0..runs.len() {
     let mut page = DataArray::new();
     for j in n.saturating_sub(cap)..n { page.push_object(events.get_object(j)); }
     out.put_string("status", "ok"); out.put_string("run_id", &run_id);
+    let process_start = std::fs::read_to_string("/proc/self/stat").ok().and_then(|s| {
+        let tail = s.rsplit_once(") ")?.1;
+        tail.split_whitespace().nth(19)?.parse::<i64>().ok()
+    }).unwrap_or(0);
+    let same_process = r.try_get_int("process_start").unwrap_or(0) == 0 ||
+        (process_start > 0 && r.try_get_int("process_start").unwrap_or(0) == process_start);
     let stale = r.try_get_boolean("active").unwrap_or(false) &&
-        (r.try_get_int("pid").unwrap_or(0) != std::process::id() as i64 ||
+        (r.try_get_int("pid").unwrap_or(0) != std::process::id() as i64 || !same_process ||
          (r.try_get_int("boot").unwrap_or(0) != 0 && boot_now != 0 && r.try_get_int("boot").unwrap_or(0) != boot_now));
     out.put_boolean("active", r.try_get_boolean("active").unwrap_or(false) && !stale);
     out.put_boolean("stale", stale); out.put_int("now", now);
@@ -39,7 +45,7 @@ for i in 0..runs.len() {
     for k in ["claim", "turn", "started", "updated", "ended", "pid", "boot", "outcome", "round", "max_rounds", "tool_calls", "errors"] {
         if let Ok(v) = r.try_get_property(k) { out.set_property(k, v); }
     }
-    for k in ["context", "handoff", "pending_tool"] {
+    for k in ["context", "handoff", "pending_tool", "delivery"] {
         if let Ok(v) = r.try_get_object(k) { out.put_object(k, v); }
     }
     if let Ok(v) = r.try_get_string("checkpoint") { out.put_string("checkpoint", &v); }

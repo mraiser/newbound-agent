@@ -1,6 +1,12 @@
 // Internal activity sink. The model is not given this command as a tool; the
 // execution loop emits facts at real model/tool boundaries. The runtime store
 // is instance-local and bounded; kb.plan remains the durable intent/journal.
+fn process_start() -> i64 {
+    std::fs::read_to_string("/proc/self/stat").ok().and_then(|s| {
+        let tail = s.rsplit_once(") ")?.1;
+        tail.split_whitespace().nth(19)?.parse::<i64>().ok()
+    }).unwrap_or(0)
+}
 if run_id.trim().is_empty() || run_id.len() > 160 {
     let mut o = DataObject::new(); o.put_string("status", "err");
     o.put_string("msg", "activity_emit requires a bounded run_id"); return o;
@@ -41,6 +47,7 @@ let kind = event.try_get_string("kind").unwrap_or_else(|_| "activity".to_string(
 if kind == "start" {
     r.put_boolean("active", true); r.put_boolean("stale", false); r.put_int("boot", boot);
     r.put_int("started", now); r.put_int("pid", std::process::id() as i64);
+    r.put_int("process_start", process_start());
     r.put_string("state", "preparing");
 }
 for k in ["claim", "phase", "state", "outcome", "checkpoint"] {

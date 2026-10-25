@@ -12,10 +12,11 @@ fn copy_summary(src: &DataObject) -> DataObject {
     for k in ["run_id", "claim", "turn", "phase", "state", "active", "stale", "pid",
               "started", "updated", "last_event_at", "round", "max_rounds", "tool_calls",
               "errors", "failure_streak", "duplicate_streak", "pending_tool", "checkpoint",
-              "context", "finish", "handoff", "ended", "outcome", "seq"] {
+              "context", "finish", "handoff", "ended", "outcome", "seq", "delivery", "process_start"] {
         if let Ok(v) = src.try_get_property(k) { r.set_property(k, v); }
     }
     if let Ok(v) = src.try_get_object("pending_tool") { r.put_object("pending_tool", v); }
+    if let Ok(v) = src.try_get_object("delivery") { r.put_object("delivery", v); }
     if let Ok(v) = src.try_get_object("checkpoint") { r.put_object("checkpoint", v); }
     if let Ok(v) = src.try_get_object("context") { r.put_object("context", v); }
     if let Ok(v) = src.try_get_object("handoff") {
@@ -46,7 +47,13 @@ for r in runs.iter_mut() {
     let run_boot = r.try_get_int("boot").unwrap_or(0);
     let recorded_pid = r.try_get_int("pid").unwrap_or(0);
     let live_pid = recorded_pid > 0 && recorded_pid == std::process::id() as i64;
-    if active && (!live_pid || (run_boot != 0 && boot != 0 && run_boot != boot)) {
+    let process_start = std::fs::read_to_string("/proc/self/stat").ok().and_then(|s| {
+        let tail = s.rsplit_once(") ")?.1;
+        tail.split_whitespace().nth(19)?.parse::<i64>().ok()
+    }).unwrap_or(0);
+    let same_process = r.try_get_int("process_start").unwrap_or(0) == 0 ||
+        (process_start > 0 && r.try_get_int("process_start").unwrap_or(0) == process_start);
+    if active && (!live_pid || !same_process || (run_boot != 0 && boot != 0 && run_boot != boot)) {
         r.put_boolean("active", false);
         r.put_boolean("stale", true);
         r.put_string("state", "interrupted");
