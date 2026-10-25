@@ -221,7 +221,7 @@ function renderActivity() {
     if (run.active) {
       var requestedControl = run.control && run.control.requested;
       runState = requestedControl === 'pause' ? 'Pause requested: ' : requestedControl === 'stop' ? 'Stop requested: ' : 'Working: ';
-    } else if (run.paused || run.outcome === 'PAUSED') runState = 'Paused: ';
+    } else if (run.outcome === 'PAUSED' || (run.paused && (!run.control_state || run.control_state === 'paused' || run.control_state === 'requested'))) runState = 'Paused: ';
     else if (run.outcome === 'STOPPED' || run.control_state === 'stopped') runState = 'Stopped: ';
     else if (run.stale || run.interrupted) runState = 'Interrupted: ';
     else if (activityView === 'history') runState = 'Run history: ';
@@ -242,12 +242,12 @@ function renderActivity() {
     var liveControl = !!run.active;
     controls.querySelector('[data-runact="pause"]').hidden = !liveControl || requested === 'pause';
     controls.querySelector('[data-runact="stop"]').hidden = !liveControl || requested === 'stop';
-    controls.querySelector('[data-runact="resume"]').hidden = liveControl || !(run.paused || run.control_state === 'stopped' || run.outcome === 'STOPPED' || run.interrupted || run.stale);
+    controls.querySelector('[data-runact="resume"]').hidden = liveControl || !(run.outcome === 'PAUSED' || run.outcome === 'STOPPED' || (run.paused && (!run.control_state || run.control_state === 'paused' || run.control_state === 'requested')) || run.control_state === 'stopped' || run.interrupted || run.stale);
     controls.querySelector('[data-runact="resume"]').disabled = controlBusy;
     controls.querySelector('[data-runact="pause"]').disabled = controlBusy;
     controls.querySelector('[data-runact="stop"]').disabled = controlBusy;
     ME.querySelector('.pl-resume-note').hidden = liveControl;
-    ME.querySelector('.pl-control-state').textContent = requested === 'pause' && liveControl ? 'Pause requested; the current model/tool boundary will finish.' : requested === 'stop' && liveControl ? 'Stop requested; the current model/tool boundary will finish.' : run.paused ? 'Paused — no new model round will begin.' : run.outcome === 'STOPPED' ? 'Stopped — checkpoint available for an authorized resume.' : run.active ? 'Active run controls' : 'Run controls';
+    ME.querySelector('.pl-control-state').textContent = requested === 'pause' && liveControl ? 'Pause requested; the current model/tool boundary will finish.' : requested === 'stop' && liveControl ? 'Stop requested; the current model/tool boundary will finish.' : run.outcome === 'PAUSED' || (run.paused && (!run.control_state || run.control_state === 'paused' || run.control_state === 'requested')) ? 'Paused — no new model round will begin.' : run.outcome === 'STOPPED' || run.control_state === 'stopped' ? 'Stopped — checkpoint available for an authorized resume.' : run.active ? 'Active run controls' : 'Run controls';
   }
   if (run && (run.interrupted || run.stale) && !run.active) {
     body.appendChild(elWith('pl-recovery', run.outcome === 'STOPPED' ? 'Stopped at a safe boundary. No further model round was started. Resume is an explicit authorized turn from this checkpoint.' : run.outcome === 'PAUSED' || run.paused ? 'Paused at a safe boundary. The scheduler will hold this item until you resume it or re-accept it.' : 'This run did not reach a normal finish. Its saved checkpoint remains available for an authorized next turn; unfinished changes are not verified completion.'));
