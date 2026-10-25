@@ -115,9 +115,9 @@ let tags = e.try_get_string("tags").unwrap_or_default().to_lowercase();
 let toks: Vec<&str> = tags.split(',').map(|t| t.trim()).collect();
 let has_tag = |s: &str| toks.iter().any(|t| *t == s);
 let was_accepted = has_tag("accepted");
-if e.try_get_object("control").ok().and_then(|c| c.try_get_string("requested").ok()).unwrap_or_default() == "pause" {
+if e.try_get_object("control").ok().and_then(|c| c.try_get_string("requested").ok()).map(|s| s == "pause" || s == "stop").unwrap_or(false) {
     out.put_string("status", "ok"); out.put_string("action", "paused");
-    out.put_string("msg", "item is paused; use resume to authorize its next turn from the saved checkpoint");
+    out.put_string("msg", "item is paused/stopped; use resume to authorize its next turn from the saved checkpoint");
     return out;
 }
 if !was_accepted && !has_tag("in-progress") {
@@ -807,7 +807,10 @@ let write_ok = pw.try_get_boolean("ok").unwrap_or(false)
     || pw.try_get_string("status").map(|s| s == "ok").unwrap_or(false);
 if !write_ok {
     out.put_string("status", "err");
-    out.put_string("msg", "step ran but the step_log write failed (likely stale_base) - re-read the board and retry");
+    out.put_string("msg", "step ran but the final journal write conflicted (likely stale_base). The active run pointer and checkpoint are retained for explicit recovery; do not blindly repeat the work.");
+    out.put_string("action", "journal_recovery_required");
+    out.put_string("recovery", "Inspect the active run and its structured checkpoint, then resume through the normal item gate; the scheduler will not auto-retry this conflict.");
+    out.put_string("run_id", &actual_run_id);
     if pw.has("msg") { out.put_string("write_msg", &pw.get_string("msg")); }
     return out;
 }

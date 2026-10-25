@@ -208,7 +208,7 @@ fn run(gen: i64) {
                 // A durable pause is an item-level hold, not merely a runtime
                 // status. It survives worker restarts and must not be undone
                 // by the scheduler before an explicit resume.
-                if e.try_get_object("control").ok().and_then(|c| c.try_get_string("requested").ok()).unwrap_or_default() == "pause" {
+                if e.try_get_object("control").ok().and_then(|c| c.try_get_string("requested").ok()).map(|s| s == "pause" || s == "stop").unwrap_or(false) {
                     continue;
                 }
                 let t = tagset(e);
@@ -335,7 +335,7 @@ fn run(gen: i64) {
                 Ok(Err(_)) => ("step_failed".to_string(), "step_item raised an exception".to_string(), -1),
                 Err(_) => ("step_failed".to_string(), "step_item panicked".to_string(), -1),
             };
-            let turn = matches!(action.as_str(), "stepped" | "completed" | "blocked" | "step_failed");
+            let turn = matches!(action.as_str(), "stepped" | "completed" | "blocked" | "step_failed" | "paused" | "stopped" | "journal_recovery_required");
             if turn {
                 turns.push(now);
                 w.put_int("turns_total", w.try_get_int("turns_total").unwrap_or(0) + 1);
@@ -352,6 +352,12 @@ fn run(gen: i64) {
             last.put_int("ms", t1 - now);
             w.put_object("last", last);
             match action.as_str() {
+                "paused" | "stopped" | "journal_recovery_required" => {
+                    // Deliberate human holds and journal conflicts are not
+                    // transient model failures. Never auto-retry them.
+                    parked.insert(claim.clone(), Park { fp: fp_now(&claim), until: 0,
+                        reason: format!("{} - explicit resume/review required", action) });
+                }
                 "stepped" | "completed" => { fails.remove(&claim); }
                 "step_failed" => {
                     let n = { let c = fails.entry(claim.clone()).or_insert(0); *c += 1; *c };
