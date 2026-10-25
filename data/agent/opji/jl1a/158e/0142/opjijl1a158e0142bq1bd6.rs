@@ -176,10 +176,11 @@ let mut prior_steps = continuity.get_string("prior_steps");
 let mut previous_run_id = continuity.get_string("previous_run_id");
 let mut handoff_received = continuity.get_string("handoff_received");
 let mut recovered_run = false;
+let journaled_run = previous_run_id.clone();
 // An interrupted run or a stale post-turn board write must not erase working
 // state. The runtime run is a recovery facet, never an authority to override
 // human lifecycle: this code is reached only after the normal step gate.
-if handoff_received.is_empty() {
+if handoff_received.is_empty() || !journaled_run.is_empty() {
     let store = flowlang::datastore::DataStore::new();
     if store.exists("runtime", "agent_plan_runs") {
         let runs = store.get_data("runtime", "agent_plan_runs").get_object("data").get_array("runs");
@@ -187,8 +188,18 @@ if handoff_received.is_empty() {
         for i in 0..runs.len() {
             let r = runs.get_object(i);
             if r.try_get_string("claim").unwrap_or_default() != claim { continue; }
+            let rid = r.try_get_string("run_id").unwrap_or_default();
+            if rid == journaled_run { continue; }
+            // Already-journaled history is older context, not a newer recovery
+            // source. A different run may represent an interrupted write.
+            if e.try_get_array("step_log").ok().map(|a| {
+                (0..a.len()).any(|j| a.get_object(j).try_get_string("run_id").unwrap_or_default() == rid)
+            }).unwrap_or(false) { continue; }
             let updated = r.try_get_int("updated").unwrap_or(0);
-            if updated <= newest { continue; }
+            // A stale older run must not replace a newer durable handoff.
+            let last_journal_time = e.try_get_array("step_log").ok()
+                .and_then(|a| if a.len() == 0 { None } else { a.get_object(a.len()-1).try_get_int("time").ok() }).unwrap_or(0);
+            if updated <= last_journal_time || updated <= newest { continue; }
             let text = r.try_get_object("handoff").ok()
                 .and_then(|h| h.try_get_string("checkpoint").ok()).unwrap_or_default();
             if text.trim().is_empty() { continue; }

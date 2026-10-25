@@ -234,6 +234,11 @@ function probeActivity() {
     activityState.recent = r.recent || [];
     if (!historyRunId && activityState.recent.length) historyRunId = activityState.recent[0].run_id;
     var next = r.run || null;
+    // With no active run the API selects the latest finished run for live
+    // inspection; when one starts, switch the stream back to the active run.
+    if (next && next.active && activityRunId && next.run_id !== activityRunId) {
+      activityState.events = []; activityCursor = 0; activityRunId = next.run_id;
+    }
     var nextId = next && next.run_id || '';
     if (nextId !== activityRunId) { activityCursor = 0; activityState.events = []; activityRunId = nextId; }
     if (next) {
