@@ -28,6 +28,8 @@ var reloadPending = false;
 var workerStatus = null;
 var workerStatusError = '';
 var workerChecking = false;
+var autonomySaving = false;
+var autonomyPending = null;
 var openClaims = {};
 var drafts = {}; // claim -> half-typed note text, survives a live re-render
 
@@ -125,6 +127,16 @@ function renderWorker() {
   var bar = ME.querySelector('.pl-autonomy');
   var running = isRunning(workerStatus);
   var enabled = !!(workerStatus && workerStatus.plan_autonomy);
+  var checkbox = ME.querySelector('.pl-autonomy-checkbox');
+  var shown = autonomySaving ? autonomyPending : enabled;
+  checkbox.checked = shown === true;
+  checkbox.disabled = autonomySaving;
+  checkbox.setAttribute('aria-busy', autonomySaving ? 'true' : 'false');
+  ME.querySelector('.pl-autonomy-label').textContent = autonomySaving ?
+    (autonomyPending ? 'enabling autonomy…' : 'disabling autonomy…') :
+    'autonomy ' + (enabled ? 'on' : 'off');
+  checkbox.title = enabled ? 'Disable plan autonomy — prevents new steps; a running step finishes.' :
+    'Enable plan autonomy — persists the setting and starts the plan worker.';
   bar.hidden = !enabled && !workerStatusError;
   bar.classList.toggle('running', running);
   bar.classList.toggle('error', !!workerStatusError);
@@ -159,6 +171,33 @@ function probeWorker() {
       workerStatusError = 'Cannot read plan-autonomy status: ' + ((r && r.msg) || 'worker status request failed') + '.';
     }
     if (ME.isConnected) renderWorker();
+  });
+}
+
+function setAutonomy(enabled) {
+  if (autonomySaving) return;
+  autonomySaving = true;
+  autonomyPending = enabled;
+  note(enabled ? 'enabling plan autonomy…' : 'disabling plan autonomy…');
+  renderWorker();
+  send_set_autonomy(enabled, function (r) {
+    if (!ME.isConnected) return;
+    autonomySaving = false;
+    autonomyPending = null;
+    if (r && r.status === 'ok') {
+      var saved = r.data && typeof r.data === 'object' ? r.data : r;
+      workerStatus = Object.assign({}, workerStatus || {}, {
+        plan_autonomy: saved.plan_autonomy === true
+      });
+      note(saved.msg || (enabled ? 'plan autonomy enabled' : 'plan autonomy disabled'));
+      probeWorker();
+    } else {
+      // A failure does not invent an enabled/disabled state: re-read it.
+      note((r && r.msg) || 'could not change plan autonomy', true);
+      workerStatusError = 'Could not change plan autonomy: ' + ((r && r.msg) || 'request failed') + '.';
+      probeWorker();
+    }
+    renderWorker();
   });
 }
 
@@ -442,7 +481,9 @@ function startLive() {
 
 me.ready = function () {
   startLive();
-  ME.querySelector('.pl-refresh').addEventListener('click', function () { note(''); load(); probeWorker(); });
+  ME.querySelector('.pl-autonomy-checkbox').addEventListener('change', function () {
+    setAutonomy(this.checked);
+  });
   ME.querySelector('.pl-add').addEventListener('submit', function (ev) {
     ev.preventDefault();
     var claimEl = ME.querySelector('.pl-add-claim');
