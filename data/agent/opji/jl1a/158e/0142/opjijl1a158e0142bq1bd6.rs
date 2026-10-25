@@ -580,6 +580,13 @@ let (ok_step, result_json, tl_status, handoff_checkpoint, actual_run_id, structu
         (false, "{\"error\":\"panic during executive reasoning\"}".to_string(), "ERROR".to_string(), text, run_id.clone(), structured)
     },
 };
+let structured_checkpoint = if structured_checkpoint.has("summary") { structured_checkpoint } else {
+    let mut ci=DataObject::new();ci.put_string("kind","planner_boundary");
+    ci.put_string("response",&result_json);ci.put_string("status",&tl_status);
+    ci.put_string("run_id",&actual_run_id);ci.put_string("previous_run_id",&previous_run_id);
+    ci.put_string("reason","The planner preserved a fallback checkpoint after a missing/failed model checkpoint.");
+    crate::agent::plan::checkpoint::checkpoint(ci)
+};
 // FRESH BASE after the turn: the turn can run for minutes, the start
 // transition above already changed the board hash, and the turn itself (or a
 // human dragging a card) may write kb.plan meanwhile. Re-read the board,

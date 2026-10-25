@@ -11,7 +11,8 @@ fn label(response: &str, name: &str) -> String {
             for next in response.lines().skip(i + 1) {
                 let nt = next.trim().trim_start_matches('#').trim();
                 let boundary = ["PROGRESS:", "NEXT:", "BLOCKERS:", "VERIFIED:", "STATUS:",
-                    "LAST ACTION:", "LAST RESULT:", "PREVIOUS RUN ID:", "SOURCE CONFIRMATION:"]
+                    "LAST ACTION:", "LAST RESULT:", "PREVIOUS RUN ID:", "SOURCE CONFIRMATION:",
+                    "PENDING:", "VERIFICATION PENDING:", "REMAINING:", "OPEN QUESTIONS:"]
                     .iter().any(|m| nt.starts_with(m));
                 if boundary { break; }
                 if !out.is_empty() { out.push('\n'); }
@@ -60,7 +61,13 @@ if next.is_empty() { next = input.try_get_string("next").unwrap_or_default(); }
 if next.is_empty() { next = "Inspect the saved activity and choose a new, verifiable increment; do not repeat an identical failed call without new information.".to_string(); }
 let mut blockers = label(&response, "BLOCKERS");
 if blockers.is_empty() && status == "BLOCKED" { blockers = summary.clone(); }
-let verification_pending = input.try_get_string("verification_pending").unwrap_or_default();
+let verification_pending = {
+    let explicit = input.try_get_string("verification_pending").unwrap_or_default();
+    if !explicit.is_empty() { explicit } else {
+        let pending = label(&response, "PENDING");
+        if !pending.is_empty() { pending } else { label(&response, "VERIFICATION PENDING") }
+    }
+};
 let verified = label(&response, "VERIFIED");
 let last_action = bounded(&input.try_get_string("last_action").unwrap_or_default(), 1000);
 let last_result = bounded(&input.try_get_string("last_result").unwrap_or_default(), 3000);
