@@ -668,6 +668,7 @@ if !run_id.is_empty() {
     e.put_int("tool_calls", executed_calls); e.put_int("errors", error_count);
     e.put_int("failure_streak", consecutive_failures); e.put_int("duplicate_streak", repeat_count);
     activity_emit(&run_id, e);
+    activity_guard.closed = true;
 }
 let mut response = DataObject::new();
 if !run_id.is_empty() { response.put_string("run_id", &run_id); }
