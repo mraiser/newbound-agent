@@ -36,12 +36,13 @@ for i in 0..runs.len() {
     out.put_int("boot_now", boot_now);
     if stale { out.put_string("state", "interrupted"); }
     out.put_array("events", page); out.put_boolean("truncated", n > cap);
-    for k in ["claim", "turn", "started", "updated", "ended", "active", "pid", "boot", "outcome", "round", "max_rounds", "tool_calls", "errors"] {
+    for k in ["claim", "turn", "started", "updated", "ended", "pid", "boot", "outcome", "round", "max_rounds", "tool_calls", "errors"] {
         if let Ok(v) = r.try_get_property(k) { out.set_property(k, v); }
     }
-    for k in ["context", "handoff", "checkpoint", "pending_tool"] {
+    for k in ["context", "handoff", "pending_tool"] {
         if let Ok(v) = r.try_get_object(k) { out.put_object(k, v); }
     }
+    if let Ok(v) = r.try_get_string("checkpoint") { out.put_string("checkpoint", &v); }
     return out;
 }
 out.put_string("status", "err"); out.put_string("msg", "run not found (history is bounded and instance-local)"); out

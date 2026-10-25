@@ -160,7 +160,15 @@ function renderActivity() {
       return;
     }
   }
-  if (activityView === 'handoff') { renderHandoff(body, run); return; }
+  if (activityView === 'handoff') {
+    if (!run.active && historyRunId === run.run_id && historyData && historyData.status === 'ok') {
+      renderHandoff(body, Object.assign({}, run, {handoff: historyData.handoff, checkpoint: historyData.checkpoint, context: historyData.context}));
+    } else renderHandoff(body, run);
+    if (!run.active && (!historyData || historyRunId !== run.run_id)) {
+      historyRunId = run.run_id; historyData = null; loadHistory();
+    }
+    return;
+  }
   if (activityView === 'activity') {
     if (!run.active && historyRunId === run.run_id && historyData && historyData.status === 'ok') {
       appendEvents(body, historyData.events || []);
@@ -176,7 +184,7 @@ function renderActivity() {
   appendKV(now, 'turn / round', 'turn ' + (run.turn || '—') + ' · round ' + (run.round || 0) + '/' + (run.max_rounds || '—'));
   appendKV(now, 'tools / errors', (run.tool_calls || 0) + ' executed · ' + (run.errors || 0) + ' failures' + (run.failure_streak ? ' · current identical streak ' + run.failure_streak + '/3' : ''));
   appendKV(now, 'elapsed', run.started ? activityDuration(run.started) : '—');
-  appendKV(now, 'last event', run.updated ? relTime(run.updated) : '—');
+  appendKV(now, 'last event', run.last_event_at ? relTime(run.last_event_at) : run.updated ? relTime(run.updated) : '—');
   body.appendChild(now);
   if (run.pending_tool && run.pending_tool.tool) appendKV(body, 'pending tool', run.pending_tool.tool + ' · ' + (run.pending_tool.target || ''));
   var last = a.events[a.events.length - 1];

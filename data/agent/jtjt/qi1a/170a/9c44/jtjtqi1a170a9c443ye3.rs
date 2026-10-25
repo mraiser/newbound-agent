@@ -27,7 +27,7 @@ fn copy_summary(src: &DataObject) -> DataObject {
     r
 }
 let now = time();
-let mut g = DataStore::globals();
+let g = DataStore::globals();
 let boot = g.try_get_object("AGENT_PLAN_ACTIVITY").ok()
     .and_then(|a| a.try_get_int("boot").ok()).unwrap_or(0);
 let store = DataStore::new();
@@ -39,7 +39,8 @@ if store.exists("runtime", "agent_plan_runs") {
     }
 }
 // A live run from before this service boot is interrupted, never active. Do
-// not mutate stored state merely because somebody opened the Plan tab.
+// not mutate stored state merely because somebody opened the Plan tab. PID is
+// a same-process supplement to the boot token, not a cross-restart identity.
 for r in runs.iter_mut() {
     let active = r.try_get_boolean("active").unwrap_or(false);
     let run_boot = r.try_get_int("boot").unwrap_or(0);
@@ -54,7 +55,13 @@ for r in runs.iter_mut() {
 }
 runs.sort_by(|a, b| b.try_get_int("updated").unwrap_or(0).cmp(&a.try_get_int("updated").unwrap_or(0)));
 let mut recent = DataArray::new();
-for r in runs.iter().take(12) { recent.push_object(copy_summary(r)); }
+for r in runs.iter().take(8) {
+    let mut summary = copy_summary(r);
+    // The selected run carries its full bounded handoff below. Recent cards
+    // only need identity, lifecycle and counters; fetch history on selection.
+    for key in ["checkpoint", "handoff", "context"] { summary.remove_property(key); }
+    recent.push_object(summary);
+}
 let active = runs.iter().find(|r| r.try_get_boolean("active").unwrap_or(false)
     && r.try_get_int("pid").unwrap_or(0) == std::process::id() as i64
     && (r.try_get_int("boot").unwrap_or(0) == 0 || boot == 0 || r.try_get_int("boot").unwrap_or(0) == boot));

@@ -172,9 +172,36 @@ let is_parent = !children.is_empty();
 let goal = claim.clone();
 let detail = e.try_get_string("detail").unwrap_or_default();
 let continuity = crate::agent::plan::continuity_context::continuity_context(e.deep_copy());
-let prior_steps = continuity.get_string("prior_steps");
-let previous_run_id = continuity.get_string("previous_run_id");
-let handoff_received = continuity.get_string("handoff_received");
+let mut prior_steps = continuity.get_string("prior_steps");
+let mut previous_run_id = continuity.get_string("previous_run_id");
+let mut handoff_received = continuity.get_string("handoff_received");
+let mut recovered_run = false;
+// An interrupted run or a stale post-turn board write must not erase working
+// state. The runtime run is a recovery facet, never an authority to override
+// human lifecycle: this code is reached only after the normal step gate.
+if handoff_received.is_empty() {
+    let store = flowlang::datastore::DataStore::new();
+    if store.exists("runtime", "agent_plan_runs") {
+        let runs = store.get_data("runtime", "agent_plan_runs").get_object("data").get_array("runs");
+        let mut newest = 0i64;
+        for i in 0..runs.len() {
+            let r = runs.get_object(i);
+            if r.try_get_string("claim").unwrap_or_default() != claim { continue; }
+            let updated = r.try_get_int("updated").unwrap_or(0);
+            if updated <= newest { continue; }
+            let text = r.try_get_object("handoff").ok()
+                .and_then(|h| h.try_get_string("checkpoint").ok()).unwrap_or_default();
+            if text.trim().is_empty() { continue; }
+            newest = updated;
+            previous_run_id = r.try_get_string("run_id").unwrap_or_default();
+            handoff_received = text;
+            recovered_run = true;
+        }
+    }
+    if recovered_run {
+        prior_steps = format!("- [recovered run not yet journaled to this item] [run_id: {}] -> {}\n{}", previous_run_id, handoff_received, prior_steps);
+    }
+}
 let mut prompt = format!(
     "You are the executive's plan-step engine. Advance ONE accepted plan item toward completion. \
 Think, then act via the available tools. Prefer a single concrete, verifiable increment over a sweep. \
