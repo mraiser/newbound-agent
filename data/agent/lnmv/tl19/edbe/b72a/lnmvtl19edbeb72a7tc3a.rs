@@ -38,10 +38,6 @@ fn safe_target(args: &str) -> String {
         Err(_) => "invalid argument JSON".to_string(),
     }
 }
-fn text_tail(s: &str, n: usize) -> String {
-    let v: Vec<char> = s.chars().collect();
-    if v.len() <= n { s.to_string() } else { v[v.len()-n..].iter().collect() }
-}
 let mut run_id = String::new();
 let mut run_turn = 0i64;
 let mut dispatch = DataObject::new();
@@ -204,6 +200,9 @@ let mut tools = DataArray::new();
 for t in mcp_tools.objects() {
   let t = t.object();
   if !t.has("name") { continue; }
+  // Runtime telemetry is emitted by the execution substrate, never chosen by
+  // the model. Read-side activity/history remains available for continuity.
+  if t.get_string("name") == "agent-plan-activity_emit" { continue; }
   let mut f = DataObject::new();
   f.put_string("name", &t.get_string("name"));
   if t.has("description") { f.put_string("description", &t.get_string("description")); }
@@ -347,6 +346,13 @@ loop {
     }
 
     // kind == "tool_calls"
+    if let Ok(am) = resp.try_get_object("assistant_message") {
+        if let Ok(content) = am.try_get_string("content") {
+            if !content.trim().is_empty() {
+                activity_field(&run_id, "assistant_progress", "assistant progress", &clamp(&content, 2000), iterations);
+            }
+        }
+    }
     messages.push_object(resp.get_object("assistant_message"));
     let calls = resp.get_array("tool_calls");
     for c in calls.objects() {
@@ -475,6 +481,16 @@ loop {
         if !duplicate {
             last_action = format!("{} — {}", name, target);
             last_observation = obs.clone();
+            if !run_id.is_empty() {
+                let observed = clamp(&format!("IN-FLIGHT OBSERVATION (unfinished; not verified completion)\nROUND: {}\nLAST ACTION: {}\nLAST RESULT:\n{}\nNEXT: Reconstruct from the observed action and result; inspect this run's activity. Do not repeat an identical failed call without new information.", iterations, last_action, last_observation), 6000);
+                let mut ce = DataObject::new(); ce.put_string("kind", "observation");
+                ce.put_string("checkpoint", &observed);
+                let mut h = DataObject::new(); h.put_string("checkpoint", &observed);
+                h.put_string("next", "Recover cautiously from this unfinished observation; no model-authored handoff was reached.");
+                h.put_int("round", iterations); h.put_int("max_rounds", max_iterations);
+                h.put_int("tool_calls", executed_calls); h.put_int("errors", error_count);
+                ce.put_object("handoff", h); activity_emit(&run_id, ce);
+            }
         }
         if is_failure {
             error_count += 1;
@@ -628,9 +644,7 @@ if !run_id.is_empty() {
     h.put_string("next", "Resume from this checkpoint; inspect this run's activity if more detail is needed.");
     h.put_int("round", iterations); h.put_int("max_rounds", max_iterations);
     h.put_int("tool_calls", executed_calls); h.put_int("errors", error_count);
-    // Recent working context for postmortem/inspection. The NEXT turn gets a
-    // bounded structured checkpoint, not this raw serialized dump by default.
-    h.put_string("transcript_excerpt", &text_tail(&messages.to_string(), 16000));
+    h.put_string("recovery", "Use the checkpoint and this run's safe activity timeline. Raw tool arguments and serialized provider transcripts are not retained here.");
     ce.put_object("handoff", h); activity_emit(&run_id, ce);
     let mut e = DataObject::new(); e.put_string("kind", "finish");
     e.put_string("phase", "finished"); e.put_string("state", "run finished");
