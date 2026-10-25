@@ -64,6 +64,9 @@ function activityLine(e) {
     tool_running: 'Tool running',
     tool_result: e.ok ? 'Tool succeeded' : 'Tool failed',
     tool_skipped: 'Duplicate tool call suppressed',
+    observation: 'Observed tool result — in-flight recovery checkpoint saved',
+    assistant_progress: 'Assistant progress update',
+    verification_required: 'Verification pending',
     checkpoint: 'Checkpoint saved',
     finish: 'Run finished',
     start: 'Run started'
@@ -96,9 +99,9 @@ function appendEvents(host, events) {
     var tm = e.time ? new Date(e.time).toLocaleTimeString() : '';
     h.textContent = tm + '  ·  ' + activityLine(e) + (e.round ? '  ·  round ' + e.round : '');
     row.appendChild(h);
-    if (e.detail) {
+    if (e.detail && e.kind !== 'tool_requested' && e.kind !== 'checkpoint' && e.kind !== 'observation') {
       var d = elWith('pl-event-detail', e.detail);
-      d.title = e.kind === 'tool_requested' ? 'Call id; raw arguments are not shown in the live stream.' : '';
+      if (e.kind === 'finish') d.textContent = 'Outcome: ' + (e.outcome || 'finished') + '. The response and resumable checkpoint are in handoff.';
       row.appendChild(d);
     }
     list.appendChild(row);

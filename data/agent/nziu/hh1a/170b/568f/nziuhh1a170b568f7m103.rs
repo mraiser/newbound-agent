@@ -1,6 +1,6 @@
 // Read a specific bounded run for the Plan tab or a later agent turn. Raw
-// arguments are not emitted. transcript_excerpt is returned only on request
-// through its own bounded field; it is diagnostic context, not auto-prompted.
+// arguments are not emitted. Handoffs and tool outcomes are bounded; provider
+// transcripts and raw arguments are not retained in these run records.
 // After boot, active is recomputed from the run PID/boot rather than trusted
 // from a stale record.
 let now = flowlang::flowlang::system::time::time();
