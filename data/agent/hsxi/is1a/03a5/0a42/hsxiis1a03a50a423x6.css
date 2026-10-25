@@ -39,6 +39,17 @@
 .pl-activity { flex: none; max-height: 46%; overflow-y: auto; border: 1px solid var(--line);
   border-radius: 9px; background: var(--panel); font-size: .86em; }
 .pl-activity[hidden] { display: none; }
+/* Drag-resized: an explicit height replaces the automatic max-height cap. */
+.pl-activity.sized { box-sizing: border-box; max-height: none; }
+/* The grip fills the wrap's 10px gap exactly, so layout is unchanged. */
+.pl-activity-grip { flex: none; position: relative; height: 10px; margin: -10px 0;
+  cursor: ns-resize; touch-action: none; outline: none; }
+.pl-activity-grip::after { content: ''; position: absolute; left: 50%; top: 3px;
+  width: 40px; height: 4px; margin-left: -20px; border-radius: 2px;
+  background: var(--line); transition: background .12s; }
+.pl-activity-grip:hover::after, .pl-activity-grip.dragging::after,
+.pl-activity-grip:focus-visible::after { background: var(--accent, #f0a63c); }
+.pl-activity[hidden] + .pl-activity-grip { display: none; }
 .pl-activity-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
   padding: 8px 10px; border-bottom: 1px solid var(--line); }
 .pl-activity-title { flex: 1; min-width: 220px; overflow-wrap: anywhere; }

@@ -886,7 +886,63 @@ function startLive() {
   });
 }
 
+// Resizable activity panel: drag the grip under its bottom edge (or focus it
+// and use ↑/↓, shift for bigger steps). The height is a per-browser view
+// preference in localStorage, not plan data; double-click resets to the
+// automatic max-height.
+var ACT_H_KEY = 'agent.plan.activityHeight';
+function initActivityResize() {
+  var panel = ME.querySelector('.pl-activity');
+  var grip = ME.querySelector('.pl-activity-grip');
+  if (!panel || !grip) return;
+  function apply(h, save) {
+    if (h == null) {
+      panel.style.height = ''; panel.classList.remove('sized');
+      if (save) try { localStorage.removeItem(ACT_H_KEY); } catch (e) {}
+      return;
+    }
+    // panel + board share the free height, so their sum is the room to split
+    var board = ME.querySelector('.pl-board');
+    var bh = board ? board.getBoundingClientRect().height : 0;
+    if (bh > 0) h = Math.min(h, Math.max(80, panel.getBoundingClientRect().height + bh - 160)); // keep the board visible
+    h = Math.round(Math.max(80, h));
+    panel.style.height = h + 'px'; panel.classList.add('sized');
+    if (save) try { localStorage.setItem(ACT_H_KEY, String(h)); } catch (e) {}
+  }
+  var saved = 0;
+  try { saved = parseInt(localStorage.getItem(ACT_H_KEY), 10) || 0; } catch (e) {}
+  if (saved > 0) apply(saved, false);
+  var startY = 0, startH = 0;
+  function move(ev) { apply(startH + ev.clientY - startY, false); }
+  function end() {
+    window.removeEventListener('pointermove', move);
+    window.removeEventListener('pointerup', end);
+    window.removeEventListener('pointercancel', end);
+    if (!grip.classList.contains('dragging')) return;
+    grip.classList.remove('dragging');
+    apply(panel.getBoundingClientRect().height, true);
+  }
+  grip.addEventListener('pointerdown', function (ev) {
+    if (ev.button !== 0) return;
+    ev.preventDefault();
+    startY = ev.clientY; startH = panel.getBoundingClientRect().height;
+    try { grip.setPointerCapture(ev.pointerId); } catch (e) {}
+    grip.classList.add('dragging');
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', end);
+    window.addEventListener('pointercancel', end);
+  });
+  grip.addEventListener('dblclick', function () { apply(null, true); });
+  grip.addEventListener('keydown', function (ev) {
+    if (ev.key !== 'ArrowUp' && ev.key !== 'ArrowDown') return;
+    ev.preventDefault();
+    var step = (ev.shiftKey ? 60 : 20) * (ev.key === 'ArrowDown' ? 1 : -1);
+    apply(panel.getBoundingClientRect().height + step, true);
+  });
+}
+
 me.ready = function () {
+  initActivityResize();
   ME.querySelectorAll('[data-runact]').forEach(function (b) {
     b.addEventListener('click', function () {
       var controlEl = ME.querySelector('.pl-run-controls');
