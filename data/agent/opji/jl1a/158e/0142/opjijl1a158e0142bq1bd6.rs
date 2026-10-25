@@ -171,47 +171,10 @@ let is_parent = !children.is_empty();
 // this journaled step_log), NOT in refusing to think.
 let goal = claim.clone();
 let detail = e.try_get_string("detail").unwrap_or_default();
-let mut prior_steps = String::new();
-if e.has("step_log") {
-    if let Ok(sl) = e.try_get_array("step_log") {
-        let n = sl.len();
-        if n > 0 {
-            // Feed the LATEST [budget checkpoint] IN FULL - it is the rolling
-            // thread the next turn resumes from, and truncating it reintroduces
-            // the amnesia we just fixed (the checkpoint is length-bounded at
-            // generation, ~1500 chars, by tool_loop's summary prompt - so the
-            // bound lives at the source, not a blind cut here). Ordinary steps
-            // stay terse one-liners (200 chars); older checkpoints are
-            // superseded by the newest and drop out.
-            let mut latest_ckpt: i64 = -1;
-            for i in 0..n {
-                if let Ok(le) = sl.try_get_object(i) {
-                    if le.has("checkpoint") || le.try_get_string("result").unwrap_or_default().starts_with("[budget checkpoint") {
-                        latest_ckpt = i as i64;
-                    }
-                }
-            }
-            let mut parts = Vec::new();
-            for i in 0..n {
-                if let Ok(le) = sl.try_get_object(i) {
-                    let home = le.try_get_string("home").unwrap_or_default();
-                    let ok = le.try_get_boolean("ok").unwrap_or(false);
-                    let res = le.try_get_string("checkpoint").ok()
-                        .filter(|s| !s.trim().is_empty())
-                        .unwrap_or_else(|| le.try_get_string("result").unwrap_or_default());
-                    let is_ckpt = le.has("checkpoint") || res.starts_with("[budget checkpoint");
-                    let keep = (i as i64 == latest_ckpt) || (!is_ckpt && (i as i64) >= n as i64 - 3);
-                    if !keep { continue; }
-                    // Latest continuation is substantial and bounded; older
-                    // steps remain useful evidence, not 200-char amnesia.
-                    let res: String = if i as i64 == latest_ckpt { res.chars().take(8000).collect() } else { res.chars().take(1200).collect() };
-                    parts.push(format!("- [{}] {} -> {}", if ok { "ok" } else { "err" }, home, res));
-                }
-            }
-            prior_steps = parts.join("\n");
-        }
-    }
-}
+let continuity = crate::agent::plan::continuity_context::continuity_context(e.deep_copy());
+let prior_steps = continuity.get_string("prior_steps");
+let previous_run_id = continuity.get_string("previous_run_id");
+let handoff_received = continuity.get_string("handoff_received");
 let mut prompt = format!(
     "You are the executive's plan-step engine. Advance ONE accepted plan item toward completion. \
 Think, then act via the available tools. Prefer a single concrete, verifiable increment over a sweep. \

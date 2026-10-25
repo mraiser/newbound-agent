@@ -47,7 +47,13 @@ for k in ["claim", "phase", "state", "pending_tool", "outcome", "checkpoint"] {
     if event.has(k) { r.put_string(k, &event.get_string(k)); }
 }
 for k in ["turn", "round", "max_rounds", "tool_calls", "errors", "failure_streak", "duplicate_streak"] {
-    if event.has(k) { r.put_int(k, event.get_int(k)); }
+    if event.has(k) {
+        let incoming = event.get_int(k);
+        // Model/tool lifecycle events carry different subsets. A later wait
+        // with round N must not erase the counters observed at round N-1.
+        let current = r.try_get_int(k).unwrap_or(0);
+        r.put_int(k, incoming.max(current));
+    }
 }
 for k in ["context", "handoff", "pending_tool"] {
     if let Ok(v) = event.try_get_object(k) { r.put_object(k, v); }

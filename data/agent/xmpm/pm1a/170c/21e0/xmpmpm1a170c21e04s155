@@ -1,0 +1,1 @@
+{"data":{"attachmentkeynames":["rs"],"import":"use ndata::dataobject::DataObject;","params":[{"name":"entry","type":"JSONObject"}],"returntype":"JSONObject","type":"rust"},"id":"xmpmpm1a170c21e04s155","readers":[],"time":1792893132292,"username":"system","writers":[]}

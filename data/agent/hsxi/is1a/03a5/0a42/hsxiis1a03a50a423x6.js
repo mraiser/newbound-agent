@@ -55,7 +55,7 @@ function activityLine(e) {
   if (!e) return '';
   var tool = e.tool ? String(e.tool).replace(/^dev-code-/, '') : '';
   var target = e.target && e.target !== tool ? ' · ' + e.target : '';
-  var streak = Number(e.streak || 0) > 1 ? ' · identical failure ' + e.streak + '/3' : '';
+  var streak = Number(e.streak || 0) > 0 ? ' · identical failure ' + e.streak + '/3' : '';
   var label = {
     model_wait: 'Waiting for model response',
     model_error: 'Model backend error',
@@ -153,7 +153,15 @@ function renderActivity() {
     }
   }
   if (activityView === 'handoff') { renderHandoff(body, run); return; }
-  if (activityView === 'activity') { appendEvents(body, a.events); return; }
+  if (activityView === 'activity') {
+    if (!run.active && historyRunId === run.run_id && historyData && historyData.status === 'ok') {
+      appendEvents(body, historyData.events || []);
+    } else if (!run.active) {
+      body.appendChild(elWith('pl-empty', 'Loading the saved activity timeline…'));
+      historyRunId = run.run_id; historyData = null; loadHistory();
+    } else appendEvents(body, a.events);
+    return;
+  }
   if (activityView === 'history') { body.appendChild(elWith('pl-empty', 'Choose a recent run below.')); }
   var now = elWith('pl-now-grid');
   appendKV(now, 'state', run.stale ? 'interrupted — no live worker owns this old run' : (run.phase || run.state || 'preparing'), run.stale ? 'bad' : '');
@@ -198,6 +206,7 @@ function probeActivity() {
     }
     activityState.error = '';
     activityState.recent = r.recent || [];
+    if (!historyRunId && activityState.recent.length) historyRunId = activityState.recent[0].run_id;
     var next = r.run || null;
     var nextId = next && next.run_id || '';
     if (nextId !== activityRunId) { activityCursor = 0; activityState.events = []; activityRunId = nextId; }
