@@ -189,7 +189,7 @@ function setAutonomy(enabled) {
       workerStatus = Object.assign({}, workerStatus || {}, {
         plan_autonomy: saved.plan_autonomy === true
       });
-      note(saved.msg || (enabled ? 'plan autonomy enabled' : 'plan autonomy disabled'));
+      note(enabled ? 'plan autonomy enabled' : 'plan autonomy disabled — no new steps');
       probeWorker();
     } else {
       // A failure does not invent an enabled/disabled state: re-read it.
