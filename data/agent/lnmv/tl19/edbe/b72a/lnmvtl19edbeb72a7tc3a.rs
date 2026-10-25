@@ -5,6 +5,66 @@
 }
 
 // --- helpers ----------------------------------------------------------------
+// Plan activity is derived at real execution boundaries, never model-authored
+// status. The prompt-only public command stays source-compatible: step_item
+// hands its run metadata through a one-shot dispatch record.
+fn activity_emit(run_id: &str, event: DataObject) {
+    if run_id.is_empty() { return; }
+    let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let cmd = Command::lookup("agent", "plan", "activity_emit");
+        let mut a = DataObject::new(); a.put_string("run_id", run_id);
+        a.put_object("event", event); let _ = cmd.execute(a);
+    }));
+}
+fn activity_field(run_id: &str, kind: &str, phase: &str, detail: &str, round: i64) {
+    let mut e = DataObject::new(); e.put_string("kind", kind);
+    e.put_string("phase", phase); e.put_string("state", phase);
+    e.put_string("detail", detail); e.put_int("round", round);
+    activity_emit(run_id, e);
+}
+fn safe_target(args: &str) -> String {
+    // Targets only: raw arguments may contain secrets, source, or large data.
+    match DataObject::try_from_string(&format!("{{\"a\":{}}}", args)) {
+        Ok(w) => if let Ok(a) = w.try_get_object("a") {
+            let target = if a.has("lib") && a.has("ctl") && a.has("cmd") {
+                format!("{}.{}.{}", a.get_string("lib"), a.get_string("ctl"), a.get_string("cmd"))
+            } else if a.has("lib") && a.has("ctl") && a.has("facet") {
+                format!("{}.{}:{}", a.get_string("lib"), a.get_string("ctl"), a.get_string("facet"))
+            } else if a.has("claim") { a.get_string("claim") }
+            else if a.has("name") { a.get_string("name") }
+            else { "arguments available in the bounded run record".to_string() };
+            target.chars().take(300).collect()
+        } else { "invalid argument object".to_string() },
+        Err(_) => "invalid argument JSON".to_string(),
+    }
+}
+fn text_tail(s: &str, n: usize) -> String {
+    let v: Vec<char> = s.chars().collect();
+    if v.len() <= n { s.to_string() } else { v[v.len()-n..].iter().collect() }
+}
+let mut run_id = String::new();
+let mut run_turn = 0i64;
+{
+    let mut g = DataStore::globals();
+    if let Ok(mut dispatch) = g.try_get_object("AGENT_PLAN_DISPATCH") {
+        if dispatch.try_get_string("prompt").unwrap_or_default() == prompt {
+            run_id = dispatch.try_get_string("run_id").unwrap_or_default();
+            run_turn = dispatch.try_get_int("turn").unwrap_or(0);
+            g.remove_property("AGENT_PLAN_DISPATCH");
+        }
+    }
+}
+let dispatch = if !run_id.is_empty() {
+    let g = DataStore::globals();
+    g.try_get_object("AGENT_PLAN_DISPATCH_CONTEXT").unwrap_or_else(|_| DataObject::new())
+} else { DataObject::new() };
+if !run_id.is_empty() {
+    let mut e = DataObject::new(); e.put_string("kind", "start");
+    e.put_string("claim", &dispatch.try_get_string("claim").unwrap_or_default());
+    e.put_int("turn", run_turn);
+    if let Ok(c) = dispatch.try_get_object("context") { e.put_object("context", c); }
+    activity_emit(&run_id, e);
+}
 fn extract_compile_errors(raw: &str) -> String {
   // Compile failures arrive as {"status":"err","kind":"compile_error","msg":"error[E0382]: ..."}
   // serialized to JSON, so newlines inside msg are escaped literals. Unescape, then keep
@@ -209,8 +269,26 @@ let mut last_sig = String::new(); // repeated-identical-call detection
 let mut consecutive_failures = 0;
 let mut repeat_count = 0;
 let mut last_err_head = String::new();
+let mut executed_calls = 0i64;
+let mut error_count = 0i64;
+let mut tool_calls_seen = 0i64;
+let mut pending_checkpoint = String::new();
+let mut checkpoint_reason = String::new();
 
 loop {
+    if !pending_checkpoint.is_empty() {
+        let mut e = DataObject::new(); e.put_string("kind", "checkpoint");
+        e.put_string("phase", "checkpoint"); e.put_string("state", "checkpoint saved");
+        e.put_string("detail", &checkpoint_reason);
+        e.put_string("checkpoint", &pending_checkpoint);
+        let mut h = DataObject::new(); h.put_string("checkpoint", &pending_checkpoint);
+        h.put_string("next", "Resume from this checkpoint, inspect the latest run events as needed, then verify the next concrete increment.");
+        h.put_int("round", iterations); h.put_int("max_rounds", max_iterations);
+        h.put_int("tool_calls", executed_calls); h.put_int("errors", error_count);
+        h.put_string("transcript_excerpt", &text_tail(&messages.to_string(), 24000));
+        e.put_object("handoff", h); activity_emit(&run_id, e);
+        pending_checkpoint.clear();
+    }
     if iterations >= max_iterations {
         // Budget exhausted: do NOT discard the work. Ask the model to compress
         // its own progress into a resumable checkpoint (one bounded extra
@@ -237,12 +315,16 @@ loop {
         break;
     }
     iterations += 1;
+    activity_field(&run_id, "model_wait", "waiting for model response",
+        "The model has the in-turn conversation; a response or tool request has not arrived yet.", iterations);
 
     let resp = chat_llm(messages.clone(), tools.clone());
     let kind = resp.get_string("kind");
     println!("TL[{}] kind={}", iterations, kind);
   
     if kind == "error" {
+        error_count += 1;
+        activity_field(&run_id, "model_error", "model backend error", &resp.get_string("content"), iterations);
         final_answer = format!("LLM backend error: {}", resp.get_string("content"));
         break;
     }
@@ -272,12 +354,28 @@ loop {
         let name = c.get_string("name");
         let args_str = c.get_string("arguments");
         let call_id = c.get_string("id");
+        tool_calls_seen += 1;
+        let target = safe_target(&args_str);
+        let mut requested = DataObject::new(); requested.put_string("kind", "tool_requested");
+        requested.put_string("phase", "tool requested"); requested.put_string("tool", &name);
+        requested.put_string("target", &target); requested.put_int("round", iterations);
+        requested.put_int("tool_calls", tool_calls_seen); requested.put_string("detail", &call_id);
+        let mut pending = DataObject::new(); pending.put_string("tool", &name);
+        pending.put_string("target", &target); pending.put_int("round", iterations);
+        requested.put_object("pending_tool", pending); activity_emit(&run_id, requested);
         let sig = format!("{}::{}", &name, &args_str);
         let args_head: String = args_str.chars().take(200).collect();
         println!("TL[{}] -> {} args: {}", iterations, name, args_head.replace('\n', " "));
 
+        let duplicate = sig == last_sig;
         let observation = if sig == last_sig {
             repeat_count += 1;
+            let mut e = DataObject::new(); e.put_string("kind", "tool_skipped");
+            e.put_string("phase", "duplicate call suppressed"); e.put_string("tool", &name);
+            e.put_string("target", &target); e.put_int("round", iterations);
+            e.put_int("duplicate_streak", repeat_count); e.put_int("streak", repeat_count);
+            e.put_boolean("ok", false); e.put_string("detail", "Same tool and arguments as the preceding call; not executed again.");
+            activity_emit(&run_id, e);
             if repeat_count >= 3 {
                 final_answer = format!("Aborting: the model repeated the identical call to {} {} times despite being told the result will not change. Last real result from this tool is above in the transcript. This usually means the underlying operation is failing and the model has no viable alternative.", name, repeat_count + 1);
                 break;
@@ -286,6 +384,8 @@ loop {
         } else {
             repeat_count = 0;
             last_sig = sig;
+            executed_calls += 1;
+            activity_field(&run_id, "tool_running", "tool running", &format!("{} — {}", name, target), iterations);
             let parsed = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                 DataObject::from_string(&args_str)
             }));
@@ -372,6 +472,7 @@ loop {
             || obs.starts_with("Compilation failed")
             || obs.contains("You already called this exact tool");
         if is_failure {
+            error_count += 1;
             let err_head: String = obs.chars().take(120).collect();
             if err_head == last_err_head {
                 consecutive_failures += 1;
