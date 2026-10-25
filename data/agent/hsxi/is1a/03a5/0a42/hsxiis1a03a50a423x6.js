@@ -144,6 +144,7 @@ function renderHandoff(host, run) {
   if (run.delivery) appendKV(manifest, 'delivery', (run.delivery.state === 'provider_responded' ? 'Provider responded to this context' : run.delivery.state) + (run.delivery.time ? ' · ' + relTime(run.delivery.time) : ''));
   else if (run.active) appendKV(manifest, 'delivery', 'Context prepared; no provider response receipt yet');
   if (c.source) appendKV(manifest, 'handoff source', c.source);
+  if (c.recovery_kind) appendKV(manifest, 'recovery kind', c.recovery_kind === 'runtime_observation' ? 'Recovered from saved runtime observations' : 'Resumed from a durable plan checkpoint');
   if (c.recovered_from_unjournaled_run || run.recovered) appendKV(manifest, 'recovery', 'Resumed from an interrupted or unjournaled run; verify unfinished changes before completion.', 'bad');
   host.appendChild(manifest);
   if (c.handoff_received) {
@@ -180,10 +181,19 @@ function renderActivity() {
   });
   var body = ME.querySelector('.pl-activity-body');
   body.textContent = '';
+  if (run && (run.interrupted || run.stale) && !run.active) {
+    body.appendChild(elWith('pl-recovery', 'This run did not reach a normal finish. Its saved checkpoint remains available for an authorized next turn; unfinished changes are not verified completion.'));
+  }
   if (!run) { body.appendChild(elWith('pl-empty', a.error || 'Start an accepted plan item to see its live activity here.')); return; }
   if (activityView === 'history') {
     if (historyLoading) { body.appendChild(elWith('pl-empty', 'Loading run history…')); return; }
-    if (historyData && historyData.status === 'err') { body.appendChild(elWith('pl-empty', historyData.msg)); return; }
+    if (historyData && historyData.status === 'err') {
+      if (run.fromCard && run.handoff) {
+        body.appendChild(elWith('pl-continuity-note', 'Detailed runtime history is unavailable. Showing the durable checkpoint retained on this plan item.'));
+        renderHandoff(body, run);
+      } else body.appendChild(elWith('pl-empty', historyData.msg));
+      return;
+    }
     if (historyData) {
       body.appendChild(elWith('pl-subhead', (historyData.active ? 'Active' : historyData.stale ? 'Interrupted' : 'Finished') + ' run · ' + (historyData.run_id || '')));
       appendEvents(body, historyData.events || []);
@@ -275,7 +285,7 @@ function probeActivity() {
     activityState.recent = r.recent || [];
     if (!historyRunId && activityState.recent.length) historyRunId = activityState.recent[0].run_id;
     var next = r.run || null;
-    if (activityView === 'handoff' && activityState.run && activityState.run.fromCard) {
+    if (activityState.run && activityState.run.fromCard && (activityView === 'handoff' || activityView === 'history')) {
       renderActivity(); return;
     }
     // With no active run the API selects the latest finished run for live
@@ -542,6 +552,7 @@ function card(e) {
       activityState.run = {
         fromCard: true,
         run_id: historyRunId, claim: e.claim, active: !!e.active_run,
+        interrupted: !!e.active_run && !!(e.last_run && e.last_run.run_id && e.last_run.run_id !== historyRunId),
         previous_run_id: run.previous_run_id || (e.checkpoint && e.checkpoint.previous_run_id) || '',
         recovered: !!run.recovered, updated: run.started || run.time || (e.checkpoint && e.checkpoint.time),
         started: run.started, turn: run.turn || (e.checkpoint && e.checkpoint.turn),
@@ -549,6 +560,21 @@ function card(e) {
         context: e.continuity || {}
       };
       if (historyRunId) loadHistory();
+      send_continuity_status(e.claim || '', function (raw) {
+        var status = activityEnvelope(raw);
+        if (!status || status.status !== 'ok' || !activityState.run || activityState.run.run_id !== status.run_id) return;
+        activityState.run = Object.assign({}, activityState.run, status, {
+          handoff: status.checkpoint || activityState.run.handoff,
+          context: status.continuity || activityState.run.context,
+          active: !!status.active
+        });
+        if (status.run) activityState.run = Object.assign({}, activityState.run, status.run, {
+          handoff: status.run.handoff || status.checkpoint || activityState.run.handoff,
+          context: status.run.context || status.continuity || activityState.run.context,
+          active: !!status.active
+        });
+        renderActivity();
+      });
       renderActivity();
       ME.querySelector('.pl-activity').scrollIntoView({block: 'nearest', behavior: 'smooth'});
     });

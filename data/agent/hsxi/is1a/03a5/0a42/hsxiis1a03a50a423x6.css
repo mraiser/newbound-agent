@@ -78,6 +78,8 @@
   border: 1px solid var(--line); border-radius: 5px; cursor: pointer;
   font: inherit; font-size: .82em; white-space: normal; overflow-wrap: anywhere; }
 .pl-card-continuity:hover { border-color: var(--accent, #f0a63c); }
+.pl-recovery { padding: 7px 9px; margin-bottom: 8px; border-left: 3px solid var(--bad, #c0564f);
+  color: var(--bad, #c0564f); background: var(--bg); line-height: 1.4; overflow-wrap: anywhere; }
 @media (max-width: 760px) { .pl-now-grid, .pl-manifest { grid-template-columns: 1fr; }
   .pl-activity { max-height: 52%; } }
 

@@ -174,6 +174,13 @@ let detail = e.try_get_string("detail").unwrap_or_default();
 let continuity = crate::agent::plan::continuity_context::continuity_context(e.deep_copy());
 let inherited_structured = if e.has("checkpoint") { e.get_object("checkpoint") } else { DataObject::new() };
 let inherited_checkpoint_time = inherited_structured.try_get_int("time").unwrap_or(0);
+let _interrupted_active = if e.has("active_run") {
+    let a = e.get_object("active_run");
+    let rid = a.try_get_string("run_id").unwrap_or_default();
+    let previous = e.try_get_object("last_run").ok()
+        .and_then(|l| l.try_get_string("run_id").ok()).unwrap_or_default();
+    !rid.is_empty() && rid != previous
+} else { false };
 let last_journal_time = e.try_get_array("step_log").ok()
     .and_then(|a| if a.len() == 0 { None } else { a.get_object(a.len()-1).try_get_int("time").ok() }).unwrap_or(0);
 let prefer_structured = inherited_structured.has("summary") && inherited_checkpoint_time > 0 && inherited_checkpoint_time >= last_journal_time;
