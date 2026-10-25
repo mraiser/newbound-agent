@@ -789,12 +789,13 @@ if !run_id.is_empty() {
     h.put_string("recovery", "Use the structured checkpoint and safe activity timeline. Raw tool arguments and provider transcripts are not retained.");
     ce.put_object("handoff", h); activity_emit(&run_id, ce);
     let mut e = DataObject::new(); e.put_string("kind", "finish");
-    let interrupted = status == "ERROR" || status == "PAUSED" || status == "STOPPED" || !checkpoint_reason.is_empty();
+    let outcome_status = cp.get_string("status");
+    let interrupted = outcome_status == "ERROR" || outcome_status == "PAUSED" || outcome_status == "STOPPED" || !checkpoint_reason.is_empty();
     let controlled_finish = applied_control.clone();
     let phase = if controlled_finish == "pause" { "paused" } else if controlled_finish == "stop" { "stopped" } else if interrupted { "interrupted" } else { "finished" };
     e.put_string("phase", phase);
     e.put_string("state", if phase == "paused" || phase == "stopped" { phase } else if interrupted { "interrupted" } else { "run finished" });
-    e.put_string("outcome", &status); e.put_string("detail", &final_answer);
+    e.put_string("outcome", &outcome_status); e.put_string("detail", &final_answer);
     e.put_int("round", iterations); e.put_int("max_rounds", max_iterations);
     e.put_int("tool_calls", executed_calls); e.put_int("errors", error_count);
     e.put_int("failure_streak", consecutive_failures); e.put_int("duplicate_streak", repeat_count);
