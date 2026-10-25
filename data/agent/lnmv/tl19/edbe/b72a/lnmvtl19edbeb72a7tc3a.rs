@@ -226,7 +226,7 @@ for t in mcp_tools.objects() {
   if !t.has("name") { continue; }
   // Runtime telemetry is emitted by the execution substrate, never chosen by
   // the model. Read-side activity/history remains available for continuity.
-  if t.get_string("name") == "agent-plan-activity_emit" { continue; }
+  if ["agent-plan-activity_emit", "agent-plan-run_state", "agent-plan-test_run_control_contract", "agent-plan-test_continuity_contract", "agent-plan-test_parent_coordination_eligibility"].contains(&t.get_string("name").as_str()) { continue; }
   let mut f = DataObject::new();
   f.put_string("name", &t.get_string("name"));
   if t.has("description") { f.put_string("description", &t.get_string("description")); }
