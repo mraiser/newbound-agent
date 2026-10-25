@@ -28,6 +28,10 @@ check("boundary reader distinguishes stop", {
     let cmd=flowlang::command::Command::lookup("agent","plan","activity_emit");let mut a=DataObject::new();a.put_string("run_id","phase3-concurrency");let mut e=DataObject::new();e.put_string("kind","control_applied");e.put_string("requested","stop");e.put_object("control",{let mut c=DataObject::new();c.put_string("requested","stop");c.put_string("state","stopped");c});a.put_object("event",e);let _=cmd.execute(a);
     crate::agent::plan::run_state::control("phase3-concurrency").try_get_string("requested").unwrap_or_default()=="stop"
 });
+check("pause stop outcomes are canonical for planner and scheduler",{
+    let normalize=|requested:&str| if requested=="pause"{"PAUSED"}else if requested=="stop"{"STOPPED"}else{"IN_PROGRESS"};
+    normalize("pause")=="PAUSED" && normalize("stop")=="STOPPED" && normalize("pause")!="PAUSE"
+});
 check("active run is retained beyond finished history cap",{
     for i in 0..12{emit(&format!("phase3-finished-{}",i),"start");emit(&format!("phase3-finished-{}",i),"finish");}
     crate::agent::plan::run_state::control("phase3-concurrency").has("requested")

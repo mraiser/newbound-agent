@@ -45,13 +45,15 @@ if lifecycle.is_empty(){
 }
 if lifecycle.is_empty(){let mut o=DataObject::new();o.put_string("status","err");o.put_string("msg","plan item not found");return o;}
 let live = run.try_get_boolean("active").unwrap_or(false);
+let requested_now = run.try_get_object("control").ok().and_then(|c|c.try_get_string("requested").ok()).unwrap_or_default();
+let live = run.try_get_boolean("active").unwrap_or(false) || requested_now=="pause" || requested_now=="stop";
 if (action=="pause"||action=="stop") && !live {
     let mut o=DataObject::new();o.put_string("status","err");o.put_string("msg","run is not active; its checkpoint is already available for resume");return o;
 }
 if action=="resume" && !lifecycle.split(',').any(|t|{let t=t.trim();t=="accepted"||t=="in-progress"}) {
     let mut o=DataObject::new();o.put_string("status","err");o.put_string("msg","item is not accepted/in-progress; re-accept it through the normal lifecycle gate before resuming");return o;
 }
-if action=="resume" && live {
+if action=="resume" && run.try_get_boolean("active").unwrap_or(false) {
     let mut o=DataObject::new();o.put_string("status","err");o.put_string("msg","run is still active; pause or stop it before starting a new turn");return o;
 }
 if action=="resume" && (run_id.is_empty() || (run_id!=last_run && run_id!=active_run && run_id!=item_checkpoint.try_get_string("run_id").unwrap_or_default())) {
@@ -62,6 +64,10 @@ if action=="resume" && !note.trim().is_empty() {
     if nr.try_get_string("status").unwrap_or_default()!="ok" {let mut o=DataObject::new();o.put_string("status","err");o.put_string("msg", &format!("could not journal resume guidance: {}",nr.try_get_string("msg").unwrap_or_default()));return o;}
 }
 if action=="resume" {
+    let prior_control = run.try_get_object("control").unwrap_or_else(|_|DataObject::new());
+    let resume_note = if note.trim().is_empty() {prior_control.try_get_string("note").unwrap_or_default()} else {note.clone()};
+    let resume_rid = run_id.clone();
+    let resume_claim = claim.clone();
     let _guard=crate::agent::plan::run_state::lock();
     if store.exists("runtime","agent_plan_runs") {
         let mut rec=store.get_data("runtime","agent_plan_runs");let mut d=rec.get_object("data");let runs=d.get_array("runs");
@@ -82,7 +88,17 @@ if action=="resume" {
         }
     }
     let h=api.agent.plan.board_hash().get_string("hash");
+    let sid=nn_sessionid.clone();
     let r=api.agent.plan.step_item(claim,h,nn_sessionid);
+    // Preserve WHY work resumed, not just the fact that another turn ran.
+    let b2=api.agent.plan.board();
+    let mut arr=b2.get_array("entries");
+    for i in 0..arr.len(){let mut e=arr.get_object(i);if e.try_get_string("claim").unwrap_or_default()!=resume_claim{continue;}
+        let mut receipt=DataObject::new();receipt.put_string("run_id",&resume_rid);receipt.put_string("note",&resume_note);
+        receipt.put_int("time",flowlang::flowlang::system::time::time());receipt.put_string("state","resumed");e.put_object("resume",receipt);
+        let _=api.dev.code.patch_control_facet("kb".to_string(),"plan".to_string(),"memory".to_string(),"".to_string(),arr.to_string(),b2.get_string("hash"),"plan resumed with guidance".to_string(),"plan-board".to_string(),sid);
+        break;
+    }
     return r;
 }
 if action=="clear" {
