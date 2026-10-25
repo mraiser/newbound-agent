@@ -85,9 +85,9 @@ function workerText(r) {
   var phase = r.phase || 'unknown';
   if (isRunning(r)) return 'Running now: ' + r.current;
   var prefix = 'No task running: ';
-  if (phase === 'off') return prefix + 'autonomy was just enabled; waiting for the worker to start.';
-  if (phase === 'starting') return prefix + 'the plan worker is starting.';
+  if (phase === 'off' && r.alive) return prefix + 'autonomy was just enabled; waiting for the worker to start.';
   if (!r.alive) return prefix + 'autonomy is enabled, but its worker is not running. Start the plan worker to run tasks.';
+  if (phase === 'starting') return prefix + 'the plan worker is starting.';
   if (phase === 'rate_limited') {
     var resume = r.resume_at ? ' Resumes ' + new Date(r.resume_at).toLocaleTimeString() + '.' : '';
     return prefix + 'the hourly plan-step limit was reached (' + (r.turns_last_hour || 0) +
