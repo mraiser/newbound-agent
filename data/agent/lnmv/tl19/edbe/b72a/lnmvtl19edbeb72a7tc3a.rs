@@ -288,6 +288,8 @@ let mut pending_checkpoint = String::new();
 let mut checkpoint_reason = String::new();
 let mut last_action = String::new();
 let mut last_observation = String::new();
+let mut observed_work = DataArray::new();
+let mut assistant_progress = String::new();
 
 loop {
     if iterations >= max_iterations {
@@ -324,6 +326,14 @@ loop {
         "The model has the in-turn conversation; a response or tool request has not arrived yet.", iterations);
 
     let resp = chat_llm(messages.clone(), tools.clone());
+    if !run_id.is_empty() && iterations == 1 {
+        let mut delivered = DataObject::new(); delivered.put_string("kind", "context_delivered");
+        delivered.put_string("phase", "context acknowledged by provider");
+        delivered.put_string("detail", "The provider returned a response to the first prompt carrying this turn's context manifest; it was not merely queued.");
+        delivered.put_int("round", iterations);
+        if let Ok(c) = dispatch.try_get_object("context") { delivered.put_object("context", c); }
+        activity_emit(&run_id, delivered);
+    }
     if !run_id.is_empty() {
         let mut e = DataObject::new(); e.put_string("kind", "model_received");
         e.put_string("phase", "model response received"); e.put_string("state", "processing model response");
@@ -354,6 +364,20 @@ loop {
             messages.push_object(m);
             nudged = true;
             activity_field(&run_id, "verification_required", "verification pending", &format!("{} was modified but has not been executed yet.", dirty), iterations);
+            if !run_id.is_empty() {
+                let mut ci = DataObject::new(); ci.put_string("kind", "verification_pending");
+                ci.put_string("status", "IN_PROGRESS"); ci.put_string("response", &content);
+                ci.put_string("summary", &format!("{} was modified; execution/verification is still required.", dirty));
+                ci.put_string("next", &format!("Execute or test {} before treating it as complete.", dirty));
+                ci.put_string("verification_pending", &dirty); ci.put_string("run_id", &run_id);
+                ci.put_int("turn", run_turn); ci.put_int("round", iterations); ci.put_int("max_rounds", max_iterations);
+                ci.put_int("tool_calls", executed_calls); ci.put_int("errors", error_count);
+                ci.put_array("work", observed_work.clone());
+                let cp = crate::agent::plan::checkpoint::checkpoint(ci);
+                let mut ce = DataObject::new(); ce.put_string("kind", "checkpoint");
+                ce.put_string("checkpoint", &cp.get_string("text")); ce.put_object("handoff", cp);
+                activity_emit(&run_id, ce);
+            }
             continue;
         }
         final_answer = content;
@@ -364,7 +388,24 @@ loop {
     if let Ok(am) = resp.try_get_object("assistant_message") {
         if let Ok(content) = am.try_get_string("content") {
             if !content.trim().is_empty() {
+                assistant_progress = clamp(&content, 4000);
                 activity_field(&run_id, "assistant_progress", "assistant progress", &clamp(&content, 2000), iterations);
+                if !run_id.is_empty() {
+                    let mut ci = DataObject::new(); ci.put_string("kind", "milestone");
+                    ci.put_string("status", "IN_PROGRESS"); ci.put_string("summary", &assistant_progress);
+                    ci.put_string("response", &assistant_progress);
+                    ci.put_string("reason", "The assistant reported progress between tool actions; this is not verified completion.");
+                    ci.put_string("run_id", &run_id); ci.put_string("previous_run_id", &dispatch.try_get_string("previous_run_id").unwrap_or_default());
+                    ci.put_int("turn", run_turn); ci.put_int("round", iterations); ci.put_int("max_rounds", max_iterations);
+                    ci.put_int("tool_calls", executed_calls); ci.put_int("errors", error_count);
+                    ci.put_string("last_action", &last_action); ci.put_string("last_result", &last_observation);
+                    ci.put_string("verification_pending", if dirty.is_empty() { "" } else { &dirty });
+                    ci.put_array("work", observed_work.clone());
+                    let cp = crate::agent::plan::checkpoint::checkpoint(ci);
+                    let mut ce = DataObject::new(); ce.put_string("kind", "checkpoint");
+                    ce.put_string("checkpoint", &cp.get_string("text")); ce.put_object("handoff", cp.clone());
+                    activity_emit(&run_id, ce);
+                }
             }
         }
     }
@@ -496,15 +537,26 @@ loop {
         if !duplicate {
             last_action = format!("{} — {}", name, target);
             last_observation = obs.clone();
+            let mut work = DataObject::new(); work.put_string("tool", &name);
+            work.put_string("target", &target); work.put_boolean("ok", !is_failure);
+            work.put_string("result", &obs); observed_work.push_object(work);
+            while observed_work.len() > 16 { observed_work.remove_property(0); }
             if !run_id.is_empty() {
-                let observed = clamp(&format!("IN-FLIGHT OBSERVATION (unfinished; not verified completion)\nROUND: {}\nLAST ACTION: {}\nLAST RESULT:\n{}\nNEXT: Reconstruct from the observed action and result; inspect this run's activity. Do not repeat an identical failed call without new information.", iterations, last_action, last_observation), 6000);
+                let mut ci = DataObject::new(); ci.put_string("kind", "observation");
+                ci.put_string("status", "IN_PROGRESS"); ci.put_string("response", &assistant_progress);
+                ci.put_string("summary", "Observed tool activity; the model has not yet summarized this work as complete.");
+                ci.put_string("next", "Continue from the observed action/result; verify the next increment and do not repeat an identical failed call without new information.");
+                ci.put_string("reason", "Tool observation saved before a model-authored handoff; unfinished work is not verified completion.");
+                ci.put_string("run_id", &run_id); ci.put_string("previous_run_id", &dispatch.try_get_string("previous_run_id").unwrap_or_default());
+                ci.put_int("turn", run_turn); ci.put_int("round", iterations); ci.put_int("max_rounds", max_iterations);
+                ci.put_int("tool_calls", executed_calls); ci.put_int("errors", error_count);
+                ci.put_string("last_action", &last_action); ci.put_string("last_result", &last_observation);
+                ci.put_string("verification_pending", if dirty.is_empty() { "" } else { &dirty });
+                ci.put_array("work", observed_work.clone());
+                let cp = crate::agent::plan::checkpoint::checkpoint(ci);
                 let mut ce = DataObject::new(); ce.put_string("kind", "observation");
-                ce.put_string("checkpoint", &observed);
-                let mut h = DataObject::new(); h.put_string("checkpoint", &observed);
-                h.put_string("next", "Recover cautiously from this unfinished observation; no model-authored handoff was reached.");
-                h.put_int("round", iterations); h.put_int("max_rounds", max_iterations);
-                h.put_int("tool_calls", executed_calls); h.put_int("errors", error_count);
-                ce.put_object("handoff", h); activity_emit(&run_id, ce);
+                ce.put_string("checkpoint", &cp.get_string("text")); ce.put_object("handoff", cp);
+                activity_emit(&run_id, ce);
             }
         }
         if is_failure {
@@ -652,14 +704,25 @@ if !run_id.is_empty() {
             status, final_answer, if last_action.is_empty() { "none".to_string() } else { last_action.clone() },
             if last_observation.is_empty() { "none".to_string() } else { last_observation.clone() }), 8000)
     };
+    let mut ci = DataObject::new(); ci.put_string("kind", "response");
+    ci.put_string("status", &status); ci.put_string("response", &final_answer);
+    ci.put_string("reason", &checkpoint_reason); ci.put_string("run_id", &run_id);
+    ci.put_string("previous_run_id", &dispatch.try_get_string("previous_run_id").unwrap_or_default());
+    ci.put_int("turn", run_turn); ci.put_int("round", iterations); ci.put_int("max_rounds", max_iterations);
+    ci.put_int("tool_calls", executed_calls); ci.put_int("errors", error_count);
+    ci.put_string("last_action", &last_action); ci.put_string("last_result", &last_observation);
+    ci.put_string("verification_pending", if dirty.is_empty() { "" } else { &dirty });
+    ci.put_array("work", observed_work.clone());
+    let cp = crate::agent::plan::checkpoint::checkpoint(ci);
+    // Preserve the legacy budget prefix for downstream compatibility while
+    // attaching structured continuity for both old and new readers.
+    let checkpoint = if final_answer.starts_with("[budget checkpoint") { checkpoint } else { cp.get_string("text") };
     let mut ce = DataObject::new(); ce.put_string("kind", "checkpoint");
     ce.put_string("phase", "checkpoint saved"); ce.put_string("state", "checkpoint saved");
     ce.put_string("detail", &checkpoint_reason); ce.put_string("checkpoint", &checkpoint);
-    let mut h = DataObject::new(); h.put_string("checkpoint", &checkpoint);
-    h.put_string("next", "Resume from this checkpoint; inspect this run's activity if more detail is needed.");
-    h.put_int("round", iterations); h.put_int("max_rounds", max_iterations);
-    h.put_int("tool_calls", executed_calls); h.put_int("errors", error_count);
-    h.put_string("recovery", "Use the checkpoint and this run's safe activity timeline. Raw tool arguments and serialized provider transcripts are not retained here.");
+    let mut h = cp.deep_copy(); h.put_string("checkpoint", &checkpoint);
+    h.put_string("next", &cp.get_string("next"));
+    h.put_string("recovery", "Use the structured checkpoint and safe activity timeline. Raw tool arguments and provider transcripts are not retained.");
     ce.put_object("handoff", h); activity_emit(&run_id, ce);
     let mut e = DataObject::new(); e.put_string("kind", "finish");
     e.put_string("phase", "finished"); e.put_string("state", "run finished");
