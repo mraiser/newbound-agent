@@ -753,7 +753,8 @@ if !run_id.is_empty() {
             if last_observation.is_empty() { "none".to_string() } else { last_observation.clone() }), 8000)
     };
     let mut ci = DataObject::new(); ci.put_string("kind", "response");
-    ci.put_string("status", &status); ci.put_string("response", &final_answer);
+    let requested_now = crate::agent::plan::run_state::control(&run_id).try_get_string("requested").unwrap_or_default();
+    ci.put_string("status", if requested_now == "pause" { "PAUSED" } else if requested_now == "stop" { "STOPPED" } else { &status }); ci.put_string("response", &final_answer);
     ci.put_string("reason", &checkpoint_reason); ci.put_string("run_id", &run_id);
     ci.put_string("previous_run_id", &dispatch.try_get_string("previous_run_id").unwrap_or_default());
     ci.put_int("turn", run_turn); ci.put_int("round", iterations); ci.put_int("max_rounds", max_iterations);
@@ -792,7 +793,7 @@ if !run_id.is_empty() {
 }
 let control_status = crate::agent::plan::run_state::control(&run_id).try_get_string("requested").unwrap_or_default();
 if control_status == "pause" || control_status == "stop" {
-    status = control_status.to_uppercase();
+    status = if control_status == "pause" { "PAUSED".to_string() } else { "STOPPED".to_string() };
     if !run_id.is_empty() {
         let mut ce = DataObject::new(); ce.put_string("kind", "control_applied");
         ce.put_string("requested", &control_status); ce.put_string("phase", if control_status=="pause" {"paused"} else {"stopped"});
