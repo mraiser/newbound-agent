@@ -38,14 +38,22 @@ if store.exists("runtime", "agent_plan_runs") {
 for r in runs.iter_mut() {
     let active = r.try_get_boolean("active").unwrap_or(false);
     let run_boot = r.try_get_int("boot").unwrap_or(0);
-    if active && run_boot != boot { r.put_boolean("stale", true); }
+    let recorded_pid = r.try_get_int("pid").unwrap_or(0);
+    let live_pid = recorded_pid > 0 && recorded_pid == std::process::id() as i64;
+    if active && (!live_pid || (run_boot != 0 && boot != 0 && run_boot != boot)) {
+        r.put_boolean("active", false);
+        r.put_boolean("stale", true);
+        r.put_string("state", "interrupted");
+        r.put_string("outcome", "The service or worker stopped before this run reached its finish boundary.");
+    }
 }
 runs.sort_by(|a, b| b.try_get_int("updated").unwrap_or(0).cmp(&a.try_get_int("updated").unwrap_or(0)));
 let mut summaries = DataArray::new();
 let mut recent = DataArray::new();
 for r in runs.iter().take(12) { recent.push_object(copy_summary(r)); }
 let active = runs.iter().find(|r| r.try_get_boolean("active").unwrap_or(false)
-    && r.try_get_int("boot").unwrap_or(0) == boot);
+    && r.try_get_int("pid").unwrap_or(0) == std::process::id() as i64
+    && (r.try_get_int("boot").unwrap_or(0) == 0 || boot == 0 || r.try_get_int("boot").unwrap_or(0) == boot));
 if let Some(r) = active {
     summaries.push_object(copy_summary(r));
     let mut events = DataArray::new();
