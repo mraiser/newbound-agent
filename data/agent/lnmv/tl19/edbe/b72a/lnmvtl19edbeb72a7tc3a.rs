@@ -299,6 +299,8 @@ let mut last_action = String::new();
 let mut last_observation = String::new();
 let mut observed_work = DataArray::new();
 let mut assistant_progress = String::new();
+let mut applied_control = String::new();
+let mut applied_guidance = String::new();
 
 loop {
     // Human control is applied only at a model/tool boundary. A pause request
@@ -311,6 +313,8 @@ loop {
             let mut answer = format!("{} at a safe model/tool boundary. No new model round was started.\nPROGRESS: {}\nNEXT: Resume from the saved checkpoint when authorized.", if requested=="pause" {"Paused"} else {"Stopped"}, if assistant_progress.is_empty() { "The current activity and last observed result are saved." } else { &assistant_progress });
             if let Ok(note)=control.try_get_string("note") { if !note.trim().is_empty() { answer.push_str(&format!("\nHUMAN GUIDANCE: {}",note)); } }
             final_answer = answer;
+            applied_control = requested.clone();
+            applied_guidance = control.try_get_string("note").unwrap_or_default();
             checkpoint_reason = if requested=="pause" {"Human pause requested; applied at a safe boundary.".to_string()} else {"Human stop requested; applied at a safe boundary.".to_string()};
             break;
         }
@@ -457,6 +461,8 @@ loop {
             if control.try_get_string("state").unwrap_or_default() == "requested" && (requested == "pause" || requested == "stop") {
                 final_answer = format!("{} before starting the next tool call. The current model response is complete; no additional tool was started.\nPROGRESS: {}\nNEXT: Resume from the saved checkpoint when authorized.", if requested=="pause" {"Paused"} else {"Stopped"}, if assistant_progress.is_empty() { "The current activity is saved." } else { &assistant_progress });
                 checkpoint_reason = "Human control requested before the next tool call.".to_string();
+                applied_control = requested.clone();
+                applied_guidance = control.try_get_string("note").unwrap_or_default();
                 break;
             }
         }
@@ -753,7 +759,7 @@ if !run_id.is_empty() {
             if last_observation.is_empty() { "none".to_string() } else { last_observation.clone() }), 8000)
     };
     let mut ci = DataObject::new(); ci.put_string("kind", "response");
-    let requested_now = crate::agent::plan::run_state::control(&run_id).try_get_string("requested").unwrap_or_default();
+    let requested_now = applied_control.clone();
     let controlled_now = (requested_now == "pause" || requested_now == "stop") && !checkpoint_reason.is_empty();
     ci.put_string("status", if controlled_now && requested_now == "pause" { "PAUSED" } else if controlled_now && requested_now == "stop" { "STOPPED" } else { &status }); ci.put_string("response", &final_answer);
     ci.put_string("reason", &checkpoint_reason); ci.put_string("run_id", &run_id);
@@ -763,6 +769,7 @@ if !run_id.is_empty() {
     ci.put_string("last_action", &last_action); ci.put_string("last_result", &last_observation);
     ci.put_string("verification_pending", if dirty.is_empty() { "" } else { &dirty });
     ci.put_array("work", observed_work.clone());
+    if !applied_guidance.is_empty() { ci.put_string("guidance", &applied_guidance); }
     // Keep the durable model NEXT when a final response omits its own label;
     // the generic resume instruction must not erase actionable continuity.
     if label_next_is_missing(&final_answer) {
@@ -783,7 +790,7 @@ if !run_id.is_empty() {
     ce.put_object("handoff", h); activity_emit(&run_id, ce);
     let mut e = DataObject::new(); e.put_string("kind", "finish");
     let interrupted = status == "ERROR" || status == "PAUSED" || status == "STOPPED" || !checkpoint_reason.is_empty();
-    let controlled_finish = crate::agent::plan::run_state::control(&run_id).try_get_string("requested").unwrap_or_default();
+    let controlled_finish = applied_control.clone();
     let phase = if controlled_finish == "pause" { "paused" } else if controlled_finish == "stop" { "stopped" } else if interrupted { "interrupted" } else { "finished" };
     e.put_string("phase", phase);
     e.put_string("state", if phase == "paused" || phase == "stopped" { phase } else if interrupted { "interrupted" } else { "run finished" });
@@ -794,9 +801,11 @@ if !run_id.is_empty() {
     activity_emit(&run_id, e);
     activity_guard.closed = true;
 }
-let control_status = crate::agent::plan::run_state::control(&run_id).try_get_string("requested").unwrap_or_default();
+let control_status = applied_control.clone();
 if (control_status == "pause" || control_status == "stop") && !checkpoint_reason.is_empty() {
     status = if control_status == "pause" { "PAUSED".to_string() } else { "STOPPED".to_string() };
+    // A late request against an already finished run must not rewrite its
+    // outcome. Only the request observed at a boundary controls this finish.
     if !run_id.is_empty() {
         let mut ce = DataObject::new(); ce.put_string("kind", "control_applied");
         ce.put_string("requested", &control_status); ce.put_string("phase", if control_status=="pause" {"paused"} else {"stopped"});
