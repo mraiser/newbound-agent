@@ -195,7 +195,13 @@ if !detail.trim().is_empty() {
     prompt.push_str(&format!("\nDETAIL:\n{}\n", detail));
 }
 if !prior_steps.is_empty() {
-    prompt.push_str(&format!("\nPRIOR STEPS (do not repeat without new information):\n{}\n", prior_steps));
+    prompt.push_str(&format!("\nCONTINUITY ACROSS TURNS (this is your actual handoff, not a hidden replay):\n{}\n", prior_steps));
+    if !handoff_received.is_empty() {
+        prompt.push_str("\nTreat the latest handoff above as your working state. Preserve its verified facts, changed targets, unresolved error, and next action. Do not restart the goal from scratch or repeat an identical failed call without new information.\n");
+    }
+    if !previous_run_id.is_empty() {
+        prompt.push_str(&format!("\nPREVIOUS RUN: {}. Inspect it with dev-code-invoke_command lib=agent ctl=plan cmd=activity_history args={{run_id,after:0,limit:400}} when you need concrete tool outcomes not present above. Read-only activity_status shows the live/recent run. Runtime history is bounded and instance-local; kb.plan.step_log is the durable handoff.\n", previous_run_id));
+    }
 }
 // (C) HUMAN NOTES (agent.plan.add_note, from the kanban card): the owner's
 // running guidance on an item, appended between steps. EVERY note rides the
@@ -349,6 +355,10 @@ context_manifest.put_int("notes_new", notes_new_count);
 context_manifest.put_string("detail_policy", "full");
 context_manifest.put_string("checkpoint_policy", "latest continuation in full, bounded at 8000 characters");
 context_manifest.put_string("history_policy", "recent non-checkpoint steps bounded at 1200 characters; inspect run activity for details");
+context_manifest.put_string("previous_run_id", &previous_run_id);
+context_manifest.put_string("handoff_received", &handoff_received);
+context_manifest.put_int("included_steps", continuity.get_int("included_steps"));
+context_manifest.put_int("available_steps", continuity.get_int("available_steps"));
 {
     let mut globals = flowlang::datastore::DataStore::globals();
     let mut d = DataObject::new(); d.put_string("run_id", &run_id);

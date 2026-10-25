@@ -115,7 +115,12 @@ function renderHandoff(host, run) {
   appendKV(manifest, 'notes', (c.notes_presented || 0) + ' included · ' + (c.notes_new || 0) + ' new');
   appendKV(manifest, 'prior context', (c.prior_chars || 0) + ' chars · ' + (c.checkpoint_policy || 'latest checkpoint'));
   appendKV(manifest, 'history', c.history_policy || 'Bounded recent steps; run history available on demand');
+  if (c.previous_run_id) appendKV(manifest, 'previous run', c.previous_run_id);
   host.appendChild(manifest);
+  if (c.handoff_received) {
+    host.appendChild(elWith('pl-subhead', 'Handoff received by this turn'));
+    host.appendChild(elWith('pl-checkpoint', c.handoff_received));
+  }
   host.appendChild(elWith('pl-subhead', 'Checkpoint available for resumption'));
   host.appendChild(elWith('pl-checkpoint', h.checkpoint || run.checkpoint ||
     'No checkpoint yet. It is saved when the turn reaches a checkpoint/finish boundary; the live activity above shows work already observed.'));
