@@ -1,5 +1,16 @@
 // This file is auto-generated and managed by the flowlang build script.
 use flowlang::rustcmd::Transform;
+pub mod test_run_control_contract;
+pub mod run_state;
+pub mod run_control;
+pub mod continuity_status;
+pub mod test_continuity_contract;
+pub mod checkpoint_read;
+pub mod checkpoint;
+pub mod continuity_context;
+pub mod activity_history;
+pub mod activity_emit;
+pub mod activity_status;
 pub mod set_autonomy;
 pub mod test_parent_coordination_eligibility;
 pub mod add_note;
@@ -21,4 +32,15 @@ pub fn cmdinit(cmds: &mut Vec<(String, Transform, String)>) {
     cmds.push(("sgxusm1a1689003c3wf4".to_string(), add_note::execute, "".to_string()));
     cmds.push(("lijoqw1a16fde422eg104".to_string(), test_parent_coordination_eligibility::execute, "".to_string()));
     cmds.push(("wulhwh1a1706f7abap180".to_string(), set_autonomy::execute, "".to_string()));
+    cmds.push(("jtjtqi1a170a9c443ye3".to_string(), activity_status::execute, "".to_string()));
+    cmds.push(("hqiyvu1a170ab764eje8".to_string(), activity_emit::execute, "".to_string()));
+    cmds.push(("nziuhh1a170b568f7m103".to_string(), activity_history::execute, "".to_string()));
+    cmds.push(("xmpmpm1a170c21e04s155".to_string(), continuity_context::execute, "".to_string()));
+    cmds.push(("gzvvxz1a170edb05ck227".to_string(), checkpoint::execute, "".to_string()));
+    cmds.push(("jtqzuq1a170f0650ag22f".to_string(), checkpoint_read::execute, "".to_string()));
+    cmds.push(("zjzrxh1a1710a67b0o2ca".to_string(), test_continuity_contract::execute, "".to_string()));
+    cmds.push(("mgnmgi1a1710d320ck2d8".to_string(), continuity_status::execute, "".to_string()));
+    cmds.push(("syhhtm1a172795455j611".to_string(), run_control::execute, "".to_string()));
+    cmds.push(("qyjgkh1a1727aa651z616".to_string(), run_state::execute, "".to_string()));
+    cmds.push(("wpiwht1a17287e0f5n647".to_string(), test_run_control_contract::execute, "".to_string()));
 }
