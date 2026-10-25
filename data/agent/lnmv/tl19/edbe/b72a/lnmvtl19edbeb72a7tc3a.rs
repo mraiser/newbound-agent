@@ -59,6 +59,21 @@ if !run_id.is_empty() {
     if let Ok(c) = dispatch.try_get_object("context") { e.put_object("context", c); }
     activity_emit(&run_id, e);
 }
+// Covers early returns and unwinding as well as the normal finish path. The
+// process may still be alive when the TURN is not; step_item's panic path is a
+// second safety net for failures before this guard can be constructed.
+struct ActivityGuard { run_id: String, closed: bool }
+impl Drop for ActivityGuard {
+    fn drop(&mut self) {
+        if self.closed || self.run_id.is_empty() { return; }
+        let mut e = DataObject::new(); e.put_string("kind", "finish");
+        e.put_string("phase", "interrupted"); e.put_string("state", "interrupted");
+        e.put_string("outcome", "ERROR");
+        e.put_string("detail", "The model/tool loop exited before its normal finish boundary; resume from the last saved observation, not an assumption of completion.");
+        activity_emit(&self.run_id, e);
+    }
+}
+let mut activity_guard = ActivityGuard { run_id: run_id.clone(), closed: run_id.is_empty() };
 fn extract_compile_errors(raw: &str) -> String {
   // Compile failures arrive as {"status":"err","kind":"compile_error","msg":"error[E0382]: ..."}
   // serialized to JSON, so newlines inside msg are escaped literals. Unescape, then keep
