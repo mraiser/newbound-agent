@@ -47,7 +47,8 @@ if lifecycle.is_empty(){
 if lifecycle.is_empty(){let mut o=DataObject::new();o.put_string("status","err");o.put_string("msg","plan item not found");return o;}
 let live = run.try_get_boolean("active").unwrap_or(false);
 let requested_now = run.try_get_object("control").ok().and_then(|c|c.try_get_string("requested").ok()).unwrap_or_default();
-let live = run.try_get_boolean("active").unwrap_or(false) || (run.try_get_string("outcome").unwrap_or_default()!="STOPPED" && (requested_now=="pause" || requested_now=="stop"));
+let requested_pending = run.try_get_object("control").ok().and_then(|c|c.try_get_string("state").ok()).unwrap_or_default()=="requested";
+let live = run.try_get_boolean("active").unwrap_or(false) || (run.try_get_string("outcome").unwrap_or_default()!="STOPPED" && requested_pending && (requested_now=="pause" || requested_now=="stop"));
 if (action=="pause"||action=="stop") && !live {
     let mut o=DataObject::new();o.put_string("status","err");o.put_string("msg","run is not active; its checkpoint is already available for resume");return o;
 }
@@ -108,7 +109,9 @@ if action=="resume" {
     return r;
 }
 if action=="clear" {
-    if live {let mut o=DataObject::new();o.put_string("status","err");o.put_string("msg","cannot clear control on a live run; use pause or stop at a safe boundary");return o;}
+    if run.try_get_boolean("active").unwrap_or(false) && run.try_get_int("ended").unwrap_or(0)==0 {
+        let mut o=DataObject::new();o.put_string("status","err");o.put_string("msg","cannot clear control on a live run; use pause or stop at a safe boundary");return o;
+    }
     let _guard=crate::agent::plan::run_state::lock();
     if store.exists("runtime","agent_plan_runs") {
         let mut rec=store.get_data("runtime","agent_plan_runs");let mut d=rec.get_object("data");let runs=d.get_array("runs");
@@ -116,7 +119,8 @@ if action=="clear" {
         d.put_array("runs",runs);rec.put_object("data",d);store.set_data("runtime","agent_plan_runs",rec);
     }
     drop(_guard);
-    let _=api.dev.code.patch_control_facet("kb".to_string(),"plan".to_string(),"memory".to_string(),"".to_string(),b.get_string("source"),b.get_string("hash"),"clear completed run control".to_string(),"plan-board".to_string(),nn_sessionid);
+    // Clearing is a runtime control operation only; it must not rewrite the
+    // whole board or create a misleading plan-item journal entry.
     let mut o=DataObject::new();o.put_string("status","ok");o.put_string("action","clear");return o;
 }
 // Pause and stop write the request under the runtime lock, so concurrent

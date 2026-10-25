@@ -94,6 +94,18 @@ if kind == "finish" {
         let phase = r.try_get_string("phase").unwrap_or_default();
         if phase == "paused" || phase == "stopped" { r.put_string("state", &phase); }
         else { r.put_string("state", "interrupted"); }
+    } else {
+        // A normal finish invalidates any still-pending request. Do not let
+        // a late pause/stop flag masquerade as an applied hold on later reads.
+        r.put_boolean("paused", false); r.put_boolean("stop_requested", false);
+        if r.try_get_string("control_state").unwrap_or_default() == "requested" {
+            if let Ok(mut c) = r.try_get_object("control") {
+                c.put_string("state", "late_ignored");
+                c.put_string("detail", "The run reached its normal finish before this request could be applied at a safe boundary.");
+                r.put_object("control", c);
+            }
+            r.put_string("control_state", "late_ignored");
+        }
     }
 }
 let seq = r.try_get_int("seq").unwrap_or(0) + 1;

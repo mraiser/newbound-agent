@@ -47,7 +47,7 @@ if store.exists("runtime", "agent_plan_runs") {
 for r in runs.iter_mut() {
     let active = r.try_get_boolean("active").unwrap_or(false);
     let run_boot = r.try_get_int("boot").unwrap_or(0);
-    let boot_mismatch = run_boot != 0 && run_boot != boot;
+    let boot_mismatch = boot != 0 && run_boot != 0 && run_boot != boot;
     let recorded_pid = r.try_get_int("pid").unwrap_or(0);
     let live_pid = recorded_pid > 0 && recorded_pid == std::process::id() as i64;
     let process_start = std::fs::read_to_string("/proc/self/stat").ok().and_then(|s| {
@@ -84,7 +84,7 @@ let current_process_start = std::fs::read_to_string("/proc/self/stat").ok().and_
 let active = runs.iter().find(|r| r.try_get_boolean("active").unwrap_or(false)
     && r.try_get_int("pid").unwrap_or(0) == std::process::id() as i64
     && (r.try_get_int("process_start").unwrap_or(0) == 0 || (current_process_start > 0 && r.try_get_int("process_start").unwrap_or(0) == current_process_start))
-    && (r.try_get_int("boot").unwrap_or(0) == 0 || (boot != 0 && r.try_get_int("boot").unwrap_or(0) == boot)));
+    && (boot == 0 || r.try_get_int("boot").unwrap_or(0) == 0 || r.try_get_int("boot").unwrap_or(0) == boot));
 let selected = active.or_else(|| runs.first());
 if let Some(r) = selected {
     let mut selected_summary = copy_summary(r);

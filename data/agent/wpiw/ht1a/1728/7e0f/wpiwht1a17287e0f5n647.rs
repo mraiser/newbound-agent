@@ -36,6 +36,15 @@ check("active run is retained beyond finished history cap",{
     for i in 0..12{emit(&format!("phase3-finished-{}",i),"start");emit(&format!("phase3-finished-{}",i),"finish");}
     crate::agent::plan::run_state::control("phase3-concurrency").has("requested")
 });
+check("normal finish clears unapplied control flags",{
+    emit("phase3-late-control","start");
+    let cmd=flowlang::command::Command::lookup("agent","plan","activity_emit");
+    let mut a=DataObject::new();a.put_string("run_id","phase3-late-control");
+    let mut e=DataObject::new();e.put_string("kind","finish");e.put_string("phase","finished");e.put_string("outcome","IN_PROGRESS");
+    e.put_boolean("paused",false);a.put_object("event",e);let _=cmd.execute(a);
+    let runs=store.get_data("runtime","agent_plan_runs").get_object("data").get_array("runs");
+    (0..runs.len()).any(|i|{let r=runs.get_object(i);r.try_get_string("run_id").unwrap_or_default()=="phase3-late-control" && !r.try_get_boolean("paused").unwrap_or(true)})
+});
 check("pause guidance survives structured checkpoint for resume",{
     let mut ci=DataObject::new();ci.put_string("status","PAUSED");ci.put_string("response","Paused at a safe boundary\nNEXT: resume carefully");
     ci.put_string("guidance","Preserve the failed compiler diagnostic and do not repeat the same edit");

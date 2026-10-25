@@ -216,8 +216,18 @@ function renderActivity() {
   panel.hidden = !run && !a.error;
   var title = ME.querySelector('.pl-activity-title');
   var updated = ME.querySelector('.pl-activity-updated');
+  var runState = 'Latest run: ';
+  if (run) {
+    if (run.active) {
+      var requestedControl = run.control && run.control.requested;
+      runState = requestedControl === 'pause' ? 'Pause requested: ' : requestedControl === 'stop' ? 'Stop requested: ' : 'Working: ';
+    } else if (run.paused || run.outcome === 'PAUSED') runState = 'Paused: ';
+    else if (run.outcome === 'STOPPED' || run.control_state === 'stopped') runState = 'Stopped: ';
+    else if (run.stale || run.interrupted) runState = 'Interrupted: ';
+    else if (activityView === 'history') runState = 'Run history: ';
+  }
   title.textContent = a.error ? 'Activity unavailable: ' + a.error :
-    run ? ((run.active && !(run.control && run.control.requested) ? 'Working: ' : (run.paused || run.outcome === 'PAUSED' ? 'Paused: ' : run.outcome === 'STOPPED' || run.control_state === 'stopped' ? 'Stopped: ' : run.stale || run.interrupted ? 'Interrupted: ' : activityView === 'history' ? 'Run history: ' : 'Latest run: ')) + (run.claim || run.run_id)) : 'No plan runs recorded yet';
+    run ? runState + (run.claim || run.run_id) : 'No plan runs recorded yet';
   updated.textContent = run && run.updated ? 'last event ' + relTime(run.updated) : '';
   panel.querySelectorAll('[data-aview]').forEach(function (b) {
     b.classList.toggle('on', b.dataset.aview === activityView);
