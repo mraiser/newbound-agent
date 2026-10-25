@@ -59,7 +59,9 @@ if kind == "finish" || kind == "checkpoint" {
     r.put_boolean("active", false); r.put_int("ended", now); r.remove_property("pending_tool");
 }
 r.put_int("updated", now); r.put_int("last_event_at", now);
-if kind == "finish" || kind == "checkpoint" { r.put_string("phase", "finished"); }
+if kind == "finish" || kind == "checkpoint" {
+    r.put_string("phase", "finished"); r.put_string("state", "run finished");
+}
 let seq = r.try_get_int("seq").unwrap_or(0) + 1;
 r.put_int("seq", seq);
 let mut e = event.deep_copy();

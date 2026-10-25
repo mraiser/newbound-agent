@@ -248,6 +248,7 @@ function probe() {
   if (!onScreen()) return;
   refreshTimes();
   probeWorker();
+  probeActivity();
   if (probing || loading) return;
   probing = true;
   send_board_hash(function (r) {
@@ -646,6 +647,7 @@ function load() {
     if (r && r.status === 'ok') {
       boardHash = r.hash || '';
       render(r.entries || []);
+      renderActivity();
     } else {
       note((r && r.msg) || 'load failed', true);
     }
@@ -668,6 +670,13 @@ function startLive() {
 }
 
 me.ready = function () {
+  ME.querySelectorAll('[data-aview]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      activityView = b.dataset.aview;
+      if (activityView === 'history' && !historyData && historyRunId) loadHistory();
+      renderActivity();
+    });
+  });
   startLive();
   ME.querySelector('.pl-autonomy-checkbox').addEventListener('change', function () {
     setAutonomy(this.checked);
