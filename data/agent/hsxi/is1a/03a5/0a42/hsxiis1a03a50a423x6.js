@@ -46,7 +46,7 @@ var historyLoading = false;
 var controlBusy = false;
 
 function renderReview(host, run) {
-  var cp = run && run.handoff || run && run.checkpoint || {};
+  var cp = run && run.handoff && typeof run.handoff === 'object' ? run.handoff : run && run.checkpoint && typeof run.checkpoint === 'object' ? run.checkpoint : {};
   var context = run && run.context || {};
   host.appendChild(elWith('pl-subhead', 'Goal and scope'));
   host.appendChild(elWith('pl-review-goal', context.goal || run.claim || 'The plan item claim is the goal; open the card for its full detail.'));
@@ -207,7 +207,7 @@ function renderActivity() {
   var title = ME.querySelector('.pl-activity-title');
   var updated = ME.querySelector('.pl-activity-updated');
   title.textContent = a.error ? 'Activity unavailable: ' + a.error :
-    run ? ((run.active ? 'Working: ' : (run.stale || run.interrupted ? 'Interrupted: ' : activityView === 'history' ? 'Run history: ' : 'Latest run: ')) + (run.claim || run.run_id)) : 'No plan runs recorded yet';
+    run ? ((run.active ? 'Working: ' : (run.paused || run.outcome === 'PAUSED' ? 'Paused: ' : run.outcome === 'STOPPED' ? 'Stopped: ' : run.stale || run.interrupted ? 'Interrupted: ' : activityView === 'history' ? 'Run history: ' : 'Latest run: ')) + (run.claim || run.run_id)) : 'No plan runs recorded yet';
   updated.textContent = run && run.updated ? 'last event ' + relTime(run.updated) : '';
   panel.querySelectorAll('[data-aview]').forEach(function (b) {
     b.classList.toggle('on', b.dataset.aview === activityView);
@@ -229,7 +229,7 @@ function renderActivity() {
     ME.querySelector('.pl-control-state').textContent = requested === 'pause' && liveControl ? 'Pause requested; the current model/tool boundary will finish.' : requested === 'stop' && liveControl ? 'Stop requested; the current model/tool boundary will finish.' : run.paused ? 'Paused — no new model round will begin.' : run.outcome === 'STOPPED' ? 'Stopped — checkpoint available for an authorized resume.' : run.active ? 'Active run controls' : 'Run controls';
   }
   if (run && (run.interrupted || run.stale) && !run.active) {
-    body.appendChild(elWith('pl-recovery', 'This run did not reach a normal finish. Its saved checkpoint remains available for an authorized next turn; unfinished changes are not verified completion.'));
+    body.appendChild(elWith('pl-recovery', run.outcome === 'STOPPED' ? 'Stopped at a safe boundary. No further model round was started. Resume is an explicit authorized turn from this checkpoint.' : run.outcome === 'PAUSED' || run.paused ? 'Paused at a safe boundary. The scheduler will hold this item until you resume it or re-accept it.' : 'This run did not reach a normal finish. Its saved checkpoint remains available for an authorized next turn; unfinished changes are not verified completion.'));
   }
   if (!run) { body.appendChild(elWith('pl-empty', a.error || 'Start an accepted plan item to see its live activity here.')); return; }
   if (activityView === 'history') {
