@@ -323,6 +323,7 @@ loop {
         error_count += 1;
         activity_field(&run_id, "model_error", "model backend error", &resp.get_string("content"), iterations);
         final_answer = format!("LLM backend error: {}", resp.get_string("content"));
+        checkpoint_reason = "Model backend error ended the run before a model-authored summary.".to_string();
         break;
     }
 
@@ -613,7 +614,10 @@ if declared_done {
 
 if !run_id.is_empty() {
     let checkpoint = if !pending_checkpoint.is_empty() { pending_checkpoint.clone() } else {
-        clamp(&format!("CONTINUATION FROM PREVIOUS PLAN TURN\nSTATUS: {}\nRESPONSE / EVIDENCE:\n{}\nLAST ACTION: {}\nLAST RESULT:\n{}\nNEXT: Use the response's stated next action; if absent, inspect the latest run activity and choose a new concrete increment. Do not repeat an identical failed call without new information.",
+        // If the model left an explicit NEXT, retain it verbatim instead of
+        // replacing it with a generic instruction. Always append observed
+        // action/result facts so an unfinished response is still resumable.
+        clamp(&format!("CONTINUATION FROM PREVIOUS PLAN TURN\nSTATUS: {}\nRESPONSE / EVIDENCE:\n{}\nLAST ACTION: {}\nLAST RESULT:\n{}\nNEXT: Resume from the response's NEXT/action when present; otherwise inspect run activity and choose a new concrete increment. Do not repeat an identical failed call without new information.",
             status, final_answer, if last_action.is_empty() { "none".to_string() } else { last_action.clone() },
             if last_observation.is_empty() { "none".to_string() } else { last_observation.clone() }), 8000)
     };
