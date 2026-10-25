@@ -25,6 +25,9 @@ var pollTimer = null;
 var probing = false;
 var loading = false;
 var reloadPending = false;
+var workerStatus = null;
+var workerStatusError = '';
+var workerChecking = false;
 var openClaims = {};
 var drafts = {}; // claim -> half-typed note text, survives a live re-render
 
@@ -52,14 +55,110 @@ function refreshTimes() {
 
 function probe() {
   if (!ME.isConnected) { if (pollTimer) clearInterval(pollTimer); pollTimer = null; return; }
-  if (probing || loading || !onScreen()) return;
+  if (!onScreen()) return;
   refreshTimes();
+  probeWorker();
+  if (probing || loading) return;
   probing = true;
   send_board_hash(function (r) {
     probing = false;
     if (r && r.status === 'ok' && (r.hash || '') !== boardHash) {
       if (dragClaim !== null || typing()) reloadPending = true; else load();
     }
+  });
+}
+
+function isRunning(r) {
+  return !!(r && r.plan_autonomy && r.phase === 'stepping' && r.current);
+}
+
+function claimList(a) {
+  var list = (a || []).slice(0, 2);
+  var extra = (a || []).length - list.length;
+  return list.map(function (c) { return '“' + c + '”'; }).join(', ') +
+    (extra > 0 ? ' and ' + extra + ' more' : '');
+}
+
+// Explain the WORKER's state, not just a card's lifecycle. In particular,
+// in-progress means unfinished, not necessarily executing at this instant.
+function workerText(r) {
+  var phase = r.phase || 'unknown';
+  if (isRunning(r)) return 'Running now: ' + r.current;
+  var prefix = 'No task running: ';
+  if (phase === 'off') return prefix + 'autonomy was just enabled; waiting for the worker to start.';
+  if (phase === 'starting') return prefix + 'the plan worker is starting.';
+  if (!r.alive) return prefix + 'autonomy is enabled, but its worker is not running. Start the plan worker to run tasks.';
+  if (phase === 'rate_limited') {
+    var resume = r.resume_at ? ' Resumes ' + new Date(r.resume_at).toLocaleTimeString() + '.' : '';
+    return prefix + 'the hourly plan-step limit was reached (' + (r.turns_last_hour || 0) +
+      '/' + (r.per_hour || 0) + ').' + resume;
+  }
+  if (phase === "waiting for the previous worker's step") {
+    return prefix + "the previous worker's step is still finishing" + (r.next ? '; next: ' + r.next : '') + '.';
+  }
+  if (phase === 'idle') {
+    if (r.awaiting_reapproval && r.awaiting_reapproval.length) {
+      return prefix + claimList(r.awaiting_reapproval) + ' reached the ' + r.max_steps +
+        '-step limit. Move the item back to accepted to re-approve it.';
+    }
+    if (r.parked && r.parked.length) {
+      var p = r.parked[0];
+      var why = p.reason || 'waiting for a change';
+      var retry = p.until > 0 ? '; automatic retry ' + new Date(p.until).toLocaleTimeString() :
+        '; change the item or add a note to retry';
+      var failure = r.last && r.last.action === 'step_failed' && r.last.claim === p.claim && r.last.msg ?
+        ' Last error: ' + r.last.msg : '';
+      return prefix + (r.parked.length === 1 ? 'one item is parked' : r.parked.length + ' items are parked') +
+        '. ' + p.claim + ' — ' + why + retry + '.' + failure;
+    }
+    if (r.waiting_for_children && r.waiting_for_children.length) {
+      return prefix + 'parent work is waiting for active children: ' + claimList(r.waiting_for_children) + '.';
+    }
+    if (!r.eligible) return prefix + 'there are no eligible accepted or in-progress tasks. Accept a task to start work.';
+    return prefix + 'the next eligible task is being prepared' + (r.next ? ': ' + r.next : '') + '.';
+  }
+  if (phase === 'stepping') return prefix + 'the worker is between steps; the next task should start shortly.';
+  return prefix + 'worker phase: ' + phase + (r.next ? '. Next: ' + r.next : '') + '.';
+}
+
+function renderWorker() {
+  var bar = ME.querySelector('.pl-autonomy');
+  var running = isRunning(workerStatus);
+  var enabled = !!(workerStatus && workerStatus.plan_autonomy);
+  bar.hidden = !enabled && !workerStatusError;
+  bar.classList.toggle('running', running);
+  bar.classList.toggle('error', !!workerStatusError);
+  ME.querySelector('.pl-autonomy-text').textContent = workerStatusError ||
+    (enabled ? workerText(workerStatus) : '');
+  var cards = ME.querySelectorAll('.pl-card');
+  for (var i = 0; i < cards.length; i++) {
+    var active = running && cards[i].dataset.claim === workerStatus.current;
+    cards[i].classList.toggle('running', active);
+    if (active) cards[i].setAttribute('aria-current', 'true');
+    else cards[i].removeAttribute('aria-current');
+    var badge = cards[i].querySelector(':scope > .pl-card-running');
+    if (badge) {
+      badge.hidden = !active;
+      badge.textContent = active ? 'running now · plan autonomy' : '';
+    }
+  }
+}
+
+function probeWorker() {
+  if (workerChecking) return;
+  workerChecking = true;
+  send_worker_status(function (r) {
+    workerChecking = false;
+    if (r && r.status === 'ok') {
+      // worker_status returns JSONObject; board/board_hash return FLAT.
+      // Accept either envelope so a failed/flat transport never hides status.
+      workerStatus = r.data && typeof r.data === 'object' ? r.data : r;
+      workerStatusError = '';
+    } else {
+      workerStatus = null; // never leave an old running highlight on a failed read
+      workerStatusError = 'Cannot read plan-autonomy status: ' + ((r && r.msg) || 'worker status request failed') + '.';
+    }
+    if (ME.isConnected) renderWorker();
   });
 }
 
@@ -93,6 +192,11 @@ function card(e) {
   el.className = 'pl-card';
   el.draggable = true;
   el.dataset.claim = e.claim || '';
+
+  var runningBadge = document.createElement('div');
+  runningBadge.className = 'pl-card-running';
+  runningBadge.hidden = true;
+  el.appendChild(runningBadge);
 
   var c = document.createElement('div');
   c.className = 'pl-card-claim';
@@ -304,6 +408,7 @@ function render(entries) {
     });
     board.appendChild(col);
   });
+  renderWorker();
 }
 
 function load() {
@@ -337,7 +442,7 @@ function startLive() {
 
 me.ready = function () {
   startLive();
-  ME.querySelector('.pl-refresh').addEventListener('click', function () { note(''); load(); });
+  ME.querySelector('.pl-refresh').addEventListener('click', function () { note(''); load(); probeWorker(); });
   ME.querySelector('.pl-add').addEventListener('submit', function (ev) {
     ev.preventDefault();
     var claimEl = ME.querySelector('.pl-add-claim');
