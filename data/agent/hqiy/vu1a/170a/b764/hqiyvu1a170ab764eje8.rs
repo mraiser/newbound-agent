@@ -46,11 +46,13 @@ let mut r = if found >= 0 { runs.get_object(found as usize) } else {
 let kind = event.try_get_string("kind").unwrap_or_else(|_| "activity".to_string());
 if kind == "start" {
     r.put_boolean("active", true); r.put_boolean("stale", false); r.put_int("boot", boot);
+    r.put_boolean("interrupted", false);
+    if event.has("recovered") { r.put_boolean("recovered", event.get_boolean("recovered")); }
     r.put_int("started", now); r.put_int("pid", std::process::id() as i64);
     r.put_int("process_start", process_start());
     r.put_string("state", "preparing");
 }
-for k in ["claim", "phase", "state", "outcome", "checkpoint"] {
+for k in ["claim", "phase", "state", "outcome", "checkpoint", "previous_run_id"] {
     if event.has(k) { r.put_string(k, &event.get_string(k)); }
 }
 for k in ["turn", "round", "max_rounds", "tool_calls", "errors"] {
@@ -66,7 +68,7 @@ for k in ["turn", "round", "max_rounds", "tool_calls", "errors"] {
 for k in ["failure_streak", "duplicate_streak"] {
     if event.has(k) { r.put_int(k, event.get_int(k)); }
 }
-for k in ["context", "handoff", "pending_tool", "delivery"] {
+for k in ["context", "handoff", "pending_tool", "delivery", "inherited_checkpoint"] {
     if let Ok(v) = event.try_get_object(k) { r.put_object(k, v); }
 }
 if kind == "context_delivered" {

@@ -69,6 +69,10 @@ for r in runs.iter().take(8) {
     // The selected run carries its full bounded handoff below. Recent cards
     // only need identity, lifecycle and counters; fetch history on selection.
     for key in ["checkpoint", "handoff", "context"] { summary.remove_property(key); }
+    if let Ok(h) = r.try_get_object("handoff") {
+        summary.put_string("next", &h.try_get_string("next").unwrap_or_default());
+        summary.put_string("summary", &h.try_get_string("summary").unwrap_or_default().chars().take(240).collect::<String>());
+    }
     recent.push_object(summary);
 }
 let active = runs.iter().find(|r| r.try_get_boolean("active").unwrap_or(false)
