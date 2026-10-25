@@ -77,6 +77,9 @@ impl Drop for ActivityGuard {
     }
 }
 let mut activity_guard = ActivityGuard { run_id: run_id.clone(), closed: run_id.is_empty() };
+// The provider-response receipt is real delivery evidence; also keep a
+// first-response recovery checkpoint so an early failure is not context-free.
+let mut first_response_checkpointed = false;
 fn extract_compile_errors(raw: &str) -> String {
   // Compile failures arrive as {"status":"err","kind":"compile_error","msg":"error[E0382]: ..."}
   // serialized to JSON, so newlines inside msg are escaped literals. Unescape, then keep
@@ -336,6 +339,20 @@ loop {
         delivered.put_int("round", iterations);
         if let Ok(c) = dispatch.try_get_object("context") { delivered.put_object("context", c); }
         activity_emit(&run_id, delivered);
+        if !first_response_checkpointed {
+            first_response_checkpointed = true;
+            let mut ci = DataObject::new(); ci.put_string("kind", "delivered");
+            ci.put_string("status", "IN_PROGRESS"); ci.put_string("run_id", &run_id);
+            ci.put_string("previous_run_id", &dispatch.try_get_string("previous_run_id").unwrap_or_default());
+            ci.put_string("summary", "The provider responded to this turn's supplied context; work is still in progress.");
+            ci.put_string("next", "Use the observed model/tool activity to continue the current goal.");
+            ci.put_string("reason", "Delivery receipt, not a completion claim.");
+            ci.put_int("turn", run_turn); ci.put_int("round", iterations); ci.put_int("max_rounds", max_iterations);
+            let cp = crate::agent::plan::checkpoint::checkpoint(ci);
+            let mut ce = DataObject::new(); ce.put_string("kind", "checkpoint");
+            ce.put_string("checkpoint", &cp.get_string("text")); ce.put_object("handoff", cp);
+            activity_emit(&run_id, ce);
+        }
     }
     if !run_id.is_empty() {
         let mut e = DataObject::new(); e.put_string("kind", "model_received");
@@ -396,6 +413,8 @@ loop {
                 if !run_id.is_empty() {
                     let mut ci = DataObject::new(); ci.put_string("kind", "milestone");
                     ci.put_string("status", "IN_PROGRESS"); ci.put_string("summary", &assistant_progress);
+                    // The free-form milestone summary is deliberately not
+                    // parsed as a final response; tool evidence is structured.
                     ci.put_string("response", &assistant_progress);
                     ci.put_string("reason", "The assistant reported progress between tool actions; this is not verified completion.");
                     ci.put_string("run_id", &run_id); ci.put_string("previous_run_id", &dispatch.try_get_string("previous_run_id").unwrap_or_default());
