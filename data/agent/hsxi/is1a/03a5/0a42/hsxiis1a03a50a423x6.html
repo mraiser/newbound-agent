@@ -4,9 +4,18 @@
 <div class="pl-wrap">
   <header class="pl-head">
     <span class="lbl">kb.plan — drag a card to change its lifecycle; click a card for its detail and notes (an in-progress item reads new notes on its next step; a blocked item waits for you — drag it back to accepted to unblock)</span>
-    <button class="pl-refresh" title="reload the board from kb.plan">refresh</button>
+    <label class="pl-autonomy-toggle" title="Enable or disable plan autonomy. On starts the plan worker; off prevents new steps but lets a running step finish.">
+      <input class="pl-autonomy-checkbox" type="checkbox" role="switch"
+             aria-label="Plan autonomy">
+      <span class="pl-autonomy-label">autonomy off</span>
+    </label>
+    <span class="pl-autonomy-help" hidden>Runs accepted and in-progress plan tasks autonomously.</span>
     <span class="pl-note lbl"></span>
   </header>
+  <div class="pl-autonomy" role="status" aria-live="polite" aria-atomic="true" hidden>
+    <span class="pl-autonomy-dot" aria-hidden="true"></span>
+    <span class="pl-autonomy-text"></span>
+  </div>
   <div class="pl-board"></div>
   <form class="pl-add">
     <input class="pl-add-claim" placeholder="new plan item — one atomic claim" aria-label="New plan item claim">

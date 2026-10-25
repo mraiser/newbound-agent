@@ -9,9 +9,11 @@
 // makes NO LLM calls - it re-reads only the kb.plan facet hash every 5s and
 // re-evaluates the board when that hash moves or a parked item comes due.
 //
-// Eligible = accepted | in-progress, not a parent with open children, under
-// MAX_PLAN_STEPS (else listed as awaiting re-approval), not parked.
-// In-progress before accepted (finish what was started), then board order.
+// Eligible = accepted | in-progress, under MAX_PLAN_STEPS (else listed as
+// awaiting re-approval), not parked. A parent coordinates proposed/blocked/
+// newly completed children, but while an accepted/in-progress child can run
+// the parent waits and that child executes. In-progress before accepted,
+// then board order.
 //
 // Full speed needs a failure guard, or a stuck item retries at full speed:
 //   stepped / completed  -> next pass immediately
@@ -137,8 +139,24 @@ fn read_facet() -> (String, String) {
 }
 fn fp_now(claim: &str) -> String {
     let (_, src) = read_facet();
-    for e in parse_board(&src) {
-        if e.try_get_string("claim").unwrap_or_default() == claim { return fingerprint(&e); }
+    let entries = parse_board(&src);
+    for e in &entries {
+        if e.try_get_string("claim").unwrap_or_default() == claim {
+            // Include the lifecycles of this entry's CHILDREN (initials in
+            // board order): for a coordinator parent the fingerprint must
+            // capture the child states its own turn just set, so its own
+            // board edits never wake it - only a change it did not make (a
+            // child completing, a human re-accept) does.
+            let child_lcs: String = entries.iter().filter(|c| {
+                c.try_get_string("parent").unwrap_or_default() == claim
+            }).map(|c| {
+                let ct = tagset(c);
+                ["proposed","accepted","in-progress","blocked","completed","done","abandoned"]
+                    .iter().find(|l| ct.iter().any(|x| x == **l))
+                    .map(|s| s.chars().next().unwrap_or('?')).unwrap_or('?')
+            }).collect();
+            return format!("{}\u{1f}{}", fingerprint(e), child_lcs);
+        }
     }
     String::new()
 }
@@ -181,8 +199,9 @@ fn run(gen: i64) {
             }
             let entries = parse_board(&src);
             let cap = max_steps();
-            let mut cands: Vec<(u8, usize, String)> = Vec::new();
+            let mut cands: Vec<(u8, usize, String, bool)> = Vec::new();
             let mut awaiting = DataArray::new();
+            let mut waiting_for_children = DataArray::new();
             for (i, e) in entries.iter().enumerate() {
                 let claim = e.try_get_string("claim").unwrap_or_default();
                 if claim.trim().is_empty() { continue; }
@@ -193,21 +212,58 @@ fn run(gen: i64) {
                 if has("done") || has("completed") || has("abandoned") || has("blocked") { continue; }
                 let prog = has("in-progress");
                 if !prog && !has("accepted") { continue; }
-                let open_children = entries.iter().filter(|c| {
-                    c.try_get_string("parent").unwrap_or_default() == claim
-                        && !tagset(c).iter().any(|x| x == "completed" || x == "done")
-                }).count();
-                if open_children > 0 { continue; }
+                // PARENT COORDINATION IS THE DEFAULT (owner, 2026-11): an
+                // accepted/in-progress parent is an executable coordination
+                // task - it stays eligible while ANY non-abandoned child is
+                // unfinished (proposed/accepted/in-progress/blocked), and the
+                // turn itself promotes the next child. The old
+                // `open_children > 0` exclusion is removed: it made the parent
+                // unsteppable exactly when it had work to direct.
+                // Completed/done children still require the parent's closing
+                // coordination/verification turn; only abandoned children are
+                // excluded from identifying a parent, matching step_item.
+                let is_coord = parent_is_coordination_task(&claim, &entries);
                 let steps = e.try_get_array("step_log").map(|a| a.len() as i64).unwrap_or(0);
                 if steps >= cap { awaiting.push_string(&claim); continue; }
-                let verdict = parked.get(&claim).map(|p| (p.fp != fingerprint(e) || fresh_note(e), p.until > 0 && now >= p.until));
+                // Coordination must not STARVE the work it just authorized.
+                // A parent with an accepted/in-progress child has no board
+                // transition to make: that child is the next implementation
+                // task. Skip the parent for THIS pass, not globally - when
+                // the child completes or blocks, the parent becomes eligible
+                // for the next coordination turn. This also prevents endless
+                // "confirmed stable" parent turns from consuming its
+                // MAX_PLAN_STEPS budget before the children can execute.
+                // Active-but-budget-exhausted children still defer the parent:
+                // that budget needs human reapproval, not a parent bypass.
+                if is_coord && parent_waits_for_active_child(&claim, &entries) {
+                    waiting_for_children.push_string(&claim);
+                    continue;
+                }
+                // Park fingerprint: a coordinator's OWN board edits (it moved
+                // a child to accepted, noted a remedy) must not wake it an
+                // extra time - the post-step fp captures the child lifecycles
+                // it just set, so they match. A change NOT made by the
+                // coordinator - a child completing, a human re-accepting or
+                // blocking a child mid-turn - mismatches and un-parks it.
+                let verdict = parked.get(&claim).map(|p| {
+                    let child_lcs: String = entries.iter().filter(|c| {
+                        c.try_get_string("parent").unwrap_or_default() == claim
+                    }).map(|c| {
+                        let ct = tagset(c);
+                        ["proposed","accepted","in-progress","blocked","completed","done","abandoned"]
+                            .iter().find(|l| ct.iter().any(|x| x == **l))
+                            .map(|s| s.chars().next().unwrap_or('?')).unwrap_or('?')
+                    }).collect();
+                    let fp = format!("{}\u{1f}{}", fingerprint(e), child_lcs);
+                    (p.fp != fp || fresh_note(e), p.until > 0 && now >= p.until)
+                });
                 match verdict {
                     Some((true, _)) => { parked.remove(&claim); fails.remove(&claim); }
                     Some((false, true)) => { parked.remove(&claim); }
                     Some((false, false)) => continue,
                     None => {}
                 }
-                cands.push((if prog { 0 } else { 1 }, i, claim));
+                cands.push((if prog { 0 } else { 1 }, i, claim, is_coord));
             }
             parked.retain(|k, _| entries.iter().any(|e| e.try_get_string("claim").unwrap_or_default() == *k));
             cands.sort();
@@ -223,7 +279,16 @@ fn run(gen: i64) {
             }
             w.put_array("parked", pk);
             w.put_array("awaiting_reapproval", awaiting);
+            w.put_array("waiting_for_children", waiting_for_children);
             w.put_int("eligible", cands.len() as i64);
+            // Expose parent COORDINATION explicitly (owner acceptance #8): a
+            // coordinating parent is eligible WORK, so eligible=0 with
+            // coordinating>0 is impossible - but the separate count keeps the
+            // kanban/status line honest about WHAT is eligible (an item being
+            // implemented vs a parent directing its children).
+            let mut coord = DataArray::new();
+            for c in cands.iter() { if c.3 { coord.push_string(&c.2); } }
+            w.put_array("coordinating", coord);
             if cands.is_empty() {
                 quiet_hash = hash;
                 recheck_at = next_due;

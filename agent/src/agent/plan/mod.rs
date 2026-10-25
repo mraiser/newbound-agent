@@ -1,5 +1,7 @@
 // This file is auto-generated and managed by the flowlang build script.
 use flowlang::rustcmd::Transform;
+pub mod set_autonomy;
+pub mod test_parent_coordination_eligibility;
 pub mod add_note;
 pub mod board_hash;
 pub mod worker_status;
@@ -17,4 +19,6 @@ pub fn cmdinit(cmds: &mut Vec<(String, Transform, String)>) {
     cmds.push(("lnvhiz1a164f6bd27wcc2".to_string(), worker_status::execute, "".to_string()));
     cmds.push(("ivuywy1a16526c37aoe1f".to_string(), board_hash::execute, "".to_string()));
     cmds.push(("sgxusm1a1689003c3wf4".to_string(), add_note::execute, "".to_string()));
+    cmds.push(("lijoqw1a16fde422eg104".to_string(), test_parent_coordination_eligibility::execute, "".to_string()));
+    cmds.push(("wulhwh1a1706f7abap180".to_string(), set_autonomy::execute, "".to_string()));
 }

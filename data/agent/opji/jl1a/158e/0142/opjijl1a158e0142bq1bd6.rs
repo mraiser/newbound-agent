@@ -141,33 +141,25 @@ if prior >= cap {
 }
 out.put_int("steps_taken", prior);
 out.put_int("max_steps", cap);
-// (A) SUB-ITEM DECOMPOSITION: a PARENT (an entry other items point to via
-// `parent`) is a container, not a unit of work - its phases are its CHILDREN,
-// each accepted/stepped on its own. Refuse to step a parent that still has
-// unfinished children so the loop drives the children instead; when every
-// child is terminal (completed/done) the parent itself becomes steppable so it
-// can be verified whole and closed (the rollup also fires when the LAST child
-// completes, below). Terminal-for-rollup = completed | done (both mean the
-// work is finished; done is only the human's confirm on top of completed).
-{
-    let mut unfinished: i64 = 0;
-    for i in 0..arr.len() {
-        if i as i64 == idx { continue; }
-        let c = arr.get_object(i);
-        if c.try_get_string("parent").unwrap_or_default() != claim { continue; }
-        let ct = c.try_get_string("tags").unwrap_or_default().to_lowercase();
-        let ctoks: Vec<&str> = ct.split(',').map(|t| t.trim()).collect();
-        let child_done = ctoks.iter().any(|t| *t == "completed" || *t == "done");
-        if !child_done { unfinished += 1; }
-    }
-    if unfinished > 0 {
-        out.put_string("status", "ok");
-        out.put_string("action", "gated");
-        out.put_int("children_open", unfinished);
-        out.put_string("msg", "this is a PARENT with unfinished child phases - the children are the unit of work; accept and step each child, and the parent closes once they are all done");
-        return out;
-    }
+// (A) PARENT COORDINATION IS THE DEFAULT (owner, 2026-11): a PARENT (an entry
+// other items point to via `parent`) is itself an executable COORDINATION
+// task even while its children are proposed/accepted/in-progress/blocked -
+// its own claim+detail is the coordination goal, no opt-in tag. The prior
+// behavior (refuse with gated while any child is unfinished) is removed: it
+// made an accepted parent unsteppable exactly when it had work to direct.
+// Abandoned children are out of the dependency graph (they carry an explicit
+// human disposition); every OTHER non-terminal child (proposed/accepted/
+// in-progress/blocked) keeps the parent open and rides the turn below.
+let mut children: Vec<DataObject> = Vec::new();
+for i in 0..arr.len() {
+    if i as i64 == idx { continue; }
+    let c = arr.get_object(i);
+    if c.try_get_string("parent").unwrap_or_default() != claim { continue; }
+    let ct = c.try_get_string("tags").unwrap_or_default().to_lowercase();
+    if ct.split(',').map(|t| t.trim()).any(|t| t == "abandoned") { continue; }
+    children.push(c);
 }
+let is_parent = !children.is_empty();
 // (2) THE GOAL: the item's claim + detail is the objective. v1 demanded a
 // pre-authored structured `step` {lib,ctl,cmd,args} and refused pure prose
 // (surfaced, never executed) - but a pre-authored step only captures work
@@ -275,6 +267,45 @@ if let Ok(na) = e.try_get_array("notes") {
     }
 }
 out.put_int("notes_new", notes_new_count);
+// (A2) THE COORDINATION TURN: a parent sees the full LIVE state of its
+// children and a modified mandate. Board order = authored dependency order;
+// the parent's own detail may narrow or override it. One active child at a
+// time is the default; explicitly independent siblings may be accepted
+// together when the detail says so. A blocked child may be re-accepted ONLY
+// with a written remedy. The turn is IN_PROGRESS until every child is
+// completed/done; a premature DONE is REJECTED below (premature_done) and the
+// item keeps its lifecycle - the final turn, once all children are done, is
+// the normal verified close.
+if is_parent {
+    let mut open_kids: i64 = 0;
+    let mut lines: Vec<String> = Vec::new();
+    for c in children.iter() {
+        let cc = c.try_get_string("claim").unwrap_or_default();
+        let ct = c.try_get_string("tags").unwrap_or_default().to_lowercase();
+        let cts: Vec<&str> = ct.split(',').map(|t| t.trim()).collect();
+        let lc = ["proposed","accepted","in-progress","blocked","completed","done","abandoned"]
+            .iter().find(|l| cts.iter().any(|t| *t == **l)).map(|s| s.to_string())
+            .unwrap_or_else(|| "none".to_string());
+        let csteps = c.try_get_array("step_log").map(|a| a.len() as i64).unwrap_or(0);
+        let latest = c.try_get_object("latest").ok()
+            .and_then(|l| l.try_get_string("note").ok()).unwrap_or_default()
+            .chars().take(240).collect::<String>();
+        lines.push(format!("- [{}] ({} steps) {}{}", lc, csteps, cc,
+            if latest.is_empty() { String::new() } else { format!(" | latest: {}", latest) }));
+        if lc != "completed" && lc != "done" { open_kids += 1; }
+    }
+    out.put_int("children_open", open_kids);
+    prompt.push_str("\nTHIS IS A PARENT COORDINATION TICKET. Your job THIS TURN is to coordinate its children, not to implement the whole goal yourself:\n");
+    prompt.push_str("1. Re-read the CHILDREN board below and your PRIOR STEPS; evaluate progress and dependencies.\n");
+    prompt.push_str("2. Choose the next child to advance (board order is the authored dependency order unless the DETAIL says otherwise; ONE active child at a time is the default - explicitly independent siblings only as the DETAIL permits).\n");
+    prompt.push_str("3. Act through agent.plan.move_item with a FRESH base from agent.plan.board (never force a stale write): move the chosen child proposed -> accepted (a coordinator acceptance of its OWN child; the item's full detail is the authorization). Corrections or addenda to a child's text belong in a note (agent.plan.add_note) - do NOT rewrite its claim or detail.\n");
+    prompt.push_str("4. A BLOCKED child may be moved back to accepted ONLY with a concrete, written remedy - your final answer must state the blocker and exactly how the remedy resolves it, and an add_note carrying that remedy is required so the next step sees it. Without a remedy, leave it blocked.\n");
+    prompt.push_str("5. Then YIELD: end with STATUS: IN_PROGRESS and a concise status update (which child you promoted and why). The worker now runs an accepted/in-progress child BEFORE another parent turn; do not spend a turn merely confirming that an active child still needs implementation. DONE is only for a later turn, after every child is completed/done AND you have verified their evidence and the integrated outcome - a DONE while any child is unfinished is REJECTED.\n");
+    prompt.push_str("6. If every unfinished child is blocked and you have no reasonable remedy for any of them, end with STATUS: BLOCKED naming the actual blocker(s) - this moves the parent itself to the blocked column (no retry loop).\n");
+    prompt.push_str("\nCHILDREN (live board state, in board order):\n");
+    prompt.push_str(&lines.join("\n"));
+    prompt.push_str("\n");
+}
 // (6) STALE LOOP: re-check the source pointer's hash before acting.
 if e.has("source") {
     if let Ok(srcptr) = e.try_get_object("source") {
@@ -488,8 +519,42 @@ let mut set_lifecycle = |e: &mut DataObject, to: &str| {
     e.put_string("tags", &kept.join(","));
 };
 let mut moved_to_blocked = false;
-if tl_status == "DONE" {
+let mut premature_done = false;
+if premature_done {
+    // A parent reported DONE with unfinished children: REJECTED - the step is
+    // journaled above but the lifecycle was not moved and the worker treats
+    // this as an ordinary in-progress step (no park, no extra reasoning turn
+    // from the coordinator's own board edits).
+    out.put_string("action", "premature_done");
+    out.put_string("msg", "DONE rejected: this parent still has unfinished children - coordinate them (promote the next child) or verify the finished whole before closing");
+} else if tl_status == "DONE" {
+    // PARENT ROLLUP GUARD: a coordinating parent may NOT close while any
+    // non-abandoned child is unfinished - its DONE is REJECTED: the step is
+    // journaled (evidence preserved), the lifecycle stays where it is, and
+    // the action is stepped (in-progress) rather than completed. The final
+    // coordination turn - with every child completed/done - goes through the
+    // normal verified close below. This replaces the old auto-rollup (the
+    // last child completing used to complete the parent sight unseen; now the
+    // parent always gets a closing turn to verify the integrated outcome).
+    let mut premature = false;
     if live_now {
+        let ptags = e.try_get_string("tags").unwrap_or_default().to_lowercase();
+        if ptags.split(',').any(|x| x.trim() == "in-progress") {
+            for i in 0..arr.len() {
+                if i as i64 == fidx { continue; }
+                let c = arr.get_object(i);
+                if c.try_get_string("parent").unwrap_or_default() != claim { continue; }
+                let ct = c.try_get_string("tags").unwrap_or_default().to_lowercase();
+                let ctoks: Vec<&str> = ct.split(',').map(|t| t.trim()).collect();
+                if ctoks.iter().any(|t| *t == "abandoned") { continue; }
+                if !ctoks.iter().any(|t| *t == "completed" || *t == "done") { premature = true; break; }
+            }
+        }
+    }
+    if premature {
+        premature_done = true;
+        label = format!("plan step: '{}' -> DONE REJECTED: unfinished children remain - coordinate them, then close with verified evidence", short);
+    } else if live_now {
         set_lifecycle(&mut e, "completed");
         label = format!("plan completed (verified, awaiting review): '{}'", short);
     } else {
@@ -516,40 +581,13 @@ if tl_status == "DONE" {
 }
 // accepted -> in-progress is no longer done here: it happens at the START of
 // the turn (START TRANSITION above) so the board is truthful while we work.
-// (A) PARENT ROLLUP, ATOMIC with this write: when the item that just completed
-// is a CHILD (it carries `parent`) and that was its LAST unfinished sibling,
-// the parent has no remaining work - mark the parent `completed` in the SAME
-// journaled patch so a parent is done only when all its children are done.
-// The parent tags the array index (entry ordering is stable within a single
-// in-memory rewrite), so we recompute over the array AFTER this child's tag
-// change is already reflected in `arr`.
-let mut rolled_parent = String::new();
-if tl_status == "DONE" && e.has("parent") {
-    let p = e.get_string("parent");
-    if !p.is_empty() {
-        let mut pidx: i64 = -1;
-        let mut all_done = true;
-        for i in 0..arr.len() {
-            let c = arr.get_object(i);
-            if c.try_get_string("claim").unwrap_or_default() == p { pidx = i as i64; continue; }
-            if c.try_get_string("parent").unwrap_or_default() != p { continue; }
-            let ct = c.try_get_string("tags").unwrap_or_default().to_lowercase();
-            let ctoks: Vec<&str> = ct.split(',').map(|t| t.trim()).collect();
-            let cd = ctoks.iter().any(|t| *t == "completed" || *t == "done");
-            if !cd { all_done = false; }
-        }
-        if pidx >= 0 && all_done {
-            let mut pe = arr.get_object(pidx as usize);
-            let ptags = pe.try_get_string("tags").unwrap_or_default().to_lowercase();
-            let ptoks: Vec<&str> = ptags.split(',').map(|t| t.trim()).collect();
-            if !ptoks.iter().any(|t| *t == "completed" || *t == "done") {
-                set_lifecycle(&mut pe, "completed");
-                rolled_parent = p.clone();
-                label = format!("plan completed (verified): '{}' -> parent '{}' completed (all children done)", short, p);
-            }
-        }
-    }
-}
+// (A) PARENT ROLLUP: REMOVED (owner, 2026-11). The old code auto-completed a
+// parent in this write when its last child completed - the parent then closed
+// without ever re-reading the children's evidence or the integrated outcome.
+// Now the parent always gets a subsequent coordination turn: it stays
+// eligible after its last child completes, verifies the whole, and closes
+// itself with a VERIFIED DONE (the premature-DONE rejection above guards the
+// path). Child completion here only journals the child itself.
 let pw = api.dev.code.patch_control_facet(
     "kb".to_string(), "plan".to_string(), "memory".to_string(),
     "".to_string(), arr.to_string(), hash.clone(), label, "executive".to_string(), nn_sessionid.clone());
@@ -576,7 +614,14 @@ if !write_ok {
 // any notes). IN_PROGRESS -> normal continuation under MAX_PLAN_STEPS.
 out.put_string("loop_status", &tl_status);
 out.put_string("status", "ok");
-if tl_status == "DONE" {
+if premature_done {
+    // A parent reported DONE with unfinished children: REJECTED - the step is
+    // journaled above but the lifecycle was not moved and the worker treats
+    // this as an ordinary in-progress step (no park, no extra reasoning turn
+    // from the coordinator's own board edits).
+    out.put_string("action", "premature_done");
+    out.put_string("msg", "DONE rejected: this parent still has unfinished children - coordinate them (promote the next child) or verify the finished whole before closing");
+} else if tl_status == "DONE" {
     // The `completed` tag was applied atomically in the write above - the agent
     // finished with verified evidence, epistemic_work drops it, the loop ENDS,
     // and the item now awaits HUMAN confirmation (completed -> done).
@@ -593,7 +638,6 @@ if tl_status == "DONE" {
     out.put_string("action", if ok_step { "stepped" } else { "step_failed" });
 }
 out.put_boolean("ok", ok_step);
-if !rolled_parent.is_empty() { out.put_string("rolled_up_parent", &rolled_parent); }
 out.put_string("home", "agent.llm.tool_loop");
 out.put_string("result", &result_json);
 out.put_int("time", now);
