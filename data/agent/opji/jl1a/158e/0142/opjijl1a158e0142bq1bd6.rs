@@ -176,7 +176,7 @@ let inherited_structured = if e.has("checkpoint") { e.get_object("checkpoint") }
 let inherited_checkpoint_time = inherited_structured.try_get_int("time").unwrap_or(0);
 let last_journal_time = e.try_get_array("step_log").ok()
     .and_then(|a| if a.len() == 0 { None } else { a.get_object(a.len()-1).try_get_int("time").ok() }).unwrap_or(0);
-let prefer_structured = inherited_structured.has("summary") && inherited_checkpoint_time >= last_journal_time;
+let prefer_structured = inherited_structured.has("summary") && inherited_checkpoint_time > 0 && inherited_checkpoint_time >= last_journal_time;
 let mut prior_steps = continuity.get_string("prior_steps");
 let mut previous_run_id = if prefer_structured { inherited_structured.try_get_string("run_id").unwrap_or_default() } else { continuity.get_string("previous_run_id") };
 let inherited_checkpoint = if prefer_structured {
@@ -237,6 +237,9 @@ GOAL: {}\n", goal);
 // per-phase detail rides each child's own step prompt in full.
 if !detail.trim().is_empty() {
     prompt.push_str(&format!("\nDETAIL:\n{}\n", detail));
+}
+if prefer_structured {
+    prompt.push_str(&format!("\nCONTINUITY v2 — ACTUAL STRUCTURED HANDOFF FROM RUN {}:\n{}\nThis is the durable working state, not a hidden transcript. Preserve verified evidence separately from unverified changes, keep the unresolved next action and blockers, and do not restart the goal from scratch. Inspect the previous run's activity_history only if you need more concrete outcomes.\n", previous_run_id, handoff_received));
 }
 if !prior_steps.is_empty() {
     prompt.push_str(&format!("\nCONTINUITY ACROSS TURNS (this is your actual handoff, not a hidden replay):\n{}\n", prior_steps));

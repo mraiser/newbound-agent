@@ -2,17 +2,6 @@
 // response; this command derives a bounded handoff from that response and real
 // tool observations. It never claims verification merely because work exists.
 fn bounded(s: &str, n: usize) -> String { s.chars().take(n).collect() }
-fn checkpoint_text(cp: &DataObject) -> String {
-    if cp.has("text") { return cp.get_string("text"); }
-    if cp.has("checkpoint") { return cp.get_string("checkpoint"); }
-    if cp.has("summary") {
-        let mut s = format!("PROGRESS: {}\nNEXT: {}", cp.try_get_string("summary").unwrap_or_default(), cp.try_get_string("next").unwrap_or_default());
-        if let Ok(v) = cp.try_get_string("verified") { if !v.is_empty() { s.push_str(&format!("\nVERIFIED: {}", v)); } }
-        if let Ok(v) = cp.try_get_string("verification_pending") { if !v.is_empty() { s.push_str(&format!("\nVERIFICATION PENDING: {}", v)); } }
-        return s.chars().take(8000).collect();
-    }
-    String::new()
-}
 fn label(response: &str, name: &str) -> String {
     let marker = format!("{}:", name);
     for (i, line) in response.lines().enumerate() {

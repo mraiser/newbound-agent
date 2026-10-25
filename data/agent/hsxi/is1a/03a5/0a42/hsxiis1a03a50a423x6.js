@@ -68,6 +68,7 @@ function activityLine(e) {
     assistant_progress: 'Assistant progress update',
     verification_required: 'Verification pending',
     checkpoint: 'Checkpoint saved',
+    context_delivered: 'Context reached the provider',
     finish: 'Run finished',
     start: 'Run started'
   }[e.kind] || e.phase || e.kind || 'Activity';
@@ -139,13 +140,18 @@ function renderHandoff(host, run) {
   appendKV(manifest, 'prior context', (c.prior_chars || 0) + ' chars · ' + (c.checkpoint_policy || 'latest checkpoint'));
   appendKV(manifest, 'history', c.history_policy || 'Bounded recent steps; run history available on demand');
   if (c.previous_run_id) appendKV(manifest, 'previous run', c.previous_run_id);
-  if (c.recovered_from_unjournaled_run) appendKV(manifest, 'recovery', 'Recovered the last observation from a run that had not reached its board journal write.', 'bad');
+  if (run.previous_run_id) appendKV(manifest, 'continuity link', run.previous_run_id + ' → ' + run.run_id);
+  if (run.delivery) appendKV(manifest, 'delivery', (run.delivery.state === 'provider_responded' ? 'Provider responded to this context' : run.delivery.state) + (run.delivery.time ? ' · ' + relTime(run.delivery.time) : ''));
+  else if (run.active) appendKV(manifest, 'delivery', 'Context prepared; no provider response receipt yet');
+  if (c.source) appendKV(manifest, 'handoff source', c.source);
+  if (c.recovered_from_unjournaled_run || run.recovered) appendKV(manifest, 'recovery', 'Resumed from an interrupted or unjournaled run; verify unfinished changes before completion.', 'bad');
   host.appendChild(manifest);
   if (c.handoff_received) {
     host.appendChild(elWith('pl-subhead', 'Handoff received by this turn'));
     host.appendChild(elWith('pl-checkpoint', c.handoff_received));
   }
   host.appendChild(elWith('pl-subhead', 'Checkpoint available for resumption'));
+  renderStructuredCheckpoint(host, h);
   host.appendChild(elWith('pl-checkpoint', h.checkpoint || run.checkpoint ||
     'No checkpoint yet. It is saved when the turn reaches a checkpoint/finish boundary; the live activity above shows work already observed.'));
   if (h.next) { host.appendChild(elWith('pl-subhead', 'Next action')); host.appendChild(elWith('pl-checkpoint-next', h.next)); }
@@ -167,7 +173,7 @@ function renderActivity() {
   var title = ME.querySelector('.pl-activity-title');
   var updated = ME.querySelector('.pl-activity-updated');
   title.textContent = a.error ? 'Activity unavailable: ' + a.error :
-    run ? ((run.active ? 'Working: ' : (run.stale ? 'Interrupted: ' : activityView === 'history' ? 'Run history: ' : 'Latest run: ')) + (run.claim || run.run_id)) : 'No plan runs recorded yet';
+    run ? ((run.active ? 'Working: ' : (run.stale || run.interrupted ? 'Interrupted: ' : activityView === 'history' ? 'Run history: ' : 'Latest run: ')) + (run.claim || run.run_id)) : 'No plan runs recorded yet';
   updated.textContent = run && run.updated ? 'last event ' + relTime(run.updated) : '';
   panel.querySelectorAll('[data-aview]').forEach(function (b) {
     b.classList.toggle('on', b.dataset.aview === activityView);
@@ -216,6 +222,15 @@ function renderActivity() {
   appendKV(now, 'elapsed', run.started ? activityDuration(run.started) : '—');
   appendKV(now, 'last event', run.last_event_at ? relTime(run.last_event_at) : run.updated ? relTime(run.updated) : '—');
   body.appendChild(now);
+  if (run.previous_run_id || run.recovered || run.delivery || run.handoff) {
+    body.appendChild(elWith('pl-subhead', 'Continuity and current working state'));
+    var cc = elWith('pl-continuity-strip');
+    if (run.previous_run_id) appendKV(cc, 'inherited from', run.previous_run_id);
+    if (run.delivery) appendKV(cc, 'provider receipt', run.delivery.state + (run.delivery.time ? ' · ' + relTime(run.delivery.time) : ''));
+    if (run.recovered) appendKV(cc, 'recovered', 'Yes — inspect the inherited checkpoint before continuing', 'bad');
+    if (run.handoff && run.handoff.next) appendKV(cc, 'next action', run.handoff.next);
+    body.appendChild(cc);
+  }
   if (run.pending_tool && run.pending_tool.tool) appendKV(body, 'pending tool', run.pending_tool.tool + ' · ' + (run.pending_tool.target || ''));
   var last = a.events[a.events.length - 1];
   if (last) {
@@ -501,6 +516,26 @@ function card(e) {
   if (extra.length) bits.push(extra.join(' · '));
   meta.textContent = bits.join('  ·  ');
   el.appendChild(meta);
+
+  if (e.active_run || e.checkpoint || e.last_run) {
+    var cont = document.createElement('button'); cont.type = 'button';
+    cont.className = 'pl-card-continuity';
+    var run = e.active_run || e.last_run || {};
+    cont.textContent = e.active_run ? '◉ active run · turn ' + (run.turn || '?') :
+      (e.checkpoint && e.checkpoint.version === 2 ? '↳ resumable checkpoint · ' : '↳ run history · ') +
+      (e.checkpoint && e.checkpoint.next ? e.checkpoint.next : (run.run_id || 'saved'));
+    cont.title = 'Inspect this item’s run, inherited context, and checkpoint';
+    cont.addEventListener('click', function (ev) {
+      ev.stopPropagation();
+      historyRunId = run.run_id || (e.checkpoint && e.checkpoint.run_id) || '';
+      historyData = null; historyLoading = !!historyRunId;
+      activityView = 'history';
+      if (historyRunId) loadHistory();
+      renderActivity();
+      ME.querySelector('.pl-activity').scrollIntoView({block: 'nearest', behavior: 'smooth'});
+    });
+    el.appendChild(cont);
+  }
 
   // rolling-latest: the agent's most recent step headline (written by step_item
   // each tick). The live pulse of the card - progress visible without opening
