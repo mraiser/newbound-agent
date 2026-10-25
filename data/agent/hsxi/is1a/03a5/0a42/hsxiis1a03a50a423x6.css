@@ -6,6 +6,25 @@
 .pl-refresh:hover { color: var(--text); }
 .pl-note.err { color: var(--bad, #c0564f); }
 
+/* Live worker state, not lifecycle: an in-progress card is not necessarily
+   the card the autonomy worker is stepping right now. */
+.pl-autonomy { flex: none; display: flex; align-items: flex-start; gap: 7px;
+  padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px;
+  background: var(--panel); color: var(--text-dim); font-size: .85em;
+  line-height: 1.35; overflow-wrap: anywhere; }
+.pl-autonomy[hidden], .pl-card-running[hidden] { display: none; }
+.pl-autonomy-dot { flex: none; width: 7px; height: 7px; margin-top: 4px;
+  border-radius: 50%; background: currentColor; }
+.pl-autonomy.running { color: var(--accent, #f0a63c);
+  border-color: var(--accent, #f0a63c); }
+.pl-autonomy.error { color: var(--bad, #c0564f);
+  border-color: var(--bad, #c0564f); }
+.pl-card.running { border-color: var(--accent, #f0a63c);
+  box-shadow: 0 0 0 1px var(--accent, #f0a63c); }
+.pl-card-running { margin: -2px 0 6px; color: var(--accent, #f0a63c);
+  font-size: .78em; font-weight: 600; text-transform: uppercase;
+  letter-spacing: .04em; }
+
 .pl-board { flex: 1; min-height: 0; display: flex; gap: 10px; overflow-x: auto; }
 .pl-col { flex: 1; min-width: 190px; display: flex; flex-direction: column;
   border: 1px solid var(--line); border-radius: 10px; background: var(--panel);

@@ -7,6 +7,10 @@
     <button class="pl-refresh" title="reload the board from kb.plan">refresh</button>
     <span class="pl-note lbl"></span>
   </header>
+  <div class="pl-autonomy" role="status" aria-live="polite" aria-atomic="true" hidden>
+    <span class="pl-autonomy-dot" aria-hidden="true"></span>
+    <span class="pl-autonomy-text"></span>
+  </div>
   <div class="pl-board"></div>
   <form class="pl-add">
     <input class="pl-add-claim" placeholder="new plan item — one atomic claim" aria-label="New plan item claim">
