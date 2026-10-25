@@ -378,6 +378,19 @@ let ran = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
     }
 }
 out.put_string("run_id", &run_id);
+let read_run_checkpoint = |rid: &str| -> String {
+    if rid.is_empty() { return String::new(); }
+    let store = flowlang::datastore::DataStore::new();
+    if !store.exists("runtime", "agent_plan_runs") { return String::new(); }
+    let runs = store.get_data("runtime", "agent_plan_runs").get_object("data").get_array("runs");
+    for i in 0..runs.len() {
+        let r = runs.get_object(i);
+        if r.try_get_string("run_id").unwrap_or_default() == rid {
+            if let Ok(h) = r.try_get_object("handoff") { return h.try_get_string("checkpoint").unwrap_or_default(); }
+        }
+    }
+    String::new()
+};
 let (ok_step, result_json, tl_status, handoff_checkpoint, actual_run_id) = match ran {
     Ok(Ok(rr)) => {
         // Log the FINAL ANSWER in FULL (owner, 2026-10) - never the messages
@@ -401,27 +414,22 @@ let (ok_step, result_json, tl_status, handoff_checkpoint, actual_run_id) = match
         let actual_run = rr.try_get_string("run_id").ok()
             .or_else(|| rr.try_get_object("a").ok().and_then(|a| a.try_get_string("run_id").ok()))
             .unwrap_or_else(|| run_id.clone());
-        let checkpoint = if actual_run.is_empty() { String::new() } else {
-            let store = flowlang::datastore::DataStore::new();
-            if store.exists("runtime", "agent_plan_runs") {
-                let runs = store.get_data("runtime", "agent_plan_runs").get_object("data").get_array("runs");
-                let mut found = String::new();
-                for i in 0..runs.len() {
-                    let r = runs.get_object(i);
-                    if r.try_get_string("run_id").unwrap_or_default() == actual_run {
-                        if let Ok(h) = r.try_get_object("handoff") { found = h.try_get_string("checkpoint").unwrap_or_default(); }
-                    }
-                }
-                found
-            } else { String::new() }
-        };
+        let checkpoint = read_run_checkpoint(&actual_run);
         let checkpoint = if !checkpoint.is_empty() { checkpoint } else {
             format!("CONTINUATION FROM PREVIOUS PLAN TURN\nSTATUS: {}\nRESPONSE / EVIDENCE:\n{}\nNEXT: Continue from the stated response and verify a new concrete increment. The preceding run did not supply a checkpoint; inspect its run activity and do not repeat a failed call without new information.", st, answer.chars().take(7000).collect::<String>())
         };
         (true, answer, st, checkpoint, actual_run)
     }
-    Ok(Err(pe)) => (false, format!("{{\"error\":\"{}\"}}", esc(&format!("{:?}", pe))), "ERROR".to_string(), "The previous run returned an execution error. Inspect its activity, diagnose the cause, and take a different verified approach.".to_string(), run_id.clone()),
-    Err(_) => (false, "{\"error\":\"panic during executive reasoning\"}".to_string(), "ERROR".to_string(), "The previous run panicked before a model checkpoint. Inspect its last recorded activity and resume with a different approach; do not assume unfinished writes were verified.".to_string(), run_id.clone()),
+    Ok(Err(pe)) => {
+        let fallback = read_run_checkpoint(&run_id);
+        let text = if fallback.is_empty() { "The previous run returned an execution error. Inspect its activity, diagnose the cause, and take a different verified approach.".to_string() } else { fallback };
+        (false, format!("{{\"error\":\"{}\"}}", esc(&format!("{:?}", pe))), "ERROR".to_string(), text, run_id.clone())
+    },
+    Err(_) => {
+        let fallback = read_run_checkpoint(&run_id);
+        let text = if fallback.is_empty() { "The previous run panicked before a model checkpoint. Inspect its last recorded activity and resume with a different approach; do not assume unfinished writes were verified.".to_string() } else { fallback };
+        (false, "{\"error\":\"panic during executive reasoning\"}".to_string(), "ERROR".to_string(), text, run_id.clone())
+    },
 };
 // FRESH BASE after the turn: the turn can run for minutes, the start
 // transition above already changed the board hash, and the turn itself (or a

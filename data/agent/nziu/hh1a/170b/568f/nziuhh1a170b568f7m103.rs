@@ -32,6 +32,8 @@ for i in 0..runs.len() {
          (r.try_get_int("boot").unwrap_or(0) != 0 && boot_now != 0 && r.try_get_int("boot").unwrap_or(0) != boot_now));
     out.put_boolean("active", r.try_get_boolean("active").unwrap_or(false) && !stale);
     out.put_boolean("stale", stale); out.put_int("now", now);
+    out.put_boolean("live_pid", r.try_get_int("pid").unwrap_or(0) == std::process::id() as i64);
+    out.put_int("boot_now", boot_now);
     if stale { out.put_string("state", "interrupted"); }
     out.put_array("events", page); out.put_boolean("truncated", n > cap);
     for k in ["claim", "turn", "started", "updated", "ended", "active", "pid", "boot", "outcome", "round", "max_rounds", "tool_calls", "errors"] {

@@ -18,7 +18,12 @@ fn copy_summary(src: &DataObject) -> DataObject {
     if let Ok(v) = src.try_get_object("pending_tool") { r.put_object("pending_tool", v); }
     if let Ok(v) = src.try_get_object("checkpoint") { r.put_object("checkpoint", v); }
     if let Ok(v) = src.try_get_object("context") { r.put_object("context", v); }
-    if let Ok(v) = src.try_get_object("handoff") { r.put_object("handoff", v); }
+    if let Ok(v) = src.try_get_object("handoff") {
+        // A diagnostic transcript is explicit history-only data. Do not send
+        // it every three seconds in the ordinary live/recent status poll.
+        let mut h = v.deep_copy(); h.remove_property("transcript_excerpt");
+        r.put_object("handoff", h);
+    }
     r
 }
 let now = time();
@@ -53,7 +58,8 @@ for r in runs.iter().take(12) { recent.push_object(copy_summary(r)); }
 let active = runs.iter().find(|r| r.try_get_boolean("active").unwrap_or(false)
     && r.try_get_int("pid").unwrap_or(0) == std::process::id() as i64
     && (r.try_get_int("boot").unwrap_or(0) == 0 || boot == 0 || r.try_get_int("boot").unwrap_or(0) == boot));
-if let Some(r) = active {
+let selected = active.or_else(|| runs.first());
+if let Some(r) = selected {
     let mut events = DataArray::new();
     let all = r.try_get_array("events").unwrap_or_else(|_| DataArray::new());
     let cap = limit.clamp(1, 400) as usize;
@@ -62,7 +68,7 @@ if let Some(r) = active {
         let e = all.get_object(i);
         if e.try_get_int("seq").unwrap_or(0) <= after { continue; }
         let mut v = DataObject::new();
-        for k in ["seq", "time", "kind", "phase", "round", "tool", "target", "ok", "streak", "detail"] {
+        for k in ["seq", "time", "kind", "phase", "round", "tool", "target", "ok", "streak", "detail", "outcome"] {
             if let Ok(x) = e.try_get_property(k) { v.set_property(k, x); }
         }
         if let Ok(x) = e.try_get_string("detail") { v.put_string("detail", &preview(&x, 4000)); }
