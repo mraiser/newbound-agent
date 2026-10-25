@@ -301,6 +301,20 @@ let mut observed_work = DataArray::new();
 let mut assistant_progress = String::new();
 
 loop {
+    // Human control is applied only at a model/tool boundary. A pause request
+    // never kills a provider call or a tool halfway through; it prevents the
+    // next model round and leaves a resumable checkpoint.
+    if !run_id.is_empty() {
+        let control = crate::agent::plan::run_state::control(&run_id);
+        let requested = control.try_get_string("requested").unwrap_or_default();
+        if requested == "pause" || requested == "stop" {
+            let mut answer = format!("{} at a safe model/tool boundary. No new model round was started.\nPROGRESS: {}\nNEXT: Resume from the saved checkpoint when authorized.", if requested=="pause" {"Paused"} else {"Stopped"}, if assistant_progress.is_empty() { "The current activity and last observed result are saved." } else { &assistant_progress });
+            if let Ok(note)=control.try_get_string("note") { if !note.trim().is_empty() { answer.push_str(&format!("\nHUMAN GUIDANCE: {}",note)); } }
+            final_answer = answer;
+            checkpoint_reason = if requested=="pause" {"Human pause requested; applied at a safe boundary.".to_string()} else {"Human stop requested; applied at a safe boundary.".to_string()};
+            break;
+        }
+    }
     if iterations >= max_iterations {
         // Budget exhausted: do NOT discard the work. Ask the model to compress
         // its own progress into a resumable checkpoint (one bounded extra
@@ -437,6 +451,15 @@ loop {
     messages.push_object(resp.get_object("assistant_message"));
     let calls = resp.get_array("tool_calls");
     for c in calls.objects() {
+        if !run_id.is_empty() {
+            let control = crate::agent::plan::run_state::control(&run_id);
+            let requested = control.try_get_string("requested").unwrap_or_default();
+            if requested == "pause" || requested == "stop" {
+                final_answer = format!("{} before starting the next tool call. The current model response is complete; no additional tool was started.\nPROGRESS: {}\nNEXT: Resume from the saved checkpoint when authorized.", if requested=="pause" {"Paused"} else {"Stopped"}, if assistant_progress.is_empty() { "The current activity is saved." } else { &assistant_progress });
+                checkpoint_reason = "Human control requested before the next tool call.".to_string();
+                break;
+            }
+        }
         let c = c.object();
         let name = c.get_string("name");
         let args_str = c.get_string("arguments");
@@ -757,7 +780,7 @@ if !run_id.is_empty() {
     h.put_string("recovery", "Use the structured checkpoint and safe activity timeline. Raw tool arguments and provider transcripts are not retained.");
     ce.put_object("handoff", h); activity_emit(&run_id, ce);
     let mut e = DataObject::new(); e.put_string("kind", "finish");
-    let interrupted = status == "ERROR" || !checkpoint_reason.is_empty();
+    let interrupted = status == "ERROR" || status == "PAUSED" || status == "STOPPED" || !checkpoint_reason.is_empty();
     e.put_string("phase", if interrupted { "interrupted" } else { "finished" });
     e.put_string("state", if interrupted { "interrupted" } else { "run finished" });
     e.put_string("outcome", &status); e.put_string("detail", &final_answer);
@@ -767,8 +790,21 @@ if !run_id.is_empty() {
     activity_emit(&run_id, e);
     activity_guard.closed = true;
 }
+let control_status = crate::agent::plan::run_state::control(&run_id).try_get_string("requested").unwrap_or_default();
+if control_status == "pause" || control_status == "stop" {
+    status = control_status.to_uppercase();
+    if !run_id.is_empty() {
+        let mut ce = DataObject::new(); ce.put_string("kind", "control_applied");
+        ce.put_string("requested", &control_status); ce.put_string("phase", if control_status=="pause" {"paused"} else {"stopped"});
+        ce.put_string("state", if control_status=="pause" {"paused"} else {"stopped"});
+        let mut applied = crate::agent::plan::run_state::control(&run_id);
+        applied.put_string("state", if control_status=="pause" {"paused"} else {"stopped"});
+        ce.put_object("control", applied); activity_emit(&run_id, ce);
+    }
+}
 let mut response = DataObject::new();
 if !run_id.is_empty() { response.put_string("run_id", &run_id); }
+response.put_string("control", &control_status);
 response.put_string("msg", &final_answer);
 response.put_string("status", &status);
 response.put_array("messages", messages);
