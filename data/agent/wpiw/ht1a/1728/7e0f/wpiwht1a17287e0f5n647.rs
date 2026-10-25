@@ -36,5 +36,11 @@ check("active run is retained beyond finished history cap",{
     for i in 0..12{emit(&format!("phase3-finished-{}",i),"start");emit(&format!("phase3-finished-{}",i),"finish");}
     crate::agent::plan::run_state::control("phase3-concurrency").has("requested")
 });
+check("pause guidance survives structured checkpoint for resume",{
+    let mut ci=DataObject::new();ci.put_string("status","PAUSED");ci.put_string("response","Paused at a safe boundary\nNEXT: resume carefully");
+    ci.put_string("guidance","Preserve the failed compiler diagnostic and do not repeat the same edit");
+    let cp=crate::agent::plan::checkpoint::checkpoint(ci);
+    cp.get_string("status")=="PAUSED" && cp.get_string("guidance").contains("compiler diagnostic") && cp.get_string("next")=="resume carefully"
+});
 match before {Some(r)=>store.set_data("runtime","agent_plan_runs",r),None=>{let _=std::fs::remove_file(store.get_data_file("runtime","agent_plan_runs"));}}
 let mut out=DataObject::new();out.put_string("status",if passed==total{"ok"}else{"err"});out.put_int("passed",passed);out.put_int("total",total);out.put_array("checks",results);out

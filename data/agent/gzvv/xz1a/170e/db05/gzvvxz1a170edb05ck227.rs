@@ -76,6 +76,7 @@ out.put_int("version", 2); out.put_int("time", time());
 out.put_string("kind", &kind); out.put_string("status", &status);
 out.put_boolean("complete", status == "DONE");
 out.put_string("reason", &bounded(&input.try_get_string("reason").unwrap_or_default(), 1000));
+out.put_string("guidance", &bounded(&input.try_get_string("guidance").unwrap_or_default(), 8000));
 out.put_string("summary", &summary); out.put_string("next", &bounded(&next, 2000));
 out.put_string("blockers", &blockers); out.put_string("verified", &verified);
 out.put_string("verification_pending", &verification_pending);

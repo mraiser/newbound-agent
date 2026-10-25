@@ -5,7 +5,7 @@ let mut cp = checkpoint;
 if cp.has("handoff") && !cp.has("summary") && !cp.has("next") { cp = cp.get_object("handoff"); }
 let structured = cp.has("summary") || cp.has("next") || cp.has("text") || cp.has("checkpoint");
 if structured {
-    for k in ["version", "time", "kind", "status", "complete", "reason", "summary", "next", "blockers", "verified", "verification_pending", "last_action", "last_result", "run_id", "previous_run_id", "turn", "round", "max_rounds", "tool_calls", "errors", "text", "checkpoint"] {
+    for k in ["version", "time", "kind", "status", "complete", "reason", "guidance", "summary", "next", "blockers", "verified", "verification_pending", "last_action", "last_result", "run_id", "previous_run_id", "turn", "round", "max_rounds", "tool_calls", "errors", "text", "checkpoint"] {
         if let Ok(v) = cp.try_get_property(k) { out.set_property(k, v); }
     }
     for k in ["observations", "changes", "evidence"] {

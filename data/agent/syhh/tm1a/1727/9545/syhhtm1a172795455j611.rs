@@ -1,3 +1,4 @@
+fn sid_for_note(sid: &str) -> String { sid.to_string() }
 // Run-scoped control record. pause/stop take effect at a real model/tool
 // boundary; resume is a normal accepted/in-progress step, never an
 // authorization bypass. No thread/process is killed and no raw prompt is stored.
@@ -46,7 +47,7 @@ if lifecycle.is_empty(){
 if lifecycle.is_empty(){let mut o=DataObject::new();o.put_string("status","err");o.put_string("msg","plan item not found");return o;}
 let live = run.try_get_boolean("active").unwrap_or(false);
 let requested_now = run.try_get_object("control").ok().and_then(|c|c.try_get_string("requested").ok()).unwrap_or_default();
-let live = run.try_get_boolean("active").unwrap_or(false) || requested_now=="pause" || requested_now=="stop";
+let live = run.try_get_boolean("active").unwrap_or(false) || (run.try_get_string("outcome").unwrap_or_default()!="STOPPED" && (requested_now=="pause" || requested_now=="stop"));
 if (action=="pause"||action=="stop") && !live {
     let mut o=DataObject::new();o.put_string("status","err");o.put_string("msg","run is not active; its checkpoint is already available for resume");return o;
 }
@@ -65,7 +66,7 @@ if action=="resume" && !note.trim().is_empty() {
 }
 if action=="resume" {
     let prior_control = run.try_get_object("control").unwrap_or_else(|_|DataObject::new());
-    let resume_note = if note.trim().is_empty() {prior_control.try_get_string("note").unwrap_or_default()} else {note.clone()};
+    let resume_note = if !note.trim().is_empty() {note.clone()} else if !prior_control.try_get_string("note").unwrap_or_default().is_empty() {prior_control.try_get_string("note").unwrap_or_default()} else {item_checkpoint.try_get_string("guidance").unwrap_or_default()};
     let resume_rid = run_id.clone();
     let resume_claim = claim.clone();
     let _guard=crate::agent::plan::run_state::lock();
@@ -87,6 +88,10 @@ if action=="resume" {
             if mr.try_get_string("status").unwrap_or_default()!="ok" {return mr;}
         }
     }
+    if !resume_note.trim().is_empty() && note.trim().is_empty() {
+        let nr=api.agent.plan.add_note(resume_claim.clone(),format!("Resume guidance from the previous run:\n{}",resume_note),sid_for_note(&nn_sessionid));
+        if nr.try_get_string("status").unwrap_or_default()!="ok" {let mut o=DataObject::new();o.put_string("status","err");o.put_string("msg","could not carry pause guidance into the resumed turn");return o;}
+    }
     let h=api.agent.plan.board_hash().get_string("hash");
     let sid=nn_sessionid.clone();
     let r=api.agent.plan.step_item(claim,h,nn_sessionid);
@@ -104,6 +109,13 @@ if action=="resume" {
 }
 if action=="clear" {
     if live {let mut o=DataObject::new();o.put_string("status","err");o.put_string("msg","cannot clear control on a live run; use pause or stop at a safe boundary");return o;}
+    let _guard=crate::agent::plan::run_state::lock();
+    if store.exists("runtime","agent_plan_runs") {
+        let mut rec=store.get_data("runtime","agent_plan_runs");let mut d=rec.get_object("data");let runs=d.get_array("runs");
+        for i in 0..runs.len(){let mut r=runs.get_object(i);if r.try_get_string("run_id").unwrap_or_default()==run_id{r.remove_property("control");r.put_string("control_state","cleared");}}
+        d.put_array("runs",runs);rec.put_object("data",d);store.set_data("runtime","agent_plan_runs",rec);
+    }
+    drop(_guard);
     let _=api.dev.code.patch_control_facet("kb".to_string(),"plan".to_string(),"memory".to_string(),"".to_string(),b.get_string("source"),b.get_string("hash"),"clear completed run control".to_string(),"plan-board".to_string(),nn_sessionid);
     let mut o=DataObject::new();o.put_string("status","ok");o.put_string("action","clear");return o;
 }

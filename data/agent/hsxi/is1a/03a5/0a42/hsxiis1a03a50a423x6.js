@@ -77,6 +77,16 @@ function renderReview(host, run) {
   host.appendChild(elWith('pl-continuity-note', note));
 }
 
+function controlsRun(run) {
+  var controls = ME.querySelector('.pl-run-controls');
+  controls.dataset.runid = run.run_id || '';
+  controls.dataset.claim = run.claim || (activityState.item && activityState.item.claim) || '';
+  controls.dataset.paused = run.paused ? '1' : '';
+  controls.dataset.stopped = run.outcome === 'STOPPED' || run.control_state === 'stopped' ? '1' : '';
+  controls.dataset.interrupted = run.interrupted || run.stale ? '1' : '';
+  controls.dataset.active = run.active ? '1' : '';
+}
+
 function activityDuration(ms) {
   var s = Math.max(0, Math.floor((Date.now() - ms) / 1000));
   if (s < 60) return s + 's';
@@ -212,6 +222,7 @@ function renderActivity() {
   panel.querySelectorAll('[data-aview]').forEach(function (b) {
     b.classList.toggle('on', b.dataset.aview === activityView);
   });
+  if (run) controlsRun(run);
   var body = ME.querySelector('.pl-activity-body');
   body.textContent = '';
   var controls = ME.querySelector('.pl-run-controls');
@@ -868,8 +879,9 @@ function startLive() {
 me.ready = function () {
   ME.querySelectorAll('[data-runact]').forEach(function (b) {
     b.addEventListener('click', function () {
-      var run = activityState.run || activityState.recent[0];
-      if (!run || controlBusy) return;
+      var controlEl = ME.querySelector('.pl-run-controls');
+      var run = {run_id: controlEl.dataset.runid, claim: controlEl.dataset.claim};
+      if (!run.run_id || controlBusy) return;
       var action = b.dataset.runact;
       var note = ME.querySelector('.pl-resume-note').value.trim();
       controlBusy = true;
