@@ -307,7 +307,7 @@ loop {
     if !run_id.is_empty() {
         let control = crate::agent::plan::run_state::control(&run_id);
         let requested = control.try_get_string("requested").unwrap_or_default();
-        if requested == "pause" || requested == "stop" {
+        if control.try_get_string("state").unwrap_or_default() == "requested" && (requested == "pause" || requested == "stop") {
             let mut answer = format!("{} at a safe model/tool boundary. No new model round was started.\nPROGRESS: {}\nNEXT: Resume from the saved checkpoint when authorized.", if requested=="pause" {"Paused"} else {"Stopped"}, if assistant_progress.is_empty() { "The current activity and last observed result are saved." } else { &assistant_progress });
             if let Ok(note)=control.try_get_string("note") { if !note.trim().is_empty() { answer.push_str(&format!("\nHUMAN GUIDANCE: {}",note)); } }
             final_answer = answer;
@@ -454,7 +454,7 @@ loop {
         if !run_id.is_empty() {
             let control = crate::agent::plan::run_state::control(&run_id);
             let requested = control.try_get_string("requested").unwrap_or_default();
-            if requested == "pause" || requested == "stop" {
+            if control.try_get_string("state").unwrap_or_default() == "requested" && (requested == "pause" || requested == "stop") {
                 final_answer = format!("{} before starting the next tool call. The current model response is complete; no additional tool was started.\nPROGRESS: {}\nNEXT: Resume from the saved checkpoint when authorized.", if requested=="pause" {"Paused"} else {"Stopped"}, if assistant_progress.is_empty() { "The current activity is saved." } else { &assistant_progress });
                 checkpoint_reason = "Human control requested before the next tool call.".to_string();
                 break;
