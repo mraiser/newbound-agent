@@ -386,6 +386,7 @@ context_manifest.put_string("previous_run_id", &previous_run_id);
 context_manifest.put_string("handoff_received", &handoff_received);
 context_manifest.put_int("included_steps", continuity.get_int("included_steps"));
 context_manifest.put_int("available_steps", continuity.get_int("available_steps"));
+context_manifest.put_boolean("recovered_from_unjournaled_run", recovered_run);
 {
     let mut globals = flowlang::datastore::DataStore::globals();
     let mut d = DataObject::new(); d.put_string("run_id", &run_id);
@@ -405,6 +406,22 @@ let ran = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
     }
 }
 out.put_string("run_id", &run_id);
+// A panic inside tool_loop bypasses its own finish event. Close the activity
+// run here even though the service process remains alive; otherwise the UI
+// would confuse a dead turn with a live one. Recovery uses the last saved
+// observation below, never an assumption that unfinished work succeeded.
+let loop_returned = matches!(&ran, Ok(Ok(_)));
+if !loop_returned {
+    let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let cmd = flowlang::command::Command::lookup("agent", "plan", "activity_emit");
+        let mut event = DataObject::new(); event.put_string("kind", "finish");
+        event.put_string("phase", "interrupted"); event.put_string("state", "interrupted");
+        event.put_string("outcome", "ERROR");
+        event.put_string("detail", "The plan tool loop returned an execution error or panicked before its finish boundary; recover from the last saved observation.");
+        let mut a = DataObject::new(); a.put_string("run_id", &run_id);
+        a.put_object("event", event); let _ = cmd.execute(a);
+    }));
+}
 let read_run_checkpoint = |rid: &str| -> String {
     if rid.is_empty() { return String::new(); }
     let store = flowlang::datastore::DataStore::new();

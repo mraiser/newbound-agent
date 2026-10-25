@@ -119,6 +119,7 @@ function renderHandoff(host, run) {
   appendKV(manifest, 'prior context', (c.prior_chars || 0) + ' chars · ' + (c.checkpoint_policy || 'latest checkpoint'));
   appendKV(manifest, 'history', c.history_policy || 'Bounded recent steps; run history available on demand');
   if (c.previous_run_id) appendKV(manifest, 'previous run', c.previous_run_id);
+  if (c.recovered_from_unjournaled_run) appendKV(manifest, 'recovery', 'Recovered the last observation from a run that had not reached its board journal write.', 'bad');
   host.appendChild(manifest);
   if (c.handoff_received) {
     host.appendChild(elWith('pl-subhead', 'Handoff received by this turn'));
@@ -137,11 +138,16 @@ function renderActivity() {
   if (!panel) return;
   var a = activityState;
   var run = a.run || a.recent[0] || null;
+  if (activityView === 'history' && historyRunId) {
+    if (historyData && historyData.status === 'ok' && historyData.run_id === historyRunId) {
+      run = Object.assign({}, a.recent.find(function (r) { return r.run_id === historyRunId; }) || {}, historyData);
+    } else run = a.recent.find(function (r) { return r.run_id === historyRunId; }) || run;
+  }
   panel.hidden = !run && !a.error;
   var title = ME.querySelector('.pl-activity-title');
   var updated = ME.querySelector('.pl-activity-updated');
   title.textContent = a.error ? 'Activity unavailable: ' + a.error :
-    run ? ((run.active ? 'Working: ' : (run.stale ? 'Interrupted: ' : 'Latest run: ')) + (run.claim || run.run_id)) : 'No plan runs recorded yet';
+    run ? ((run.active ? 'Working: ' : (run.stale ? 'Interrupted: ' : activityView === 'history' ? 'Run history: ' : 'Latest run: ')) + (run.claim || run.run_id)) : 'No plan runs recorded yet';
   updated.textContent = run && run.updated ? 'last event ' + relTime(run.updated) : '';
   panel.querySelectorAll('[data-aview]').forEach(function (b) {
     b.classList.toggle('on', b.dataset.aview === activityView);
@@ -163,6 +169,8 @@ function renderActivity() {
   if (activityView === 'handoff') {
     if (!run.active && historyRunId === run.run_id && historyData && historyData.status === 'ok') {
       renderHandoff(body, Object.assign({}, run, {handoff: historyData.handoff, checkpoint: historyData.checkpoint, context: historyData.context}));
+    } else if (!run.active && historyLoading) {
+      body.appendChild(elWith('pl-empty', 'Loading the saved context and handoff…'));
     } else renderHandoff(body, run);
     if (!run.active && (!historyData || historyRunId !== run.run_id)) {
       historyRunId = run.run_id; historyData = null; loadHistory();
@@ -172,6 +180,8 @@ function renderActivity() {
   if (activityView === 'activity') {
     if (!run.active && historyRunId === run.run_id && historyData && historyData.status === 'ok') {
       appendEvents(body, historyData.events || []);
+    } else if (!run.active && historyRunId === run.run_id && historyData && historyData.status === 'err') {
+      body.appendChild(elWith('pl-empty', 'Saved activity unavailable: ' + (historyData.msg || 'history read failed')));
     } else if (!run.active) {
       body.appendChild(elWith('pl-empty', 'Loading the saved activity timeline…'));
       historyRunId = run.run_id; historyData = null; loadHistory();
