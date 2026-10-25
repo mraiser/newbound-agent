@@ -184,6 +184,7 @@ let inherited_checkpoint = if prefer_structured {
 } else { DataObject::new() };
 let mut handoff_received = if prefer_structured { inherited_checkpoint.get_string("text") } else { continuity.get_string("handoff_received") };
 let mut recovered_run = false;
+let mut continuity_recovery_kind = if prefer_structured && e.has("active_run") { "durable_checkpoint" } else { "" };
 let journaled_run = previous_run_id.clone();
 // An interrupted run or a stale post-turn board write must not erase working
 // state. The runtime run is a recovery facet, never an authority to override
@@ -213,6 +214,7 @@ if handoff_received.is_empty() || !journaled_run.is_empty() {
             previous_run_id = r.try_get_string("run_id").unwrap_or_default();
             handoff_received = text;
             recovered_run = true;
+            continuity_recovery_kind = "runtime_observation";
         }
     }
     if recovered_run {
@@ -238,10 +240,10 @@ GOAL: {}\n", goal);
 if !detail.trim().is_empty() {
     prompt.push_str(&format!("\nDETAIL:\n{}\n", detail));
 }
-if prefer_structured {
-    prompt.push_str(&format!("\nCONTINUITY v2 — ACTUAL STRUCTURED HANDOFF FROM RUN {}:\n{}\nThis is the durable working state, not a hidden transcript. Preserve verified evidence separately from unverified changes, keep the unresolved next action and blockers, and do not restart the goal from scratch. Inspect the previous run's activity_history only if you need more concrete outcomes.\n", previous_run_id, handoff_received));
+if prefer_structured || recovered_run {
+    prompt.push_str(&format!("\nCONTINUITY v2 — ACTUAL HANDOFF FROM RUN {} (recovery: {}):\n{}\nThis is durable working state, not a hidden transcript. Preserve verified evidence separately from unverified changes, keep the unresolved next action and blockers, and do not restart the goal from scratch. Inspect activity_history if you need more concrete outcomes.\n", previous_run_id, if continuity_recovery_kind.is_empty() { "checkpoint" } else { continuity_recovery_kind }, handoff_received));
 }
-if !prior_steps.is_empty() {
+if !prefer_structured && !prior_steps.is_empty() {
     prompt.push_str(&format!("\nCONTINUITY ACROSS TURNS (this is your actual handoff, not a hidden replay):\n{}\n", prior_steps));
     if !handoff_received.is_empty() {
         prompt.push_str("\nTreat the latest handoff above as your working state. Preserve its verified facts, changed targets, unresolved error, and next action. Do not restart the goal from scratch or repeat an identical failed call without new information.\n");
@@ -442,6 +444,7 @@ context_manifest.put_boolean("recovered_from_unjournaled_run", recovered_run);
 context_manifest.put_boolean("structured_checkpoint", prefer_structured);
 if prefer_structured { context_manifest.put_object("inherited_checkpoint", inherited_checkpoint.clone()); }
 context_manifest.put_string("source", if prefer_structured { "kb.plan.checkpoint" } else if recovered_run { "runtime recovery" } else { "kb.plan.step_log" });
+context_manifest.put_string("recovery_kind", continuity_recovery_kind);
 {
     let mut globals = flowlang::datastore::DataStore::globals();
     let mut d = DataObject::new(); d.put_string("run_id", &run_id);
@@ -629,6 +632,7 @@ continuity_state.put_string("previous_run_id", &previous_run_id);
 continuity_state.put_string("handoff_received", &handoff_received);
 continuity_state.put_int("prompt_chars", prompt.chars().count() as i64);
 continuity_state.put_boolean("recovered_from_unjournaled_run", recovered_run);
+continuity_state.put_string("recovery_kind", continuity_recovery_kind);
 continuity_state.put_boolean("structured", structured_checkpoint.has("summary"));
 continuity_state.put_string("delivery", if ok_step { "provider responded to the context prompt" } else { "no completed provider exchange" });
 e.put_object("continuity", continuity_state);

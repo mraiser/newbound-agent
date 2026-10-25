@@ -193,12 +193,18 @@ function renderActivity() {
     }
   }
   if (activityView === 'handoff') {
+    var cardDurable = run.fromCard && run.handoff;
     if (!run.active && historyRunId === run.run_id && historyData && historyData.status === 'ok') {
       renderHandoff(body, Object.assign({}, run, {handoff: historyData.handoff, checkpoint: historyData.checkpoint, context: historyData.context}));
     } else if (!run.active && historyLoading) {
       body.appendChild(elWith('pl-empty', 'Loading the saved context and handoff…'));
-    } else renderHandoff(body, run);
-    if (!run.active && (!historyData || historyRunId !== run.run_id)) {
+    } else {
+      renderHandoff(body, run);
+      if (cardDurable && historyData && historyData.status === 'err') {
+        body.appendChild(elWith('pl-continuity-note', 'Detailed runtime history is no longer available; this is the durable checkpoint retained on the plan item.'));
+      }
+    }
+    if (!run.active && !run.fromCard && (!historyData || historyRunId !== run.run_id)) {
       historyRunId = run.run_id; historyData = null; loadHistory();
     }
     return;
@@ -269,6 +275,9 @@ function probeActivity() {
     activityState.recent = r.recent || [];
     if (!historyRunId && activityState.recent.length) historyRunId = activityState.recent[0].run_id;
     var next = r.run || null;
+    if (activityView === 'handoff' && activityState.run && activityState.run.fromCard) {
+      renderActivity(); return;
+    }
     // With no active run the API selects the latest finished run for live
     // inspection; when one starts, switch the stream back to the active run.
     if (next && next.active && activityRunId && next.run_id !== activityRunId) {
@@ -529,7 +538,16 @@ function card(e) {
       ev.stopPropagation();
       historyRunId = run.run_id || (e.checkpoint && e.checkpoint.run_id) || '';
       historyData = null; historyLoading = !!historyRunId;
-      activityView = 'history';
+      activityView = 'handoff';
+      activityState.run = {
+        fromCard: true,
+        run_id: historyRunId, claim: e.claim, active: !!e.active_run,
+        previous_run_id: run.previous_run_id || (e.checkpoint && e.checkpoint.previous_run_id) || '',
+        recovered: !!run.recovered, updated: run.started || run.time || (e.checkpoint && e.checkpoint.time),
+        started: run.started, turn: run.turn || (e.checkpoint && e.checkpoint.turn),
+        handoff: e.checkpoint || run.inherited || {checkpoint: run.inherited_text},
+        context: e.continuity || {}
+      };
       if (historyRunId) loadHistory();
       renderActivity();
       ME.querySelector('.pl-activity').scrollIntoView({block: 'nearest', behavior: 'smooth'});
