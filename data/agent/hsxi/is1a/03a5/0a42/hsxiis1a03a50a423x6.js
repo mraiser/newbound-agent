@@ -43,6 +43,39 @@ var activityView = 'now';
 var historyRunId = '';
 var historyData = null;
 var historyLoading = false;
+var controlBusy = false;
+
+function renderReview(host, run) {
+  var cp = run && run.handoff || run && run.checkpoint || {};
+  var context = run && run.context || {};
+  host.appendChild(elWith('pl-subhead', 'Goal and scope'));
+  host.appendChild(elWith('pl-review-goal', context.goal || run.claim || 'The plan item claim is the goal; open the card for its full detail.'));
+  if (context.detail_policy) appendKV(host, 'context policy', context.detail_policy === 'full' ? 'Full goal and detail supplied' : context.detail_policy);
+  host.appendChild(elWith('pl-subhead', 'Observed changes — not completion evidence by themselves'));
+  var changes = cp.changes || [];
+  if (!changes.length) host.appendChild(elWith('pl-empty', 'No write/change targets recorded in this checkpoint.'));
+  else {
+    var list = elWith('pl-review-list');
+    changes.forEach(function (c) { list.appendChild(elWith('pl-review-row ' + (c.ok ? '' : 'bad'), (c.ok ? 'changed · ' : 'failed · ') + (c.tool || '') + ' · ' + (c.target || '') + (c.result ? '\n' + c.result : ''))); });
+    host.appendChild(list);
+  }
+  host.appendChild(elWith('pl-subhead', 'Checks actually executed'));
+  var evidence = cp.evidence || [];
+  if (!evidence.length && !cp.verified) host.appendChild(elWith('pl-empty', 'No verification evidence recorded in this checkpoint.'));
+  else {
+    var el = elWith('pl-review-list');
+    evidence.forEach(function (v) { el.appendChild(elWith('pl-review-row good', '✓ ' + (v.tool || '') + ' · ' + (v.target || '') + (v.result ? '\n' + v.result : ''))); });
+    if (cp.verified) el.appendChild(elWith('pl-review-row good', 'Reported VERIFIED evidence:\n' + cp.verified));
+    host.appendChild(el);
+  }
+  host.appendChild(elWith('pl-subhead', 'Unresolved work and risks'));
+  if (cp.verification_pending) appendKV(host, 'verification pending', cp.verification_pending, 'bad');
+  if (cp.blockers) appendKV(host, 'blockers', cp.blockers, 'bad');
+  appendKV(host, 'next action', cp.next || 'Inspect the latest activity and checkpoint.');
+  appendKV(host, 'status', run.outcome || cp.status || run.state || 'in-progress');
+  var note = run.outcome === 'DONE' ? 'The model and goal-scope gate accepted completion. Human confirmation is still a separate lifecycle decision.' : 'No completion claim is inferred from observed writes. Use the evidence above to judge what still needs verification.';
+  host.appendChild(elWith('pl-continuity-note', note));
+}
 
 function activityDuration(ms) {
   var s = Math.max(0, Math.floor((Date.now() - ms) / 1000));
@@ -181,6 +214,20 @@ function renderActivity() {
   });
   var body = ME.querySelector('.pl-activity-body');
   body.textContent = '';
+  var controls = ME.querySelector('.pl-run-controls');
+  controls.hidden = !run;
+  if (run) {
+    var requested = run.control && run.control.requested || (run.paused ? 'pause' : '');
+    var liveControl = !!run.active;
+    controls.querySelector('[data-runact="pause"]').hidden = !liveControl || requested === 'pause';
+    controls.querySelector('[data-runact="stop"]').hidden = !liveControl || requested === 'stop';
+    controls.querySelector('[data-runact="resume"]').hidden = liveControl || !(run.paused || run.control_state === 'stopped' || run.outcome === 'STOPPED' || run.interrupted || run.stale);
+    controls.querySelector('[data-runact="resume"]').disabled = controlBusy;
+    controls.querySelector('[data-runact="pause"]').disabled = controlBusy;
+    controls.querySelector('[data-runact="stop"]').disabled = controlBusy;
+    ME.querySelector('.pl-resume-note').hidden = liveControl;
+    ME.querySelector('.pl-control-state').textContent = requested === 'pause' && liveControl ? 'Pause requested; the current model/tool boundary will finish.' : requested === 'stop' && liveControl ? 'Stop requested; the current model/tool boundary will finish.' : run.paused ? 'Paused — no new model round will begin.' : run.outcome === 'STOPPED' ? 'Stopped — checkpoint available for an authorized resume.' : run.active ? 'Active run controls' : 'Run controls';
+  }
   if (run && (run.interrupted || run.stale) && !run.active) {
     body.appendChild(elWith('pl-recovery', 'This run did not reach a normal finish. Its saved checkpoint remains available for an authorized next turn; unfinished changes are not verified completion.'));
   }
@@ -201,6 +248,15 @@ function renderActivity() {
       renderHandoff(hh, historyData); body.appendChild(hh);
       return;
     }
+  }
+  if (activityView === 'review') {
+    if (!run.active && historyRunId === run.run_id && historyData && historyData.status === 'ok') {
+      renderReview(body, historyData);
+    } else renderReview(body, run);
+    if (!run.active && !run.fromCard && (!historyData || historyRunId !== run.run_id)) {
+      historyRunId = run.run_id; historyData = null; loadHistory();
+    }
+    return;
   }
   if (activityView === 'handoff') {
     var cardDurable = run.fromCard && run.handoff;
@@ -809,6 +865,29 @@ function startLive() {
 }
 
 me.ready = function () {
+  ME.querySelectorAll('[data-runact]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var run = activityState.run || activityState.recent[0];
+      if (!run || controlBusy) return;
+      var action = b.dataset.runact;
+      var note = ME.querySelector('.pl-resume-note').value.trim();
+      controlBusy = true;
+      ME.querySelector('.pl-control-note').textContent = action === 'resume' ? 'Resuming from the saved checkpoint…' : 'Requesting a safe-boundary ' + action + '…';
+      send_run_control(run.run_id || '', run.claim || '', action, note, '', null, function (raw) {
+        controlBusy = false;
+        var r = activityEnvelope(raw);
+        if (!r || r.status !== 'ok') {
+          ME.querySelector('.pl-control-note').textContent = (r && r.msg) || action + ' failed';
+          return;
+        }
+        ME.querySelector('.pl-control-note').textContent = action === 'resume' ? 'Resumed; waiting for the new run’s first activity.' : 'Requested. The current boundary will finish; no new model round will start after it is observed.';
+        if (action === 'resume') ME.querySelector('.pl-resume-note').value = '';
+        activityCursor = 0; activityState.events = []; activityRunId = '';
+        load(); probeActivity();
+      });
+      renderActivity();
+    });
+  });
   ME.querySelectorAll('[data-aview]').forEach(function (b) {
     b.addEventListener('click', function () {
       activityView = b.dataset.aview;

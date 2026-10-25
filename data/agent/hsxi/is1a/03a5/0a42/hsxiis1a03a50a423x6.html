@@ -25,9 +25,18 @@
         <button type="button" data-aview="now">now</button>
         <button type="button" data-aview="activity">activity</button>
         <button type="button" data-aview="handoff">handoff</button>
+        <button type="button" data-aview="review">review</button>
         <button type="button" data-aview="history">history</button>
       </span>
     </header>
+    <div class="pl-run-controls" hidden>
+      <span class="pl-control-state lbl"></span>
+      <button type="button" data-runact="pause">pause</button>
+      <button type="button" data-runact="stop">stop</button>
+      <button type="button" data-runact="resume">resume</button>
+      <input class="pl-resume-note" placeholder="optional guidance for the next turn" aria-label="Resume guidance">
+      <span class="pl-control-note lbl"></span>
+    </div>
     <div class="pl-activity-body"></div>
   </section>
   <div class="pl-board"></div>

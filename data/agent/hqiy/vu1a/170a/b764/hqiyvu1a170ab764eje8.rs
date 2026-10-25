@@ -85,8 +85,12 @@ if kind == "tool_result" || kind == "tool_skipped" {
 if kind == "finish" {
     r.put_boolean("active", false); r.put_int("ended", now); r.remove_property("pending_tool");
     let interrupted = r.try_get_string("phase").unwrap_or_default() == "interrupted" || r.try_get_string("outcome").unwrap_or_default() == "ERROR";
+    let controlled = r.try_get_string("outcome").unwrap_or_default();
     r.put_boolean("interrupted", interrupted);
-    if interrupted { r.put_string("state", "interrupted"); }
+    if controlled == "PAUSED" || controlled == "STOPPED" {
+        r.put_string("state", &controlled.to_lowercase());
+        r.put_boolean("paused", controlled == "PAUSED");
+    } else if interrupted { r.put_string("state", "interrupted"); }
 }
 let seq = r.try_get_int("seq").unwrap_or(0) + 1;
 if kind == "checkpoint" || kind == "observation" { r.put_int("checkpoint_seq", seq); }
@@ -95,7 +99,6 @@ if kind == "control_applied" {
     r.put_string("control_state", if requested=="pause" {"paused"} else {"stopped"});
     if let Ok(c0)=event.try_get_object("control") {r.put_object("control",c0);}
 }
-if kind == "checkpoint" || kind == "observation" { r.put_int("checkpoint_seq", seq); }
 r.put_int("updated", now); r.put_int("last_event_at", now);
 r.put_int("seq", seq);
 let mut e = event.deep_copy();

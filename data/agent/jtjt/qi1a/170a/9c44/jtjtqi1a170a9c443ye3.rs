@@ -11,12 +11,13 @@ fn copy_summary(src: &DataObject) -> DataObject {
     let mut r = DataObject::new();
     for k in ["run_id", "claim", "turn", "phase", "state", "active", "stale", "pid",
               "started", "updated", "last_event_at", "round", "max_rounds", "tool_calls",
-              "errors", "failure_streak", "duplicate_streak", "pending_tool", "checkpoint",
+              "errors", "failure_streak", "duplicate_streak", "pending_tool", "checkpoint", "paused", "stop_requested", "control_state", "control_note", "control",
               "context", "finish", "handoff", "ended", "outcome", "seq", "delivery", "process_start", "interrupted", "previous_run_id", "recovered", "inherited_checkpoint", "checkpoint_seq"] {
         if let Ok(v) = src.try_get_property(k) { r.set_property(k, v); }
     }
     if let Ok(v) = src.try_get_object("pending_tool") { r.put_object("pending_tool", v); }
     if let Ok(v) = src.try_get_object("delivery") { r.put_object("delivery", v); }
+    if let Ok(v) = src.try_get_object("control") { r.put_object("control", v); }
     if let Ok(v) = src.try_get_object("inherited_checkpoint") { r.put_object("inherited_checkpoint", v); }
     if let Ok(v) = src.try_get_object("checkpoint") { r.put_object("checkpoint", v); }
     if let Ok(v) = src.try_get_object("context") { r.put_object("context", v); }

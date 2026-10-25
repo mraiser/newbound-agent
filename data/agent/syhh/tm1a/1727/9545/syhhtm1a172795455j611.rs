@@ -72,6 +72,16 @@ if action=="resume" {
     }
     drop(_guard);
     let h=api.agent.plan.board_hash().get_string("hash");
+    let fresh=api.agent.plan.board();
+    for x in fresh.get_array("entries").objects(){let e=x.object();if e.try_get_string("claim").unwrap_or_default()!=claim{continue;}
+        if e.has("control") {
+            let lifecycle=e.try_get_string("tags").unwrap_or_default();
+            let to=if lifecycle.split(',').any(|t|t.trim()=="accepted"){"accepted"}else{"in-progress"};
+            let mr=api.agent.plan.move_item(claim.clone(),to.to_string(),h.clone(),nn_sessionid.clone());
+            if mr.try_get_string("status").unwrap_or_default()!="ok" {return mr;}
+        }
+    }
+    let h=api.agent.plan.board_hash().get_string("hash");
     let r=api.agent.plan.step_item(claim,h,nn_sessionid);
     return r;
 }

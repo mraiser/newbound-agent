@@ -80,6 +80,23 @@
 .pl-card-continuity:hover { border-color: var(--accent, #f0a63c); }
 .pl-recovery { padding: 7px 9px; margin-bottom: 8px; border-left: 3px solid var(--bad, #c0564f);
   color: var(--bad, #c0564f); background: var(--bg); line-height: 1.4; overflow-wrap: anywhere; }
+.pl-run-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+  padding: 7px 10px; border-bottom: 1px solid var(--line); }
+.pl-run-controls[hidden] { display: none; }
+.pl-run-controls button { background: var(--bg); color: var(--text-dim); border: 1px solid var(--line);
+  border-radius: 5px; padding: 4px 9px; cursor: pointer; font: inherit; }
+.pl-run-controls button:hover { color: var(--accent, #f0a63c); border-color: var(--accent, #f0a63c); }
+.pl-run-controls button:disabled { opacity: .5; cursor: wait; }
+.pl-control-state { flex: 1; min-width: 190px; }
+.pl-control-note { flex-basis: 100%; overflow-wrap: anywhere; }
+.pl-resume-note { flex: 1; min-width: 180px; background: var(--bg); color: var(--text);
+  border: 1px solid var(--line); border-radius: 5px; padding: 4px 7px; font: inherit; }
+.pl-review-goal { white-space: pre-wrap; overflow-wrap: anywhere; color: var(--text-dim); }
+.pl-review-list { display: flex; flex-direction: column; gap: 6px; }
+.pl-review-row { white-space: pre-wrap; overflow-wrap: anywhere; padding: 6px 8px;
+  border-left: 2px solid var(--line); background: var(--bg); }
+.pl-review-row.good { border-left-color: var(--good, #73b884); }
+.pl-review-row.bad { border-left-color: var(--bad, #c0564f); color: var(--bad, #c0564f); }
 @media (max-width: 760px) { .pl-now-grid, .pl-manifest { grid-template-columns: 1fr; }
   .pl-activity { max-height: 52%; } }
 

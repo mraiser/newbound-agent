@@ -205,6 +205,12 @@ fn run(gen: i64) {
             for (i, e) in entries.iter().enumerate() {
                 let claim = e.try_get_string("claim").unwrap_or_default();
                 if claim.trim().is_empty() { continue; }
+                // A durable pause is an item-level hold, not merely a runtime
+                // status. It survives worker restarts and must not be undone
+                // by the scheduler before an explicit resume.
+                if e.try_get_object("control").ok().and_then(|c| c.try_get_string("requested").ok()).unwrap_or_default() == "pause" {
+                    continue;
+                }
                 let t = tagset(e);
                 let has = |s: &str| t.iter().any(|x| x == s);
                 // `blocked` waits for a human (moved back to accepted) - never

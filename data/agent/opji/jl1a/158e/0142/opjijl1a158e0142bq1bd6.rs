@@ -115,6 +115,11 @@ let tags = e.try_get_string("tags").unwrap_or_default().to_lowercase();
 let toks: Vec<&str> = tags.split(',').map(|t| t.trim()).collect();
 let has_tag = |s: &str| toks.iter().any(|t| *t == s);
 let was_accepted = has_tag("accepted");
+if e.try_get_object("control").ok().and_then(|c| c.try_get_string("requested").ok()).unwrap_or_default() == "pause" {
+    out.put_string("status", "ok"); out.put_string("action", "paused");
+    out.put_string("msg", "item is paused; use resume to authorize its next turn from the saved checkpoint");
+    return out;
+}
 if !was_accepted && !has_tag("in-progress") {
     out.put_string("status", "err");
     out.put_string("msg", "gate: only `accepted` or `in-progress` plan items are steppable - proposed stays human-only and the agent never self-promotes; a `blocked` item waits for a human to move it back to accepted");
@@ -490,6 +495,13 @@ if !loop_returned {
         a.put_object("event", event); let _ = cmd.execute(a);
     }));
 }
+let run_control_state = |rid: &str| -> DataObject {
+    let store=flowlang::datastore::DataStore::new();
+    if !store.exists("runtime","agent_plan_runs") {return DataObject::new();}
+    let runs=store.get_data("runtime","agent_plan_runs").get_object("data").get_array("runs");
+    for i in 0..runs.len(){let r=runs.get_object(i);if r.try_get_string("run_id").unwrap_or_default()==rid{return r.try_get_object("control").unwrap_or_else(|_|DataObject::new());}}
+    DataObject::new()
+};
 let read_run_structured = |rid: &str| -> DataObject {
     if rid.is_empty() { return DataObject::new(); }
     let store = flowlang::datastore::DataStore::new();
@@ -632,6 +644,11 @@ last_run.put_string("outcome", &tl_status); last_run.put_boolean("recovered", re
 last_run.put_boolean("ok", ok_step); last_run.put_int("turn", prior + 1);
 e.put_object("last_run", last_run);
 e.remove_property("active_run");
+if tl_status == "PAUSED" || tl_status == "STOPPED" {
+    let mut c = run_control_state(&actual_run_id);
+    if !c.has("requested") {c.put_string("requested", &tl_status.to_lowercase());}
+    c.put_string("state", &tl_status.to_lowercase()); e.put_object("control",c);
+} else { e.remove_property("control"); }
 let mut continuity_state = DataObject::new();
 continuity_state.put_int("version", 2); continuity_state.put_string("source", "kb.plan.checkpoint");
 continuity_state.put_string("run_id", &actual_run_id);
@@ -829,10 +846,17 @@ if premature_done {
     // next unblocked item until a human moves it back to accepted.
     out.put_string("action", "blocked");
     out.put_boolean("moved_to_blocked", moved_to_blocked);
+} else if tl_status == "PAUSED" || tl_status == "STOPPED" {
+    out.put_string("action", &tl_status.to_lowercase());
+    out.put_string("msg", if tl_status == "PAUSED" { "paused at a safe model/tool boundary; resume from the saved checkpoint" } else { "stopped at a safe model/tool boundary; resume is an explicit new authorized turn" });
 } else {
     out.put_string("action", if ok_step { "stepped" } else { "step_failed" });
 }
 out.put_boolean("ok", ok_step);
+if tl_status == "PAUSED" || tl_status == "STOPPED" {
+    out.put_string("action", &tl_status.to_lowercase());
+    out.put_boolean("ok", true);
+}
 out.put_string("home", "agent.llm.tool_loop");
 out.put_string("result", &result_json);
 out.put_int("time", now);
