@@ -90,12 +90,13 @@ if action=="resume" {
     let h=api.agent.plan.board_hash().get_string("hash");
     let sid=nn_sessionid.clone();
     let r=api.agent.plan.step_item(claim,h,nn_sessionid);
+    let resume_ok = r.try_get_string("status").unwrap_or_default()=="ok" && !["gated","start_failed","needs_reapproval","defer_stale"].contains(&r.try_get_string("action").unwrap_or_default().as_str());
     // Preserve WHY work resumed, not just the fact that another turn ran.
     let b2=api.agent.plan.board();
     let mut arr=b2.get_array("entries");
     for i in 0..arr.len(){let mut e=arr.get_object(i);if e.try_get_string("claim").unwrap_or_default()!=resume_claim{continue;}
         let mut receipt=DataObject::new();receipt.put_string("run_id",&resume_rid);receipt.put_string("note",&resume_note);
-        receipt.put_int("time",flowlang::flowlang::system::time::time());receipt.put_string("state","resumed");e.put_object("resume",receipt);
+        receipt.put_int("time",flowlang::flowlang::system::time::time());receipt.put_string("state",if resume_ok{"resumed"}else{"resume_failed"});e.put_object("resume",receipt);
         let _=api.dev.code.patch_control_facet("kb".to_string(),"plan".to_string(),"memory".to_string(),"".to_string(),arr.to_string(),b2.get_string("hash"),"plan resumed with guidance".to_string(),"plan-board".to_string(),sid);
         break;
     }

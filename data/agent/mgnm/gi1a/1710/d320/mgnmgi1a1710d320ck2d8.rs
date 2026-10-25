@@ -41,6 +41,10 @@ for x in b.get_array("entries").objects() {
             out.put_boolean("active", r.try_get_boolean("active").unwrap_or(false) && !stale);
             out.put_boolean("stale", stale);
             if stale { out.put_string("state", "interrupted"); out.put_boolean("interrupted", true); }
+            if let Ok(control) = r.try_get_object("control") { out.put_object("control", control); }
+            out.put_string("control_state", &r.try_get_string("control_state").unwrap_or_default());
+            out.put_string("control_note", &r.try_get_string("control_note").unwrap_or_default());
+            out.put_boolean("paused", r.try_get_boolean("paused").unwrap_or(false));
             break;
         }
     }

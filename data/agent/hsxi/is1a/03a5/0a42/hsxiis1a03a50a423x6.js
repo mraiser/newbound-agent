@@ -49,7 +49,7 @@ function renderReview(host, run) {
   var cp = run && run.handoff && typeof run.handoff === 'object' ? run.handoff : run && run.checkpoint && typeof run.checkpoint === 'object' ? run.checkpoint : {};
   var context = run && run.context || {};
   host.appendChild(elWith('pl-subhead', 'Goal and scope'));
-  host.appendChild(elWith('pl-review-goal', context.goal || run.claim || 'The plan item claim is the goal; open the card for its full detail.'));
+  host.appendChild(elWith('pl-review-goal', context.goal || (run.claim || '') + (activityState.item && activityState.item.detail ? '\n\n' + activityState.item.detail : '') || 'The plan item claim is the goal; open the card for its full detail.'));
   if (context.detail_policy) appendKV(host, 'context policy', context.detail_policy === 'full' ? 'Full goal and detail supplied' : context.detail_policy);
   host.appendChild(elWith('pl-subhead', 'Observed changes — not completion evidence by themselves'));
   var changes = cp.changes || [];
@@ -65,7 +65,7 @@ function renderReview(host, run) {
   else {
     var el = elWith('pl-review-list');
     evidence.forEach(function (v) { el.appendChild(elWith('pl-review-row good', '✓ ' + (v.tool || '') + ' · ' + (v.target || '') + (v.result ? '\n' + v.result : ''))); });
-    if (cp.verified) el.appendChild(elWith('pl-review-row good', 'Reported VERIFIED evidence:\n' + cp.verified));
+    if (cp.verified) el.appendChild(elWith('pl-review-row good', (evidence.length ? 'Model-reported VERIFIED evidence' : 'Inherited or model-reported VERIFIED evidence; inspect the cited run before treating it as newly executed here') + ':\n' + cp.verified));
     host.appendChild(el);
   }
   host.appendChild(elWith('pl-subhead', 'Unresolved work and risks'));
@@ -207,7 +207,7 @@ function renderActivity() {
   var title = ME.querySelector('.pl-activity-title');
   var updated = ME.querySelector('.pl-activity-updated');
   title.textContent = a.error ? 'Activity unavailable: ' + a.error :
-    run ? ((run.active ? 'Working: ' : (run.paused || run.outcome === 'PAUSED' ? 'Paused: ' : run.outcome === 'STOPPED' ? 'Stopped: ' : run.stale || run.interrupted ? 'Interrupted: ' : activityView === 'history' ? 'Run history: ' : 'Latest run: ')) + (run.claim || run.run_id)) : 'No plan runs recorded yet';
+    run ? ((run.active && !(run.control && run.control.requested) ? 'Working: ' : (run.paused || run.outcome === 'PAUSED' ? 'Paused: ' : run.outcome === 'STOPPED' || run.control_state === 'stopped' ? 'Stopped: ' : run.stale || run.interrupted ? 'Interrupted: ' : activityView === 'history' ? 'Run history: ' : 'Latest run: ')) + (run.claim || run.run_id)) : 'No plan runs recorded yet';
   updated.textContent = run && run.updated ? 'last event ' + relTime(run.updated) : '';
   panel.querySelectorAll('[data-aview]').forEach(function (b) {
     b.classList.toggle('on', b.dataset.aview === activityView);
@@ -242,7 +242,7 @@ function renderActivity() {
       return;
     }
     if (historyData) {
-      body.appendChild(elWith('pl-subhead', (historyData.active ? 'Active' : historyData.stale ? 'Interrupted' : 'Finished') + ' run · ' + (historyData.run_id || '')));
+      body.appendChild(elWith('pl-subhead', (historyData.active ? 'Active' : historyData.outcome === 'STOPPED' || historyData.control_state === 'stopped' ? 'Stopped' : historyData.outcome === 'PAUSED' || historyData.paused ? 'Paused' : historyData.stale || historyData.interrupted ? 'Interrupted' : 'Finished') + ' run · ' + (historyData.run_id || '')));
       appendEvents(body, historyData.events || []);
       var hh = elWith('pl-history-handoff');
       renderHandoff(hh, historyData); body.appendChild(hh);
@@ -602,6 +602,7 @@ function card(e) {
     cont.title = 'Inspect this item’s run, inherited context, and checkpoint';
     cont.addEventListener('click', function (ev) {
       ev.stopPropagation();
+      activityState.item = {claim: e.claim, detail: e.detail || '', tags: e.tags || ''};
       historyRunId = run.run_id || (e.checkpoint && e.checkpoint.run_id) || '';
       historyData = null; historyLoading = !!historyRunId;
       activityView = 'handoff';

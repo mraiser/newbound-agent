@@ -46,7 +46,7 @@ for i in 0..arr.len() {
         e.put_string("tags", &kept.join(","));
         // Human lifecycle intent outranks a stale run hold. Re-accepting is
         // the existing re-authorization; it clears pause, never verification.
-        if lifecycle == "accepted" { e.remove_property("control"); }
+        if lifecycle == "accepted" || lifecycle == "in-progress" { e.remove_property("control"); }
         // Re-approval hook (convergence guard): moving an item TO `accepted`
         // is the human re-authorization. If its step_log has reached the cap
         // (i.e. step_item refused it with needs_reapproval), reset the log so
