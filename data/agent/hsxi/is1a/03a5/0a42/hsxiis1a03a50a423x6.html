@@ -16,6 +16,19 @@
     <span class="pl-autonomy-dot" aria-hidden="true"></span>
     <span class="pl-autonomy-text"></span>
   </div>
+  <section class="pl-activity" aria-label="Autonomous activity" hidden>
+    <header class="pl-activity-head">
+      <strong class="pl-activity-title">No active run</strong>
+      <span class="pl-activity-updated lbl"></span>
+      <span class="pl-activity-view">
+        <button type="button" data-aview="now">now</button>
+        <button type="button" data-aview="activity">activity</button>
+        <button type="button" data-aview="handoff">handoff</button>
+        <button type="button" data-aview="history">history</button>
+      </span>
+    </header>
+    <div class="pl-activity-body"></div>
+  </section>
   <div class="pl-board"></div>
   <form class="pl-add">
     <input class="pl-add-claim" placeholder="new plan item — one atomic claim" aria-label="New plan item claim">

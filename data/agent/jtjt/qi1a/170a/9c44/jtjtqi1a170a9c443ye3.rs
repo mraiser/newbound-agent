@@ -12,7 +12,7 @@ fn copy_summary(src: &DataObject) -> DataObject {
     for k in ["run_id", "claim", "turn", "phase", "state", "active", "stale", "pid",
               "started", "updated", "last_event_at", "round", "max_rounds", "tool_calls",
               "errors", "failure_streak", "duplicate_streak", "pending_tool", "checkpoint",
-              "context", "finish", "handoff", "ended", "outcome"] {
+              "context", "finish", "handoff", "ended", "outcome", "seq"] {
         if let Ok(v) = src.try_get_property(k) { r.set_property(k, v); }
     }
     if let Ok(v) = src.try_get_object("pending_tool") { r.put_object("pending_tool", v); }
@@ -30,7 +30,7 @@ let mut runs: Vec<DataObject> = Vec::new();
 if store.exists("runtime", "agent_plan_runs") {
     let d = store.get_data("runtime", "agent_plan_runs").get_object("data");
     if let Ok(a) = d.try_get_array("runs") {
-        for i in 0..a.len() { if let Ok(r) = a.try_get_object(i) { runs.push(r); } }
+        for i in 0..a.len() { if let Ok(r) = a.try_get_object(i) { runs.push(r.deep_copy()); } }
     }
 }
 // A live run from before this service boot is interrupted, never active. Do
@@ -48,14 +48,12 @@ for r in runs.iter_mut() {
     }
 }
 runs.sort_by(|a, b| b.try_get_int("updated").unwrap_or(0).cmp(&a.try_get_int("updated").unwrap_or(0)));
-let mut summaries = DataArray::new();
 let mut recent = DataArray::new();
 for r in runs.iter().take(12) { recent.push_object(copy_summary(r)); }
 let active = runs.iter().find(|r| r.try_get_boolean("active").unwrap_or(false)
     && r.try_get_int("pid").unwrap_or(0) == std::process::id() as i64
     && (r.try_get_int("boot").unwrap_or(0) == 0 || boot == 0 || r.try_get_int("boot").unwrap_or(0) == boot));
 if let Some(r) = active {
-    summaries.push_object(copy_summary(r));
     let mut events = DataArray::new();
     let all = r.try_get_array("events").unwrap_or_else(|_| DataArray::new());
     let cap = limit.clamp(1, 400) as usize;
@@ -76,6 +74,7 @@ if let Some(r) = active {
     out.put_int("now", now);
     out.put_int("boot", boot);
     out.put_int("event_cap", 400);
+    out.put_object("run", copy_summary(r));
     out.put_boolean("truncated", n > cap);
     if n > cap {
         let mut kept = DataArray::new();

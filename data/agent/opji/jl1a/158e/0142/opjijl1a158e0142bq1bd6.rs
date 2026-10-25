@@ -186,7 +186,7 @@ if e.has("step_log") {
             let mut latest_ckpt: i64 = -1;
             for i in 0..n {
                 if let Ok(le) = sl.try_get_object(i) {
-                    if le.try_get_string("result").unwrap_or_default().starts_with("[budget checkpoint") {
+                    if le.has("checkpoint") || le.try_get_string("result").unwrap_or_default().starts_with("[budget checkpoint") {
                         latest_ckpt = i as i64;
                     }
                 }
@@ -196,11 +196,15 @@ if e.has("step_log") {
                 if let Ok(le) = sl.try_get_object(i) {
                     let home = le.try_get_string("home").unwrap_or_default();
                     let ok = le.try_get_boolean("ok").unwrap_or(false);
-                    let res = le.try_get_string("result").unwrap_or_default();
-                    let is_ckpt = res.starts_with("[budget checkpoint");
+                    let res = le.try_get_string("checkpoint").ok()
+                        .filter(|s| !s.trim().is_empty())
+                        .unwrap_or_else(|| le.try_get_string("result").unwrap_or_default());
+                    let is_ckpt = le.has("checkpoint") || res.starts_with("[budget checkpoint");
                     let keep = (i as i64 == latest_ckpt) || (!is_ckpt && (i as i64) >= n as i64 - 3);
                     if !keep { continue; }
-                    let res: String = if i as i64 == latest_ckpt { res } else { res.chars().take(200).collect() };
+                    // Latest continuation is substantial and bounded; older
+                    // steps remain useful evidence, not 200-char amnesia.
+                    let res: String = if i as i64 == latest_ckpt { res.chars().take(8000).collect() } else { res.chars().take(1200).collect() };
                     parts.push(format!("- [{}] {} -> {}", if ok { "ok" } else { "err" }, home, res));
                 }
             }
@@ -367,14 +371,41 @@ if was_accepted {
     out.put_boolean("moved_to_in_progress", true);
 }
 // Reason + act, panic-contained: ONE bounded autonomous turn via tool_loop.
+// Dispatch is a short-lived handoff, not a second plan authority. The loop
+// claims it by exact prompt; no tool_loop signature or other caller changes.
 let now = flowlang::flowlang::system::time::time();
+let run_id = format!("plan-{}-{}", now, flowlang::flowlang::system::unique_session_id::unique_session_id());
+let mut context_manifest = DataObject::new();
+context_manifest.put_int("turn", prior + 1);
+context_manifest.put_int("max_turns", cap);
+context_manifest.put_int("prompt_chars", prompt.chars().count() as i64);
+context_manifest.put_int("detail_chars", detail.chars().count() as i64);
+context_manifest.put_int("prior_chars", prior_steps.chars().count() as i64);
+context_manifest.put_int("notes_presented", notes_presented.len() as i64);
+context_manifest.put_int("notes_new", notes_new_count);
+context_manifest.put_string("detail_policy", "full");
+context_manifest.put_string("checkpoint_policy", "latest continuation in full, bounded at 8000 characters");
+context_manifest.put_string("history_policy", "recent non-checkpoint steps bounded at 1200 characters; inspect run activity for details");
+{
+    let mut globals = flowlang::datastore::DataStore::globals();
+    let mut d = DataObject::new(); d.put_string("run_id", &run_id);
+    d.put_string("prompt", &prompt); d.put_string("claim", &claim); d.put_int("turn", prior + 1);
+    d.put_object("context", context_manifest); globals.put_object("AGENT_PLAN_DISPATCH", d);
+}
 let ran = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
     let cmd = flowlang::command::Command::lookup("agent", "llm", "tool_loop");
     let mut a = DataObject::new();
     a.put_string("prompt", &prompt);
     cmd.execute(a)
 }));
-let (ok_step, result_json, tl_status) = match ran {
+{
+    let mut globals = flowlang::datastore::DataStore::globals();
+    if let Ok(d) = globals.try_get_object("AGENT_PLAN_DISPATCH") {
+        if d.try_get_string("run_id").unwrap_or_default() == run_id { globals.remove_property("AGENT_PLAN_DISPATCH"); }
+    }
+}
+out.put_string("run_id", &run_id);
+let (ok_step, result_json, tl_status, handoff_checkpoint, actual_run_id) = match ran {
     Ok(Ok(rr)) => {
         // Log the FINAL ANSWER in FULL (owner, 2026-10) - never the messages
         // transcript (a 143KB tool_loop dump per step would bloat kb.plan and
@@ -394,10 +425,30 @@ let (ok_step, result_json, tl_status) = match ran {
         }
         if answer.is_empty() { answer = rr.to_string(); }
         if st.is_empty() { st = "IN_PROGRESS".to_string(); }
-        (true, answer, st)
+        let actual_run = rr.try_get_string("run_id").ok()
+            .or_else(|| rr.try_get_object("a").ok().and_then(|a| a.try_get_string("run_id").ok()))
+            .unwrap_or_else(|| run_id.clone());
+        let checkpoint = if actual_run.is_empty() { String::new() } else {
+            let store = flowlang::datastore::DataStore::new();
+            if store.exists("runtime", "agent_plan_runs") {
+                let runs = store.get_data("runtime", "agent_plan_runs").get_object("data").get_array("runs");
+                let mut found = String::new();
+                for i in 0..runs.len() {
+                    let r = runs.get_object(i);
+                    if r.try_get_string("run_id").unwrap_or_default() == actual_run {
+                        if let Ok(h) = r.try_get_object("handoff") { found = h.try_get_string("checkpoint").unwrap_or_default(); }
+                    }
+                }
+                found
+            } else { String::new() }
+        };
+        let checkpoint = if !checkpoint.is_empty() { checkpoint } else {
+            format!("CONTINUATION FROM PREVIOUS PLAN TURN\nSTATUS: {}\nRESPONSE / EVIDENCE:\n{}\nNEXT: Continue from the stated response and verify a new concrete increment. The preceding run did not supply a checkpoint; inspect its run activity and do not repeat a failed call without new information.", st, answer.chars().take(7000).collect::<String>())
+        };
+        (true, answer, st, checkpoint, actual_run)
     }
-    Ok(Err(pe)) => (false, format!("{{\"error\":\"{}\"}}", esc(&format!("{:?}", pe))), "ERROR".to_string()),
-    Err(_) => (false, "{\"error\":\"panic during executive reasoning\"}".to_string(), "ERROR".to_string()),
+    Ok(Err(pe)) => (false, format!("{{\"error\":\"{}\"}}", esc(&format!("{:?}", pe))), "ERROR".to_string(), "The previous run returned an execution error. Inspect its activity, diagnose the cause, and take a different verified approach.".to_string(), run_id.clone()),
+    Err(_) => (false, "{\"error\":\"panic during executive reasoning\"}".to_string(), "ERROR".to_string(), "The previous run panicked before a model checkpoint. Inspect its last recorded activity and resume with a different approach; do not assume unfinished writes were verified.".to_string(), run_id.clone()),
 };
 // FRESH BASE after the turn: the turn can run for minutes, the start
 // transition above already changed the board hash, and the turn itself (or a
@@ -443,6 +494,8 @@ entry_log.put_int("time", now);
 entry_log.put_string("home", "agent.llm.tool_loop");
 entry_log.put_boolean("ok", ok_step);
 entry_log.put_string("result", &result_json);
+entry_log.put_string("checkpoint", &handoff_checkpoint);
+entry_log.put_string("run_id", &actual_run_id);
 entry_log.put_string("author", "executive");
 entry_log.put_int("notes_presented", notes_presented.len() as i64);
 entry_log.put_int("notes_new", notes_new_count);

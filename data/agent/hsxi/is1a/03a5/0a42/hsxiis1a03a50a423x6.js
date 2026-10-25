@@ -33,6 +33,194 @@ var autonomyPending = null;
 var openClaims = {};
 var drafts = {}; // claim -> half-typed note text, survives a live re-render
 
+// Activity is a separate, instance-local stream. Tool events never alter the
+// kb.plan board hash, so a live timeline cannot race card/note edits.
+var activityState = { run: null, recent: [], events: [], error: '' };
+var activityChecking = false;
+var activityCursor = 0;
+var activityRunId = '';
+var activityView = 'now';
+var historyRunId = '';
+var historyData = null;
+var historyLoading = false;
+
+function activityDuration(ms) {
+  var s = Math.max(0, Math.floor((Date.now() - ms) / 1000));
+  if (s < 60) return s + 's';
+  var m = Math.floor(s / 60);
+  return m + 'm ' + (s % 60) + 's';
+}
+
+function activityLine(e) {
+  if (!e) return '';
+  var tool = e.tool ? String(e.tool).replace(/^dev-code-/, '') : '';
+  var target = e.target && e.target !== tool ? ' · ' + e.target : '';
+  var streak = Number(e.streak || 0) > 1 ? ' · identical failure ' + e.streak + '/3' : '';
+  var label = {
+    model_wait: 'Waiting for model response',
+    model_error: 'Model backend error',
+    model_text: 'Model response received',
+    tool_requested: 'Tool requested',
+    tool_running: 'Tool running',
+    tool_result: e.ok ? 'Tool succeeded' : 'Tool failed',
+    tool_skipped: 'Duplicate tool call suppressed',
+    checkpoint: 'Checkpoint saved',
+    finish: 'Run finished',
+    start: 'Run started'
+  }[e.kind] || e.phase || e.kind || 'Activity';
+  return label + (tool ? ': ' + tool : '') + target + streak;
+}
+
+function elWith(cls, text) {
+  var el = document.createElement('div');
+  if (cls) el.className = cls;
+  if (text !== undefined && text !== null) el.textContent = String(text);
+  return el;
+}
+
+function appendKV(host, key, value, cls) {
+  var row = elWith('pl-activity-kv');
+  row.appendChild(elWith('lbl', key));
+  row.appendChild(elWith('value' + (cls ? ' ' + cls : ''), value));
+  host.appendChild(row);
+  return row;
+}
+
+function appendEvents(host, events) {
+  var list = elWith('pl-event-list');
+  if (!events || !events.length) {
+    list.appendChild(elWith('pl-empty', 'No tool activity yet. The run may still be preparing context or waiting for the model.'));
+  } else events.forEach(function (e) {
+    var row = elWith('pl-event ' + (e.ok === false || /error|failed/.test(e.phase || '') ? 'bad' : ''));
+    var h = elWith('pl-event-h');
+    var tm = e.time ? new Date(e.time).toLocaleTimeString() : '';
+    h.textContent = tm + '  ·  ' + activityLine(e) + (e.round ? '  ·  round ' + e.round : '');
+    row.appendChild(h);
+    if (e.detail) {
+      var d = elWith('pl-event-detail', e.detail);
+      d.title = e.kind === 'tool_requested' ? 'Call id; raw arguments are not shown in the live stream.' : '';
+      row.appendChild(d);
+    }
+    list.appendChild(row);
+  });
+  host.appendChild(list);
+}
+
+function renderHandoff(host, run) {
+  var h = run && run.handoff || {};
+  var c = run && run.context || {};
+  var manifest = elWith('pl-manifest');
+  manifest.appendChild(elWith('pl-subhead', 'Context supplied at turn start'));
+  appendKV(manifest, 'goal / detail', c.detail_policy === 'full' ? 'Full goal and detail (' + (c.detail_chars || 0) + ' chars)' : 'See plan item');
+  appendKV(manifest, 'notes', (c.notes_presented || 0) + ' included · ' + (c.notes_new || 0) + ' new');
+  appendKV(manifest, 'prior context', (c.prior_chars || 0) + ' chars · ' + (c.checkpoint_policy || 'latest checkpoint'));
+  appendKV(manifest, 'history', c.history_policy || 'Bounded recent steps; run history available on demand');
+  host.appendChild(manifest);
+  host.appendChild(elWith('pl-subhead', 'Checkpoint available for resumption'));
+  host.appendChild(elWith('pl-checkpoint', h.checkpoint || run.checkpoint ||
+    'No checkpoint yet. It is saved when the turn reaches a checkpoint/finish boundary; the live activity above shows work already observed.'));
+  if (h.next) { host.appendChild(elWith('pl-subhead', 'Next action')); host.appendChild(elWith('pl-checkpoint-next', h.next)); }
+  var note = elWith('pl-continuity-note', 'During this turn the agent has its live conversation. The next turn receives this bounded checkpoint plus the goal, notes, and recent step evidence—not an invisible replay of every raw message. It can inspect this run’s activity when it needs more detail.');
+  host.appendChild(note);
+}
+
+function renderActivity() {
+  var panel = ME.querySelector('.pl-activity');
+  if (!panel) return;
+  var a = activityState;
+  var run = a.run || a.recent[0] || null;
+  panel.hidden = !run && !a.error;
+  var title = ME.querySelector('.pl-activity-title');
+  var updated = ME.querySelector('.pl-activity-updated');
+  title.textContent = a.error ? 'Activity unavailable: ' + a.error :
+    run ? ((run.active ? 'Working: ' : (run.stale ? 'Interrupted: ' : 'Latest run: ')) + (run.claim || run.run_id)) : 'No plan runs recorded yet';
+  updated.textContent = run && run.updated ? 'last event ' + relTime(run.updated) : '';
+  panel.querySelectorAll('[data-aview]').forEach(function (b) {
+    b.classList.toggle('on', b.dataset.aview === activityView);
+  });
+  var body = ME.querySelector('.pl-activity-body');
+  body.textContent = '';
+  if (!run) { body.appendChild(elWith('pl-empty', a.error || 'Start an accepted plan item to see its live activity here.')); return; }
+  if (activityView === 'history') {
+    if (historyLoading) { body.appendChild(elWith('pl-empty', 'Loading run history…')); return; }
+    if (historyData && historyData.status === 'err') { body.appendChild(elWith('pl-empty', historyData.msg)); return; }
+    if (historyData) {
+      body.appendChild(elWith('pl-subhead', (historyData.active ? 'Active' : historyData.stale ? 'Interrupted' : 'Finished') + ' run · ' + (historyData.run_id || '')));
+      appendEvents(body, historyData.events || []);
+      var hh = elWith('pl-history-handoff');
+      renderHandoff(hh, historyData); body.appendChild(hh);
+      return;
+    }
+  }
+  if (activityView === 'handoff') { renderHandoff(body, run); return; }
+  if (activityView === 'activity') { appendEvents(body, a.events); return; }
+  if (activityView === 'history') { body.appendChild(elWith('pl-empty', 'Choose a recent run below.')); }
+  var now = elWith('pl-now-grid');
+  appendKV(now, 'state', run.stale ? 'interrupted — no live worker owns this old run' : (run.phase || run.state || 'preparing'), run.stale ? 'bad' : '');
+  appendKV(now, 'turn / round', 'turn ' + (run.turn || '—') + ' · round ' + (run.round || 0) + '/' + (run.max_rounds || '—'));
+  appendKV(now, 'tools / errors', (run.tool_calls || 0) + ' executed · ' + (run.errors || 0) + ' failures' + (run.failure_streak ? ' · current identical streak ' + run.failure_streak + '/3' : ''));
+  appendKV(now, 'elapsed', run.started ? activityDuration(run.started) : '—');
+  appendKV(now, 'last event', run.updated ? relTime(run.updated) : '—');
+  body.appendChild(now);
+  if (run.pending_tool && run.pending_tool.tool) appendKV(body, 'pending tool', run.pending_tool.tool + ' · ' + (run.pending_tool.target || ''));
+  var last = a.events[a.events.length - 1];
+  if (last) {
+    body.appendChild(elWith('pl-subhead', 'Latest observed activity'));
+    appendEvents(body, [last]);
+  } else if (!run.active) {
+    body.appendChild(elWith('pl-checkpoint-next', run.outcome ? 'Outcome: ' + run.outcome : 'Open activity or handoff to inspect this run.'));
+  }
+  if (a.recent.length) {
+    body.appendChild(elWith('pl-subhead', 'Recent turns — open activity or handoff'));
+    var rr = elWith('pl-run-list');
+    a.recent.forEach(function (r) {
+      var row = document.createElement('button'); row.type = 'button'; row.className = 'pl-run-row';
+      row.textContent = (r.active ? '● ' : r.stale ? '⚠ ' : '') + (r.claim || r.run_id) + ' · turn ' + (r.turn || '?') + ' · ' + (r.outcome || r.phase || '');
+      row.addEventListener('click', function () {
+        historyRunId = r.run_id; historyData = null; historyLoading = true; activityView = 'history';
+        loadHistory(); renderActivity();
+      }); rr.appendChild(row);
+    }); body.appendChild(rr);
+  }
+}
+
+function activityEnvelope(r) { return r && r.data && typeof r.data === 'object' ? r.data : r; }
+
+function probeActivity() {
+  if (activityChecking || !onScreen()) return;
+  activityChecking = true;
+  send_activity_status(activityCursor, 200, function (raw) {
+    activityChecking = false;
+    var r = activityEnvelope(raw);
+    if (!r || r.status !== 'ok') {
+      activityState.error = (r && r.msg) || 'could not read run activity';
+      renderActivity(); return;
+    }
+    activityState.error = '';
+    activityState.recent = r.recent || [];
+    var next = r.run || null;
+    var nextId = next && next.run_id || '';
+    if (nextId !== activityRunId) { activityCursor = 0; activityState.events = []; activityRunId = nextId; }
+    if (next) {
+      activityState.run = next;
+      activityCursor = next.seq || activityCursor;
+      (r.events || []).forEach(function (e) {
+        if (!activityState.events.some(function (x) { return x.seq === e.seq; })) activityState.events.push(e);
+      });
+      if (activityState.events.length > 400) activityState.events = activityState.events.slice(-400);
+    } else { activityState.run = null; activityCursor = 0; activityState.events = []; activityRunId = ''; }
+    if (activityView === 'history' && historyRunId && historyData && historyData.active) loadHistory();
+    renderActivity();
+  });
+}
+
+function loadHistory() {
+  if (!historyRunId) return;
+  send_activity_history(historyRunId, 0, 400, function (raw) {
+    historyLoading = false; historyData = activityEnvelope(raw); renderActivity();
+  });
+}
+
 // a note textarea with focus defers live reloads (a re-render would steal it)
 function typing() {
   var a = document.activeElement;
