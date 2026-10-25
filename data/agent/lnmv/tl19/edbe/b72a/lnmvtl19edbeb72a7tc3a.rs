@@ -80,6 +80,9 @@ let mut activity_guard = ActivityGuard { run_id: run_id.clone(), closed: run_id.
 // The provider-response receipt is real delivery evidence; also keep a
 // first-response recovery checkpoint so an early failure is not context-free.
 let mut first_response_checkpointed = false;
+fn label_next_is_missing(response: &str) -> bool {
+    !response.lines().any(|line| line.trim().trim_start_matches('#').trim().starts_with("NEXT:"))
+}
 fn extract_compile_errors(raw: &str) -> String {
   // Compile failures arrive as {"status":"err","kind":"compile_error","msg":"error[E0382]: ..."}
   // serialized to JSON, so newlines inside msg are escaped literals. Unescape, then keep
@@ -735,6 +738,13 @@ if !run_id.is_empty() {
     ci.put_string("last_action", &last_action); ci.put_string("last_result", &last_observation);
     ci.put_string("verification_pending", if dirty.is_empty() { "" } else { &dirty });
     ci.put_array("work", observed_work.clone());
+    // Keep the durable model NEXT when a final response omits its own label;
+    // the generic resume instruction must not erase actionable continuity.
+    if label_next_is_missing(&final_answer) {
+        if let Ok(old) = dispatch.try_get_object("inherited_checkpoint") {
+            if let Ok(next) = old.try_get_string("next") { ci.put_string("next", &next); }
+        }
+    }
     let cp = crate::agent::plan::checkpoint::checkpoint(ci);
     // Preserve the legacy budget prefix for downstream compatibility while
     // attaching structured continuity for both old and new readers.
