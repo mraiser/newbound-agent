@@ -754,7 +754,8 @@ if !run_id.is_empty() {
     };
     let mut ci = DataObject::new(); ci.put_string("kind", "response");
     let requested_now = crate::agent::plan::run_state::control(&run_id).try_get_string("requested").unwrap_or_default();
-    ci.put_string("status", if requested_now == "pause" { "PAUSED" } else if requested_now == "stop" { "STOPPED" } else { &status }); ci.put_string("response", &final_answer);
+    let controlled_now = (requested_now == "pause" || requested_now == "stop") && !checkpoint_reason.is_empty();
+    ci.put_string("status", if controlled_now && requested_now == "pause" { "PAUSED" } else if controlled_now && requested_now == "stop" { "STOPPED" } else { &status }); ci.put_string("response", &final_answer);
     ci.put_string("reason", &checkpoint_reason); ci.put_string("run_id", &run_id);
     ci.put_string("previous_run_id", &dispatch.try_get_string("previous_run_id").unwrap_or_default());
     ci.put_int("turn", run_turn); ci.put_int("round", iterations); ci.put_int("max_rounds", max_iterations);
@@ -782,8 +783,10 @@ if !run_id.is_empty() {
     ce.put_object("handoff", h); activity_emit(&run_id, ce);
     let mut e = DataObject::new(); e.put_string("kind", "finish");
     let interrupted = status == "ERROR" || status == "PAUSED" || status == "STOPPED" || !checkpoint_reason.is_empty();
-    e.put_string("phase", if interrupted { "interrupted" } else { "finished" });
-    e.put_string("state", if interrupted { "interrupted" } else { "run finished" });
+    let controlled_finish = crate::agent::plan::run_state::control(&run_id).try_get_string("requested").unwrap_or_default();
+    let phase = if controlled_finish == "pause" { "paused" } else if controlled_finish == "stop" { "stopped" } else if interrupted { "interrupted" } else { "finished" };
+    e.put_string("phase", phase);
+    e.put_string("state", if phase == "paused" || phase == "stopped" { phase } else if interrupted { "interrupted" } else { "run finished" });
     e.put_string("outcome", &status); e.put_string("detail", &final_answer);
     e.put_int("round", iterations); e.put_int("max_rounds", max_iterations);
     e.put_int("tool_calls", executed_calls); e.put_int("errors", error_count);
@@ -792,7 +795,7 @@ if !run_id.is_empty() {
     activity_guard.closed = true;
 }
 let control_status = crate::agent::plan::run_state::control(&run_id).try_get_string("requested").unwrap_or_default();
-if control_status == "pause" || control_status == "stop" {
+if (control_status == "pause" || control_status == "stop") && !checkpoint_reason.is_empty() {
     status = if control_status == "pause" { "PAUSED".to_string() } else { "STOPPED".to_string() };
     if !run_id.is_empty() {
         let mut ce = DataObject::new(); ce.put_string("kind", "control_applied");
