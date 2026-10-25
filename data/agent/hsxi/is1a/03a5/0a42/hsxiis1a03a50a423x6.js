@@ -109,6 +109,26 @@ function appendEvents(host, events) {
   host.appendChild(list);
 }
 
+function renderStructuredCheckpoint(host, cp) {
+  if (!cp || !cp.summary) return;
+  var box = elWith('pl-structured');
+  appendKV(box, 'progress', cp.summary);
+  if (cp.next) appendKV(box, 'next action', cp.next);
+  if (cp.blockers) appendKV(box, 'blockers', cp.blockers, 'bad');
+  if (cp.verified) appendKV(box, 'verified evidence', cp.verified, 'good');
+  if (cp.verification_pending) appendKV(box, 'verification pending', cp.verification_pending, 'bad');
+  if (cp.last_action) appendKV(box, 'last action', cp.last_action);
+  if (cp.last_result) appendKV(box, 'last result', cp.last_result);
+  if (cp.changes && cp.changes.length) {
+    box.appendChild(elWith('pl-subhead', 'Observed changes — not completion evidence by themselves'));
+    var changes = elWith('pl-change-list');
+    cp.changes.forEach(function (c) {
+      changes.appendChild(elWith('pl-change ' + (c.ok ? '' : 'bad'), (c.ok ? '✓ ' : '✕ ') + (c.tool || '') + ' · ' + (c.target || '') + (c.result ? ' — ' + c.result : '')));
+    }); box.appendChild(changes);
+  }
+  host.appendChild(box);
+}
+
 function renderHandoff(host, run) {
   var h = run && run.handoff || {};
   var c = run && run.context || {};

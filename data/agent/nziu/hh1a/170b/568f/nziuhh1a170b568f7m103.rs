@@ -42,10 +42,10 @@ for i in 0..runs.len() {
     out.put_int("boot_now", boot_now);
     if stale { out.put_string("state", "interrupted"); }
     out.put_array("events", page); out.put_boolean("truncated", n > cap);
-    for k in ["claim", "turn", "started", "updated", "ended", "pid", "boot", "outcome", "round", "max_rounds", "tool_calls", "errors"] {
+    for k in ["claim", "turn", "started", "updated", "ended", "pid", "boot", "outcome", "round", "max_rounds", "tool_calls", "errors", "interrupted", "previous_run_id", "recovered", "checkpoint_seq", "phase", "state"] {
         if let Ok(v) = r.try_get_property(k) { out.set_property(k, v); }
     }
-    for k in ["context", "handoff", "pending_tool", "delivery"] {
+    for k in ["context", "handoff", "pending_tool", "delivery", "inherited_checkpoint"] {
         if let Ok(v) = r.try_get_object(k) { out.put_object(k, v); }
     }
     if let Ok(v) = r.try_get_string("checkpoint") { out.put_string("checkpoint", &v); }

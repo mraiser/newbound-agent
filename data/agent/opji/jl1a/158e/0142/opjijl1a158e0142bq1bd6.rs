@@ -477,6 +477,21 @@ if !loop_returned {
         a.put_object("event", event); let _ = cmd.execute(a);
     }));
 }
+let read_run_structured = |rid: &str| -> DataObject {
+    if rid.is_empty() { return DataObject::new(); }
+    let store = flowlang::datastore::DataStore::new();
+    if !store.exists("runtime", "agent_plan_runs") { return DataObject::new(); }
+    let runs = store.get_data("runtime", "agent_plan_runs").get_object("data").get_array("runs");
+    for i in 0..runs.len() {
+        let r = runs.get_object(i);
+        if r.try_get_string("run_id").unwrap_or_default() == rid {
+            if let Ok(h) = r.try_get_object("handoff") {
+                if h.has("summary") { return h; }
+            }
+        }
+    }
+    DataObject::new()
+};
 let read_run_checkpoint = |rid: &str| -> String {
     if rid.is_empty() { return String::new(); }
     let store = flowlang::datastore::DataStore::new();
@@ -585,12 +600,35 @@ entry_log.put_string("home", "agent.llm.tool_loop");
 entry_log.put_boolean("ok", ok_step);
 entry_log.put_string("result", &result_json);
 entry_log.put_string("checkpoint", &handoff_checkpoint);
+entry_log.put_object("checkpoint_v2", structured_checkpoint.clone());
 entry_log.put_string("run_id", &actual_run_id);
+entry_log.put_string("previous_run_id", &previous_run_id);
+entry_log.put_boolean("recovered", recovered_run);
+entry_log.put_int("prompt_chars", prompt.chars().count() as i64);
 entry_log.put_string("author", "executive");
 entry_log.put_int("notes_presented", notes_presented.len() as i64);
 entry_log.put_int("notes_new", notes_new_count);
 log.push_object(entry_log);
 e.put_array("step_log", log);
+// Durable compact continuity facet. Runtime activity may roll off; the
+// checkpoint and its provenance remain with the item and its journal.
+e.put_object("checkpoint", structured_checkpoint.clone());
+let mut last_run = DataObject::new(); last_run.put_string("run_id", &actual_run_id);
+last_run.put_string("previous_run_id", &previous_run_id); last_run.put_int("time", now);
+last_run.put_string("outcome", &tl_status); last_run.put_boolean("recovered", recovered_run);
+last_run.put_boolean("ok", ok_step); last_run.put_int("turn", prior + 1);
+e.put_object("last_run", last_run);
+e.remove_property("active_run");
+let mut continuity_state = DataObject::new();
+continuity_state.put_int("version", 2); continuity_state.put_string("source", "kb.plan.checkpoint");
+continuity_state.put_string("run_id", &actual_run_id);
+continuity_state.put_string("previous_run_id", &previous_run_id);
+continuity_state.put_string("handoff_received", &handoff_received);
+continuity_state.put_int("prompt_chars", prompt.chars().count() as i64);
+continuity_state.put_boolean("recovered_from_unjournaled_run", recovered_run);
+continuity_state.put_boolean("structured", structured_checkpoint.has("summary"));
+continuity_state.put_string("delivery", if ok_step { "provider responded to the context prompt" } else { "no completed provider exchange" });
+e.put_object("continuity", continuity_state);
 // (C) mark the notes this turn was SHOWN as consumed - only on a turn that
 // actually reached the model (ok_step); a failed/panicked turn leaves them NEW
 // so the retry still flags them. Matched by note time, so a note appended

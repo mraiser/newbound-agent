@@ -12,11 +12,12 @@ fn copy_summary(src: &DataObject) -> DataObject {
     for k in ["run_id", "claim", "turn", "phase", "state", "active", "stale", "pid",
               "started", "updated", "last_event_at", "round", "max_rounds", "tool_calls",
               "errors", "failure_streak", "duplicate_streak", "pending_tool", "checkpoint",
-              "context", "finish", "handoff", "ended", "outcome", "seq", "delivery", "process_start"] {
+              "context", "finish", "handoff", "ended", "outcome", "seq", "delivery", "process_start", "interrupted", "previous_run_id", "recovered", "inherited_checkpoint", "checkpoint_seq"] {
         if let Ok(v) = src.try_get_property(k) { r.set_property(k, v); }
     }
     if let Ok(v) = src.try_get_object("pending_tool") { r.put_object("pending_tool", v); }
     if let Ok(v) = src.try_get_object("delivery") { r.put_object("delivery", v); }
+    if let Ok(v) = src.try_get_object("inherited_checkpoint") { r.put_object("inherited_checkpoint", v); }
     if let Ok(v) = src.try_get_object("checkpoint") { r.put_object("checkpoint", v); }
     if let Ok(v) = src.try_get_object("context") { r.put_object("context", v); }
     if let Ok(v) = src.try_get_object("handoff") {
@@ -56,6 +57,7 @@ for r in runs.iter_mut() {
     if active && (!live_pid || !same_process || (run_boot != 0 && boot != 0 && run_boot != boot)) {
         r.put_boolean("active", false);
         r.put_boolean("stale", true);
+        r.put_boolean("interrupted", true);
         r.put_string("state", "interrupted");
         r.put_string("outcome", "The service or worker stopped before this run reached its finish boundary.");
     }
