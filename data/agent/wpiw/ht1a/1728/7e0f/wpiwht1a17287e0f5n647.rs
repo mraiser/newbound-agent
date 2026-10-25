@@ -11,7 +11,7 @@ let emit=|rid:&str,kind:&str|{
 };
 emit("phase3-concurrency","start");
 let mut control=DataObject::new();control.put_string("requested","pause");control.put_string("state","requested");
-let ce=|kind:&str,requested:&str|{
+let ce=move |kind:&str,requested:&str|{
     let cmd=flowlang::command::Command::lookup("agent","plan","activity_emit");
     let mut a=DataObject::new();a.put_string("run_id","phase3-concurrency");let mut e=DataObject::new();e.put_string("kind",kind);e.put_string("requested",requested);e.put_string("phase",if requested=="pause"{"paused"}else{"stopped"});e.put_object("control",control.clone());a.put_object("event",e);let _=cmd.execute(a);
 };
@@ -25,7 +25,7 @@ check("control applied state is durable",found.try_get_string("control_state").u
 let c=crate::agent::plan::run_state::control("phase3-concurrency");
 check("boundary reader sees pause",c.try_get_string("requested").unwrap_or_default()=="pause");
 check("boundary reader distinguishes stop", {
-    let cmd=flowlang::command::Command::lookup("agent","plan","activity_emit");let mut a=DataObject::new();a.put_string("run_id","phase3-concurrency");let mut e=DataObject::new();e.put_string("kind","control_applied");e.put_string("requested","stop");e.put_object("control",control.clone());a.put_object("event",e);let _=cmd.execute(a);
+    let cmd=flowlang::command::Command::lookup("agent","plan","activity_emit");let mut a=DataObject::new();a.put_string("run_id","phase3-concurrency");let mut e=DataObject::new();e.put_string("kind","control_applied");e.put_string("requested","stop");e.put_object("control",{let mut c=DataObject::new();c.put_string("requested","stop");c.put_string("state","stopped");c});a.put_object("event",e);let _=cmd.execute(a);
     crate::agent::plan::run_state::control("phase3-concurrency").try_get_string("requested").unwrap_or_default()=="stop"
 });
 check("active run is retained beyond finished history cap",{

@@ -108,11 +108,17 @@ events.push_object(e);
 while events.len() > 400 { events.remove_property(0); }
 // Keep the newest eight finished runs plus every active run. A burst of
 // activity must not evict the run whose checkpoint is needed for recovery.
-let active_ids: Vec<String> = (0..runs.len()).filter_map(|i| {
-    let r=runs.get_object(i);
-    if r.try_get_boolean("active").unwrap_or(false) {Some(r.try_get_string("run_id").unwrap_or_default())} else {None}
-}).collect();
-while runs.len() > 8 + active_ids.len() { runs.remove_property(0); }
+// Retain at most eight FINISHED runs, regardless of where active runs sit in
+// insertion order. Removing index zero until a total cap can evict an active
+// run precisely when its recovery data is most needed.
+let mut finished = (0..runs.len()).filter(|i| !runs.get_object(*i).try_get_boolean("active").unwrap_or(false)).count();
+while finished > 8 {
+    let mut remove = None;
+    for i in 0..runs.len() {
+        if !runs.get_object(i).try_get_boolean("active").unwrap_or(false) { remove=Some(i); break; }
+    }
+    match remove {Some(i)=>{runs.remove_property(i);finished-=1;},None=>break,}
+}
 d.put_array("runs", runs); rec.put_object("data", d); rec.put_int("time", now);
 store.set_data("runtime", "agent_plan_runs", rec);
 let mut out = DataObject::new(); out.put_string("status", "ok");
