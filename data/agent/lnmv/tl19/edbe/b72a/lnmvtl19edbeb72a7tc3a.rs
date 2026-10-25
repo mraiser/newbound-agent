@@ -56,6 +56,9 @@ if !run_id.is_empty() {
     let mut e = DataObject::new(); e.put_string("kind", "start");
     e.put_string("claim", &dispatch.try_get_string("claim").unwrap_or_default());
     e.put_int("turn", run_turn);
+    e.put_string("previous_run_id", &dispatch.try_get_string("previous_run_id").unwrap_or_default());
+    e.put_boolean("recovered", dispatch.try_get_boolean("recovered").unwrap_or(false));
+    if let Ok(c) = dispatch.try_get_object("inherited_checkpoint") { e.put_object("inherited_checkpoint", c); }
     if let Ok(c) = dispatch.try_get_object("context") { e.put_object("context", c); }
     activity_emit(&run_id, e);
 }
@@ -725,7 +728,9 @@ if !run_id.is_empty() {
     h.put_string("recovery", "Use the structured checkpoint and safe activity timeline. Raw tool arguments and provider transcripts are not retained.");
     ce.put_object("handoff", h); activity_emit(&run_id, ce);
     let mut e = DataObject::new(); e.put_string("kind", "finish");
-    e.put_string("phase", "finished"); e.put_string("state", "run finished");
+    let interrupted = status == "ERROR" || !checkpoint_reason.is_empty();
+    e.put_string("phase", if interrupted { "interrupted" } else { "finished" });
+    e.put_string("state", if interrupted { "interrupted" } else { "run finished" });
     e.put_string("outcome", &status); e.put_string("detail", &final_answer);
     e.put_int("round", iterations); e.put_int("max_rounds", max_iterations);
     e.put_int("tool_calls", executed_calls); e.put_int("errors", error_count);
