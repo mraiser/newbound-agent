@@ -51,6 +51,9 @@ if (action=="pause"||action=="stop") && !live {
 if action=="resume" && !lifecycle.split(',').any(|t|{let t=t.trim();t=="accepted"||t=="in-progress"}) {
     let mut o=DataObject::new();o.put_string("status","err");o.put_string("msg","item is not accepted/in-progress; re-accept it through the normal lifecycle gate before resuming");return o;
 }
+if action=="resume" && live {
+    let mut o=DataObject::new();o.put_string("status","err");o.put_string("msg","run is still active; pause or stop it before starting a new turn");return o;
+}
 if action=="resume" && (run_id.is_empty() || (run_id!=last_run && run_id!=active_run && run_id!=item_checkpoint.try_get_string("run_id").unwrap_or_default())) {
     let mut o=DataObject::new();o.put_string("status","err");o.put_string("msg","resume requires the item's current or last run; choose its saved checkpoint rather than an unrelated history entry");return o;
 }
@@ -59,6 +62,15 @@ if action=="resume" && !note.trim().is_empty() {
     if nr.try_get_string("status").unwrap_or_default()!="ok" {let mut o=DataObject::new();o.put_string("status","err");o.put_string("msg", &format!("could not journal resume guidance: {}",nr.try_get_string("msg").unwrap_or_default()));return o;}
 }
 if action=="resume" {
+    let _guard=crate::agent::plan::run_state::lock();
+    if store.exists("runtime","agent_plan_runs") {
+        let mut rec=store.get_data("runtime","agent_plan_runs");let mut d=rec.get_object("data");let runs=d.get_array("runs");
+        for i in 0..runs.len(){let mut r=runs.get_object(i);if r.try_get_string("run_id").unwrap_or_default()==run_id {
+            r.put_boolean("paused",false);r.put_boolean("stop_requested",false);r.remove_property("control");r.put_string("control_state","resuming");
+        }}
+        d.put_array("runs",runs);rec.put_object("data",d);store.set_data("runtime","agent_plan_runs",rec);
+    }
+    drop(_guard);
     let h=api.agent.plan.board_hash().get_string("hash");
     let r=api.agent.plan.step_item(claim,h,nn_sessionid);
     return r;
@@ -81,6 +93,7 @@ let control=DataObject::new();
     for i in 0..runs.len(){let mut r=runs.get_object(i);if r.try_get_string("run_id").unwrap_or_default()!=run_id{continue;}found=true;
         let mut c=DataObject::new();c.put_string("requested", &action);c.put_int("time",time());c.put_string("note", &note);
         c.put_string("state","requested");r.put_object("control",c);r.put_string("control_state","requested");r.put_string("control_note",&note);
+        r.put_boolean("paused", action=="pause"); r.put_boolean("stop_requested", action=="stop");
         if action=="pause"{r.put_string("state","pause requested");}else{r.put_string("state","stop requested");}
     }
     if !found {let mut o=DataObject::new();o.put_string("status","err");o.put_string("msg","active run record not found");return o;}

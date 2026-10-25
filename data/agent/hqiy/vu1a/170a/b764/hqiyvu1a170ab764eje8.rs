@@ -20,6 +20,7 @@ let boot = if boot == 0 {
     let mut a = globals.try_get_object("AGENT_PLAN_ACTIVITY").unwrap_or_else(|_| DataObject::new());
     a.put_int("boot", now); globals.put_object("AGENT_PLAN_ACTIVITY", a); now
 } else { boot };
+let _write_guard = crate::agent::plan::run_state::lock();
 let store = DataStore::new();
 let mut rec = if store.exists("runtime", "agent_plan_runs") {
     store.get_data("runtime", "agent_plan_runs")
@@ -68,7 +69,7 @@ for k in ["turn", "round", "max_rounds", "tool_calls", "errors"] {
 for k in ["failure_streak", "duplicate_streak"] {
     if event.has(k) { r.put_int(k, event.get_int(k)); }
 }
-for k in ["context", "handoff", "pending_tool", "delivery", "inherited_checkpoint"] {
+for k in ["context", "handoff", "pending_tool", "delivery", "inherited_checkpoint", "control"] {
     if let Ok(v) = event.try_get_object(k) { r.put_object(k, v); }
 }
 if kind == "context_delivered" {
@@ -89,6 +90,12 @@ if kind == "finish" {
 }
 let seq = r.try_get_int("seq").unwrap_or(0) + 1;
 if kind == "checkpoint" || kind == "observation" { r.put_int("checkpoint_seq", seq); }
+if kind == "control_applied" {
+    let requested = event.try_get_string("requested").unwrap_or_default();
+    r.put_string("control_state", if requested=="pause" {"paused"} else {"stopped"});
+    if let Ok(c0)=event.try_get_object("control") {r.put_object("control",c0);}
+}
+if kind == "checkpoint" || kind == "observation" { r.put_int("checkpoint_seq", seq); }
 r.put_int("updated", now); r.put_int("last_event_at", now);
 r.put_int("seq", seq);
 let mut e = event.deep_copy();
@@ -96,9 +103,13 @@ e.put_int("seq", seq); e.put_int("time", now);
 let mut events = r.get_array("events");
 events.push_object(e);
 while events.len() > 400 { events.remove_property(0); }
-// Keep the newest eight runs. Transcript snapshots are separately bounded by
-// tool_loop; expired run records may be reclaimed by runtime housekeeping.
-while runs.len() > 8 { runs.remove_property(0); }
+// Keep the newest eight finished runs plus every active run. A burst of
+// activity must not evict the run whose checkpoint is needed for recovery.
+let active_ids: Vec<String> = (0..runs.len()).filter_map(|i| {
+    let r=runs.get_object(i);
+    if r.try_get_boolean("active").unwrap_or(false) {Some(r.try_get_string("run_id").unwrap_or_default())} else {None}
+}).collect();
+while runs.len() > 8 + active_ids.len() { runs.remove_property(0); }
 d.put_array("runs", runs); rec.put_object("data", d); rec.put_int("time", now);
 store.set_data("runtime", "agent_plan_runs", rec);
 let mut out = DataObject::new(); out.put_string("status", "ok");
