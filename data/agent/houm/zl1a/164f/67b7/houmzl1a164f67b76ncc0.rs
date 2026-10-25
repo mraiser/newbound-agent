@@ -202,6 +202,7 @@ fn run(gen: i64) {
             let mut cands: Vec<(u8, usize, String, bool)> = Vec::new();
             let mut awaiting = DataArray::new();
             let mut waiting_for_children = DataArray::new();
+            let mut held = DataArray::new();
             for (i, e) in entries.iter().enumerate() {
                 let claim = e.try_get_string("claim").unwrap_or_default();
                 if claim.trim().is_empty() { continue; }
@@ -209,6 +210,7 @@ fn run(gen: i64) {
                 // status. It survives worker restarts and must not be undone
                 // by the scheduler before an explicit resume.
                 if e.try_get_object("control").ok().and_then(|c| c.try_get_string("requested").ok()).map(|s| s == "pause" || s == "stop").unwrap_or(false) {
+                    held.push_string(&claim);
                     continue;
                 }
                 let t = tagset(e);
@@ -286,6 +288,7 @@ fn run(gen: i64) {
             w.put_array("parked", pk);
             w.put_array("awaiting_reapproval", awaiting);
             w.put_array("waiting_for_children", waiting_for_children);
+            w.put_array("held", held);
             w.put_int("eligible", cands.len() as i64);
             // Expose parent COORDINATION explicitly (owner acceptance #8): a
             // coordinating parent is eligible WORK, so eligible=0 with

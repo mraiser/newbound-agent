@@ -69,7 +69,7 @@ for r in runs.iter().take(8) {
     let mut summary = copy_summary(r);
     // The selected run carries its full bounded handoff below. Recent cards
     // only need identity, lifecycle and counters; fetch history on selection.
-    for key in ["checkpoint", "handoff", "context"] { summary.remove_property(key); }
+    for key in ["checkpoint", "handoff", "context", "inherited_checkpoint", "control_note"] { summary.remove_property(key); }
     if let Ok(h) = r.try_get_object("handoff") {
         summary.put_string("next", &h.try_get_string("next").unwrap_or_default());
         summary.put_string("summary", &h.try_get_string("summary").unwrap_or_default().chars().take(240).collect::<String>());
@@ -81,6 +81,15 @@ let active = runs.iter().find(|r| r.try_get_boolean("active").unwrap_or(false)
     && (r.try_get_int("boot").unwrap_or(0) == 0 || boot == 0 || r.try_get_int("boot").unwrap_or(0) == boot));
 let selected = active.or_else(|| runs.first());
 if let Some(r) = selected {
+    let mut selected_summary = copy_summary(r);
+    // A handoff's inherited checkpoint is a provenance pointer for display,
+    // not another full transcript. Fetch the prior run only when requested.
+    if let Ok(ic) = selected_summary.try_get_object("inherited_checkpoint") {
+        let mut refonly=DataObject::new();refonly.put_string("run_id",&ic.try_get_string("run_id").unwrap_or_default());
+        refonly.put_string("next",&ic.try_get_string("next").unwrap_or_default());
+        refonly.put_string("status",&ic.try_get_string("status").unwrap_or_default());
+        selected_summary.put_object("inherited_checkpoint",refonly);
+    }
     let mut events = DataArray::new();
     let all = r.try_get_array("events").unwrap_or_else(|_| DataArray::new());
     let cap = limit.clamp(1, 400) as usize;
@@ -101,7 +110,7 @@ if let Some(r) = selected {
     out.put_int("now", now);
     out.put_int("boot", boot);
     out.put_int("event_cap", 400);
-    out.put_object("run", copy_summary(r));
+    out.put_object("run", selected_summary);
     out.put_boolean("truncated", n > cap);
     if n > cap {
         let mut kept = DataArray::new();
