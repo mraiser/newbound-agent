@@ -44,20 +44,18 @@ fn text_tail(s: &str, n: usize) -> String {
 }
 let mut run_id = String::new();
 let mut run_turn = 0i64;
+let mut dispatch = DataObject::new();
 {
     let mut g = DataStore::globals();
-    if let Ok(mut dispatch) = g.try_get_object("AGENT_PLAN_DISPATCH") {
-        if dispatch.try_get_string("prompt").unwrap_or_default() == prompt {
-            run_id = dispatch.try_get_string("run_id").unwrap_or_default();
-            run_turn = dispatch.try_get_int("turn").unwrap_or(0);
+    if let Ok(d) = g.try_get_object("AGENT_PLAN_DISPATCH") {
+        if d.try_get_string("prompt").unwrap_or_default() == prompt {
+            run_id = d.try_get_string("run_id").unwrap_or_default();
+            run_turn = d.try_get_int("turn").unwrap_or(0);
+            dispatch = d.deep_copy();
             g.remove_property("AGENT_PLAN_DISPATCH");
         }
     }
 }
-let dispatch = if !run_id.is_empty() {
-    let g = DataStore::globals();
-    g.try_get_object("AGENT_PLAN_DISPATCH_CONTEXT").unwrap_or_else(|_| DataObject::new())
-} else { DataObject::new() };
 if !run_id.is_empty() {
     let mut e = DataObject::new(); e.put_string("kind", "start");
     e.put_string("claim", &dispatch.try_get_string("claim").unwrap_or_default());
@@ -274,21 +272,10 @@ let mut error_count = 0i64;
 let mut tool_calls_seen = 0i64;
 let mut pending_checkpoint = String::new();
 let mut checkpoint_reason = String::new();
+let mut last_action = String::new();
+let mut last_observation = String::new();
 
 loop {
-    if !pending_checkpoint.is_empty() {
-        let mut e = DataObject::new(); e.put_string("kind", "checkpoint");
-        e.put_string("phase", "checkpoint"); e.put_string("state", "checkpoint saved");
-        e.put_string("detail", &checkpoint_reason);
-        e.put_string("checkpoint", &pending_checkpoint);
-        let mut h = DataObject::new(); h.put_string("checkpoint", &pending_checkpoint);
-        h.put_string("next", "Resume from this checkpoint, inspect the latest run events as needed, then verify the next concrete increment.");
-        h.put_int("round", iterations); h.put_int("max_rounds", max_iterations);
-        h.put_int("tool_calls", executed_calls); h.put_int("errors", error_count);
-        h.put_string("transcript_excerpt", &text_tail(&messages.to_string(), 24000));
-        e.put_object("handoff", h); activity_emit(&run_id, e);
-        pending_checkpoint.clear();
-    }
     if iterations >= max_iterations {
         // Budget exhausted: do NOT discard the work. Ask the model to compress
         // its own progress into a resumable checkpoint (one bounded extra
@@ -307,6 +294,7 @@ loop {
         } else {
             String::new()
         };
+        checkpoint_reason = format!("Tool-round budget exhausted at {}/{}; a resumable checkpoint was requested.", iterations, max_iterations);
         final_answer = if txt.trim().is_empty() {
             "Error: tool budget exhausted and no progress summary could be produced.".to_string()
         } else {
@@ -331,6 +319,7 @@ loop {
 
     if kind == "text" {
         let content = resp.get_string("content");
+        activity_field(&run_id, "model_text", "model responded", "Received a text response; evaluating verification and status.", iterations);
         println!("TL[{}] text {} chars; dirty='{}' nudged={}", iterations, content.len(), dirty, nudged);
         // Verify nudge: the workflow's EXECUTE step, enforced once per modification cycle.
         if !dirty.is_empty() && !nudged {
@@ -471,6 +460,10 @@ loop {
             || obs.starts_with("Tool panicked")
             || obs.starts_with("Compilation failed")
             || obs.contains("You already called this exact tool");
+        if !duplicate {
+            last_action = format!("{} — {}", name, target);
+            last_observation = obs.clone();
+        }
         if is_failure {
             error_count += 1;
             let err_head: String = obs.chars().take(120).collect();
@@ -484,12 +477,29 @@ loop {
             consecutive_failures = 0;
             last_err_head = String::new();
         }
+        {
+            let mut e = DataObject::new(); e.put_string("kind", "tool_result");
+            e.put_string("phase", if is_failure { "tool failed" } else { "tool succeeded" });
+            e.put_string("state", if is_failure { "tool failed" } else { "tool succeeded" });
+            e.put_string("tool", &name); e.put_string("target", &target);
+            e.put_boolean("ok", !is_failure && !duplicate);
+            e.put_int("round", iterations); e.put_int("tool_calls", executed_calls);
+            e.put_int("errors", error_count); e.put_int("failure_streak", consecutive_failures);
+            e.put_int("duplicate_streak", repeat_count); e.put_int("streak", consecutive_failures);
+            e.put_string("detail", &clamp(&obs, 4000)); activity_emit(&run_id, e);
+        }
         if consecutive_failures >= 3 {
             final_answer = format!("Aborting: the same failure occurred {} times in a row from {} with no change in outcome: {}", consecutive_failures, name, obs.chars().take(500).collect::<String>());
+            checkpoint_reason = "Consecutive identical failure guard stopped this run.".to_string();
             break;
         }
     }
-    if !final_answer.is_empty() { break; }
+    if !final_answer.is_empty() {
+        if checkpoint_reason.is_empty() && (final_answer.starts_with("Aborting:") || final_answer.starts_with("Error:") || final_answer.starts_with("LLM backend error:")) {
+            checkpoint_reason = "The run stopped before a verified completion.".to_string();
+        }
+        break;
+    }
 }
 
 // the archivist's intake (docs/memory.md): a completed loop is a turn.
@@ -590,7 +600,33 @@ if declared_done {
     }
 }
 
+if !run_id.is_empty() {
+    let checkpoint = if !pending_checkpoint.is_empty() { pending_checkpoint.clone() } else {
+        clamp(&format!("CONTINUATION FROM PREVIOUS PLAN TURN\nSTATUS: {}\nRESPONSE / EVIDENCE:\n{}\nLAST ACTION: {}\nLAST RESULT:\n{}\nNEXT: Use the response's stated next action; if absent, inspect the latest run activity and choose a new concrete increment. Do not repeat an identical failed call without new information.",
+            status, final_answer, if last_action.is_empty() { "none".to_string() } else { last_action.clone() },
+            if last_observation.is_empty() { "none".to_string() } else { last_observation.clone() }), 8000)
+    };
+    let mut ce = DataObject::new(); ce.put_string("kind", "checkpoint");
+    ce.put_string("phase", "checkpoint saved"); ce.put_string("state", "checkpoint saved");
+    ce.put_string("detail", &checkpoint_reason); ce.put_string("checkpoint", &checkpoint);
+    let mut h = DataObject::new(); h.put_string("checkpoint", &checkpoint);
+    h.put_string("next", "Resume from this checkpoint; inspect this run's activity if more detail is needed.");
+    h.put_int("round", iterations); h.put_int("max_rounds", max_iterations);
+    h.put_int("tool_calls", executed_calls); h.put_int("errors", error_count);
+    // Recent working context for postmortem/inspection. The NEXT turn gets a
+    // bounded structured checkpoint, not this raw serialized dump by default.
+    h.put_string("transcript_excerpt", &text_tail(&messages.to_string(), 16000));
+    ce.put_object("handoff", h); activity_emit(&run_id, ce);
+    let mut e = DataObject::new(); e.put_string("kind", "finish");
+    e.put_string("phase", "finished"); e.put_string("state", "run finished");
+    e.put_string("outcome", &status); e.put_string("detail", &final_answer);
+    e.put_int("round", iterations); e.put_int("max_rounds", max_iterations);
+    e.put_int("tool_calls", executed_calls); e.put_int("errors", error_count);
+    e.put_int("failure_streak", consecutive_failures); e.put_int("duplicate_streak", repeat_count);
+    activity_emit(&run_id, e);
+}
 let mut response = DataObject::new();
+if !run_id.is_empty() { response.put_string("run_id", &run_id); }
 response.put_string("msg", &final_answer);
 response.put_string("status", &status);
 response.put_array("messages", messages);
