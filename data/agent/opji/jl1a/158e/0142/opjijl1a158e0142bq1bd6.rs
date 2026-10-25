@@ -174,9 +174,15 @@ let detail = e.try_get_string("detail").unwrap_or_default();
 let continuity = crate::agent::plan::continuity_context::continuity_context(e.deep_copy());
 let inherited_structured = if e.has("checkpoint") { e.get_object("checkpoint") } else { DataObject::new() };
 let inherited_checkpoint_time = inherited_structured.try_get_int("time").unwrap_or(0);
-let prior_steps = continuity.get_string("prior_steps");
-let mut previous_run_id = continuity.get_string("previous_run_id");
-let mut handoff_received = continuity.get_string("handoff_received");
+let last_journal_time = e.try_get_array("step_log").ok()
+    .and_then(|a| if a.len() == 0 { None } else { a.get_object(a.len()-1).try_get_int("time").ok() }).unwrap_or(0);
+let prefer_structured = inherited_structured.has("summary") && inherited_checkpoint_time >= last_journal_time;
+let mut prior_steps = continuity.get_string("prior_steps");
+let mut previous_run_id = if prefer_structured { inherited_structured.try_get_string("run_id").unwrap_or_default() } else { continuity.get_string("previous_run_id") };
+let inherited_checkpoint = if prefer_structured {
+    crate::agent::plan::checkpoint_read::checkpoint_read(inherited_structured.clone(), String::new())
+} else { DataObject::new() };
+let mut handoff_received = if prefer_structured { inherited_checkpoint.get_string("text") } else { continuity.get_string("handoff_received") };
 let mut recovered_run = false;
 let journaled_run = previous_run_id.clone();
 // An interrupted run or a stale post-turn board write must not erase working
@@ -199,9 +205,7 @@ if handoff_received.is_empty() || !journaled_run.is_empty() {
             }).unwrap_or(false) { continue; }
             let updated = r.try_get_int("updated").unwrap_or(0);
             // A stale older run must not replace a newer durable handoff.
-            let last_journal_time = e.try_get_array("step_log").ok()
-                .and_then(|a| if a.len() == 0 { None } else { a.get_object(a.len()-1).try_get_int("time").ok() }).unwrap_or(0);
-            if updated <= last_journal_time || updated <= newest { continue; }
+            if updated <= last_journal_time || updated <= inherited_checkpoint_time || updated <= newest { continue; }
             let text = r.try_get_object("handoff").ok()
                 .and_then(|h| h.try_get_string("checkpoint").ok()).unwrap_or_default();
             if text.trim().is_empty() { continue; }
@@ -358,14 +362,14 @@ fn with_lifecycle(tags: &str, to: &str) -> String {
     kept.push(to.to_string());
     kept.join(",")
 }
-if was_accepted {
+if was_accepted || e.has("active_run") {
     let nt = with_lifecycle(&e.try_get_string("tags").unwrap_or_default(), "in-progress");
     e.put_string("tags", &nt);
     let short0: String = claim.chars().take(50).collect();
     let sw = api.dev.code.patch_control_facet(
         "kb".to_string(), "plan".to_string(), "memory".to_string(),
         "".to_string(), arr.to_string(), hash.clone(),
-        format!("plan started (in-progress): '{}'", short0),
+        format!("plan started/resumed (in-progress): '{}'", short0),
         "executive".to_string(), nn_sessionid.clone());
     let sok = sw.try_get_boolean("ok").unwrap_or(false)
         || sw.try_get_string("status").map(|s| s == "ok").unwrap_or(false);
@@ -384,6 +388,38 @@ if was_accepted {
 // claims it by exact prompt; no tool_loop signature or other caller changes.
 let now = flowlang::flowlang::system::time::time();
 let run_id = format!("plan-{}-{}", now, flowlang::flowlang::system::unique_session_id::unique_session_id());
+// Durable active pointer: if this turn dies before its final journal write,
+// the item still identifies the saved run and the checkpoint it inherited.
+let mut active_pointer_saved = false;
+{
+    let r0 = api.dev.code.read_control_facet("kb".to_string(), "plan".to_string(), "memory".to_string());
+    let h0 = r0.get_string("hash");
+    if let Ok(p0) = DataObject::try_from_string(&format!("{{\"a\":{}}}", r0.get_string("source"))) {
+        let a0 = p0.get_array("a");
+        for i in 0..a0.len() {
+            let mut item = a0.get_object(i);
+            if item.try_get_string("claim").unwrap_or_default() != claim { continue; }
+            let mut active = DataObject::new(); active.put_string("run_id", &run_id);
+            active.put_string("claim", &claim); active.put_int("turn", prior + 1);
+            active.put_int("started", now); active.put_string("state", "starting");
+            active.put_string("previous_run_id", &previous_run_id);
+            active.put_boolean("recovered", recovered_run);
+            if prefer_structured { active.put_object("inherited", inherited_structured.clone()); }
+            else if !handoff_received.is_empty() { active.put_string("inherited_text", &handoff_received); }
+            item.put_object("active_run", active);
+            let aw = api.dev.code.patch_control_facet("kb".to_string(), "plan".to_string(), "memory".to_string(),
+                "".to_string(), a0.to_string(), h0, "plan run started; durable active pointer".to_string(), "executive".to_string(), nn_sessionid.clone());
+            active_pointer_saved = aw.try_get_boolean("ok").unwrap_or(false)
+                || aw.try_get_string("status").map(|s| s == "ok").unwrap_or(false);
+            break;
+        }
+    }
+}
+if !active_pointer_saved {
+    out.put_string("status", "err"); out.put_string("action", "start_failed");
+    out.put_string("msg", "could not journal the active run pointer before the turn (likely stale_base); no model turn was run");
+    return out;
+}
 let mut context_manifest = DataObject::new();
 context_manifest.put_int("turn", prior + 1);
 context_manifest.put_int("max_turns", cap);
@@ -400,10 +436,16 @@ context_manifest.put_string("handoff_received", &handoff_received);
 context_manifest.put_int("included_steps", continuity.get_int("included_steps"));
 context_manifest.put_int("available_steps", continuity.get_int("available_steps"));
 context_manifest.put_boolean("recovered_from_unjournaled_run", recovered_run);
+context_manifest.put_boolean("structured_checkpoint", prefer_structured);
+if prefer_structured { context_manifest.put_object("inherited_checkpoint", inherited_checkpoint.clone()); }
+context_manifest.put_string("source", if prefer_structured { "kb.plan.checkpoint" } else if recovered_run { "runtime recovery" } else { "kb.plan.step_log" });
 {
     let mut globals = flowlang::datastore::DataStore::globals();
     let mut d = DataObject::new(); d.put_string("run_id", &run_id);
     d.put_string("prompt", &prompt); d.put_string("claim", &claim); d.put_int("turn", prior + 1);
+    d.put_string("previous_run_id", &previous_run_id);
+    d.put_boolean("recovered", recovered_run);
+    if prefer_structured { d.put_object("inherited_checkpoint", inherited_checkpoint.clone()); }
     d.put_object("context", context_manifest); globals.put_object("AGENT_PLAN_DISPATCH", d);
 }
 let ran = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
@@ -448,7 +490,7 @@ let read_run_checkpoint = |rid: &str| -> String {
     }
     String::new()
 };
-let (ok_step, result_json, tl_status, handoff_checkpoint, actual_run_id) = match ran {
+let (ok_step, result_json, tl_status, handoff_checkpoint, actual_run_id, structured_checkpoint) = match ran {
     Ok(Ok(rr)) => {
         // Log the FINAL ANSWER in FULL (owner, 2026-10) - never the messages
         // transcript (a 143KB tool_loop dump per step would bloat kb.plan and
@@ -475,17 +517,27 @@ let (ok_step, result_json, tl_status, handoff_checkpoint, actual_run_id) = match
         let checkpoint = if !checkpoint.is_empty() { checkpoint } else {
             format!("CONTINUATION FROM PREVIOUS PLAN TURN\nSTATUS: {}\nRESPONSE / EVIDENCE:\n{}\nNEXT: Continue from the stated response and verify a new concrete increment. The preceding run did not supply a checkpoint; inspect its run activity and do not repeat a failed call without new information.", st, answer.chars().take(7000).collect::<String>())
         };
-        (true, answer, st, checkpoint, actual_run)
+        let mut structured = read_run_structured(&actual_run);
+        if !structured.has("summary") {
+            let mut ci = DataObject::new(); ci.put_string("response", &answer);
+            ci.put_string("status", &st); ci.put_string("run_id", &actual_run);
+            ci.put_string("previous_run_id", &previous_run_id);
+            ci.put_string("reason", "Checkpoint synthesized at the planner boundary because the loop returned no structured handoff.");
+            structured = crate::agent::plan::checkpoint::checkpoint(ci);
+        }
+        (true, answer, st, checkpoint, actual_run, structured)
     }
     Ok(Err(pe)) => {
         let fallback = read_run_checkpoint(&run_id);
         let text = if fallback.is_empty() { "The previous run returned an execution error. Inspect its activity, diagnose the cause, and take a different verified approach.".to_string() } else { fallback };
-        (false, format!("{{\"error\":\"{}\"}}", esc(&format!("{:?}", pe))), "ERROR".to_string(), text, run_id.clone())
+        let structured = read_run_structured(&run_id);
+        (false, format!("{{\"error\":\"{}\"}}", esc(&format!("{:?}", pe))), "ERROR".to_string(), text, run_id.clone(), structured)
     },
     Err(_) => {
         let fallback = read_run_checkpoint(&run_id);
         let text = if fallback.is_empty() { "The previous run panicked before a model checkpoint. Inspect its last recorded activity and resume with a different approach; do not assume unfinished writes were verified.".to_string() } else { fallback };
-        (false, "{\"error\":\"panic during executive reasoning\"}".to_string(), "ERROR".to_string(), text, run_id.clone())
+        let structured = read_run_structured(&run_id);
+        (false, "{\"error\":\"panic during executive reasoning\"}".to_string(), "ERROR".to_string(), text, run_id.clone(), structured)
     },
 };
 // FRESH BASE after the turn: the turn can run for minutes, the start
