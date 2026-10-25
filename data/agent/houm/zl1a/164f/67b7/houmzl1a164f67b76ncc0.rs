@@ -202,9 +202,17 @@ fn run(gen: i64) {
             let mut cands: Vec<(u8, usize, String, bool)> = Vec::new();
             let mut awaiting = DataArray::new();
             let mut waiting_for_children = DataArray::new();
+            let mut held = DataArray::new();
             for (i, e) in entries.iter().enumerate() {
                 let claim = e.try_get_string("claim").unwrap_or_default();
                 if claim.trim().is_empty() { continue; }
+                // A durable pause is an item-level hold, not merely a runtime
+                // status. It survives worker restarts and must not be undone
+                // by the scheduler before an explicit resume.
+                if e.try_get_object("control").ok().and_then(|c| c.try_get_string("requested").ok()).map(|s| s == "pause" || s == "stop").unwrap_or(false) {
+                    held.push_string(&claim);
+                    continue;
+                }
                 let t = tagset(e);
                 let has = |s: &str| t.iter().any(|x| x == s);
                 // `blocked` waits for a human (moved back to accepted) - never
@@ -280,6 +288,7 @@ fn run(gen: i64) {
             w.put_array("parked", pk);
             w.put_array("awaiting_reapproval", awaiting);
             w.put_array("waiting_for_children", waiting_for_children);
+            w.put_array("held", held);
             w.put_int("eligible", cands.len() as i64);
             // Expose parent COORDINATION explicitly (owner acceptance #8): a
             // coordinating parent is eligible WORK, so eligible=0 with
@@ -329,7 +338,7 @@ fn run(gen: i64) {
                 Ok(Err(_)) => ("step_failed".to_string(), "step_item raised an exception".to_string(), -1),
                 Err(_) => ("step_failed".to_string(), "step_item panicked".to_string(), -1),
             };
-            let turn = matches!(action.as_str(), "stepped" | "completed" | "blocked" | "step_failed");
+            let turn = matches!(action.as_str(), "stepped" | "completed" | "blocked" | "step_failed" | "paused" | "stopped" | "journal_recovery_required");
             if turn {
                 turns.push(now);
                 w.put_int("turns_total", w.try_get_int("turns_total").unwrap_or(0) + 1);
@@ -346,6 +355,12 @@ fn run(gen: i64) {
             last.put_int("ms", t1 - now);
             w.put_object("last", last);
             match action.as_str() {
+                "paused" | "stopped" | "journal_recovery_required" => {
+                    // Deliberate human holds and journal conflicts are not
+                    // transient model failures. Never auto-retry them.
+                    parked.insert(claim.clone(), Park { fp: fp_now(&claim), until: 0,
+                        reason: format!("{} - explicit resume/review required", action) });
+                }
                 "stepped" | "completed" => { fails.remove(&claim); }
                 "step_failed" => {
                     let n = { let c = fails.entry(claim.clone()).or_insert(0); *c += 1; *c };

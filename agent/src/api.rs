@@ -880,6 +880,85 @@ pub mod agent {
             ::flowlang::rustcmd::RustCmd::new("lijoqw1a16fde422eg104").execute(d).expect("Rust command execution failed").get_object("a")
         }
 
+        pub fn set_autonomy(enabled: bool) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_boolean("enabled", enabled);
+            ::flowlang::rustcmd::RustCmd::new("wulhwh1a1706f7abap180").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn activity_status(after: i64, limit: i64) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_int("after", after);
+            d.put_int("limit", limit);
+            ::flowlang::rustcmd::RustCmd::new("jtjtqi1a170a9c443ye3").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn activity_emit(run_id: String, event: DataObject) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("run_id", &run_id);
+            d.put_object("event", event);
+            ::flowlang::rustcmd::RustCmd::new("hqiyvu1a170ab764eje8").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn activity_history(run_id: String, after: i64, limit: i64) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("run_id", &run_id);
+            d.put_int("after", after);
+            d.put_int("limit", limit);
+            ::flowlang::rustcmd::RustCmd::new("nziuhh1a170b568f7m103").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn continuity_context(entry: DataObject) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_object("entry", entry);
+            ::flowlang::rustcmd::RustCmd::new("xmpmpm1a170c21e04s155").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn checkpoint(input: DataObject) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_object("input", input);
+            ::flowlang::rustcmd::RustCmd::new("gzvvxz1a170edb05ck227").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn checkpoint_read(checkpoint: DataObject, fallback_text: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_object("checkpoint", checkpoint);
+            d.put_string("fallback_text", &fallback_text);
+            ::flowlang::rustcmd::RustCmd::new("jtqzuq1a170f0650ag22f").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn test_continuity_contract() -> DataObject {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("zjzrxh1a1710a67b0o2ca").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn continuity_status(claim: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("claim", &claim);
+            ::flowlang::rustcmd::RustCmd::new("mgnmgi1a1710d320ck2d8").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn run_control(run_id: String, claim: String, action: String, note: String, base: String, nn_sessionid: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("run_id", &run_id);
+            d.put_string("claim", &claim);
+            d.put_string("action", &action);
+            d.put_string("note", &note);
+            d.put_string("base", &base);
+            d.put_string("nn_sessionid", &nn_sessionid);
+            ::flowlang::rustcmd::RustCmd::new("syhhtm1a172795455j611").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn run_state() -> DataObject {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("qyjgkh1a1727aa651z616").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn test_run_control_contract() -> DataObject {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("wpiwht1a17287e0f5n647").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
     }
     pub mod browser {
         use ::ndata::dataobject::DataObject;
@@ -6283,6 +6362,32 @@ pub mod scratch {
             ::flowlang::rustcmd::RustCmd::new("hnnggv1a16e6a3c7dn4f").execute(d).expect("Rust command execution failed").get_object("a")
         }
 
+        pub fn flowstep_r3_mutate(o: DataObject, k: String, v: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_object("o", o);
+            d.put_string("k", &k);
+            d.put_string("v", &v);
+            ::flowlang::rustcmd::RustCmd::new("wknhul1a17024b93bn264").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn flowstep_r3_alias_probe() -> DataObject {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("ktjlzv1a1702a263br277").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn flowstep_r3_persistent_probe(home: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("home", &home);
+            ::flowlang::rustcmd::RustCmd::new("islnzw1a170702e2ci187").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn phase3_provider(messages: DataArray, tools: DataArray) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_array("messages", messages);
+            d.put_array("tools", tools);
+            ::flowlang::rustcmd::RustCmd::new("nxkqqv1a172b3e237o72a").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
     }
     pub mod stageclock {
         use ::ndata::dataobject::DataObject;
@@ -6395,6 +6500,50 @@ pub mod scratch {
 
     }
     pub mod flowstep_r2_progress {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+    }
+    pub mod flowstep {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+        pub fn debug_step(session: String, mode: String, pick: DataObject) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("session", &session);
+            d.put_string("mode", &mode);
+            d.put_object("pick", pick);
+            ::flowlang::rustcmd::RustCmd::new("ypgjvs1a1701e59b5q250").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn debug_start(lib: String, ctl: String, cmd: String, body: DataObject, args: DataObject) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("lib", &lib);
+            d.put_string("ctl", &ctl);
+            d.put_string("cmd", &cmd);
+            d.put_object("body", body);
+            d.put_object("args", args);
+            ::flowlang::rustcmd::RustCmd::new("tortlg1a1701e5f6fy252").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn debug_state(session: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("session", &session);
+            ::flowlang::rustcmd::RustCmd::new("xtmiru1a1701e651am254").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn debug_stop(session: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("session", &session);
+            ::flowlang::rustcmd::RustCmd::new("xvxvyh1a170427181r86").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+    }
+    pub mod flowstep_r3_progress {
         use ::ndata::dataobject::DataObject;
         use ::ndata::dataarray::DataArray;
         use ::ndata::databytes::DataBytes;
@@ -7154,6 +7303,8 @@ pub struct old_scratch_flowstep_p3_progress {}
 pub struct old_scratch_flowstep_p4_progress {}
 pub struct old_scratch_flowstep_p5_progress {}
 pub struct old_scratch_flowstep_r2_progress {}
+pub struct old_scratch_flowstep {}
+pub struct old_scratch_flowstep_r3_progress {}
 pub struct old_security_security {}
 pub struct old_storage_storage {}
 pub struct old_trainmore_common {}
@@ -7447,6 +7598,8 @@ pub struct old_scratch {
     pub flowstep_p4_progress: old_scratch_flowstep_p4_progress,
     pub flowstep_p5_progress: old_scratch_flowstep_p5_progress,
     pub flowstep_r2_progress: old_scratch_flowstep_r2_progress,
+    pub flowstep: old_scratch_flowstep,
+    pub flowstep_r3_progress: old_scratch_flowstep_r3_progress,
 }
 pub struct old_security {
     pub security: old_security_security,
@@ -7779,6 +7932,8 @@ pub const fn new() -> api {
             flowstep_p4_progress: old_scratch_flowstep_p4_progress {},
             flowstep_p5_progress: old_scratch_flowstep_p5_progress {},
             flowstep_r2_progress: old_scratch_flowstep_r2_progress {},
+            flowstep: old_scratch_flowstep {},
+            flowstep_r3_progress: old_scratch_flowstep_r3_progress {},
         },
         security: old_security {
             security: old_security_security {},
@@ -8278,6 +8433,54 @@ impl old_agent_plan {
     #[deprecated(note = "use api::agent::plan::test_parent_coordination_eligibility instead")]
     pub fn test_parent_coordination_eligibility(&self) -> DataObject {
         self::agent::plan::test_parent_coordination_eligibility()
+    }
+    #[deprecated(note = "use api::agent::plan::set_autonomy instead")]
+    pub fn set_autonomy(&self, enabled: bool) -> DataObject {
+        self::agent::plan::set_autonomy(enabled)
+    }
+    #[deprecated(note = "use api::agent::plan::activity_status instead")]
+    pub fn activity_status(&self, after: i64, limit: i64) -> DataObject {
+        self::agent::plan::activity_status(after, limit)
+    }
+    #[deprecated(note = "use api::agent::plan::activity_emit instead")]
+    pub fn activity_emit(&self, run_id: String, event: DataObject) -> DataObject {
+        self::agent::plan::activity_emit(run_id, event)
+    }
+    #[deprecated(note = "use api::agent::plan::activity_history instead")]
+    pub fn activity_history(&self, run_id: String, after: i64, limit: i64) -> DataObject {
+        self::agent::plan::activity_history(run_id, after, limit)
+    }
+    #[deprecated(note = "use api::agent::plan::continuity_context instead")]
+    pub fn continuity_context(&self, entry: DataObject) -> DataObject {
+        self::agent::plan::continuity_context(entry)
+    }
+    #[deprecated(note = "use api::agent::plan::checkpoint instead")]
+    pub fn checkpoint(&self, input: DataObject) -> DataObject {
+        self::agent::plan::checkpoint(input)
+    }
+    #[deprecated(note = "use api::agent::plan::checkpoint_read instead")]
+    pub fn checkpoint_read(&self, checkpoint: DataObject, fallback_text: String) -> DataObject {
+        self::agent::plan::checkpoint_read(checkpoint, fallback_text)
+    }
+    #[deprecated(note = "use api::agent::plan::test_continuity_contract instead")]
+    pub fn test_continuity_contract(&self) -> DataObject {
+        self::agent::plan::test_continuity_contract()
+    }
+    #[deprecated(note = "use api::agent::plan::continuity_status instead")]
+    pub fn continuity_status(&self, claim: String) -> DataObject {
+        self::agent::plan::continuity_status(claim)
+    }
+    #[deprecated(note = "use api::agent::plan::run_control instead")]
+    pub fn run_control(&self, run_id: String, claim: String, action: String, note: String, base: String, nn_sessionid: String) -> DataObject {
+        self::agent::plan::run_control(run_id, claim, action, note, base, nn_sessionid)
+    }
+    #[deprecated(note = "use api::agent::plan::run_state instead")]
+    pub fn run_state(&self) -> DataObject {
+        self::agent::plan::run_state()
+    }
+    #[deprecated(note = "use api::agent::plan::test_run_control_contract instead")]
+    pub fn test_run_control_contract(&self) -> DataObject {
+        self::agent::plan::test_run_control_contract()
     }
 }
 impl old_agent_browser {
@@ -10759,11 +10962,45 @@ impl old_scratch_skills {
     pub fn board_state(&self) -> DataObject {
         self::scratch::skills::board_state()
     }
+    #[deprecated(note = "use api::scratch::skills::flowstep_r3_mutate instead")]
+    pub fn flowstep_r3_mutate(&self, o: DataObject, k: String, v: String) -> DataObject {
+        self::scratch::skills::flowstep_r3_mutate(o, k, v)
+    }
+    #[deprecated(note = "use api::scratch::skills::flowstep_r3_alias_probe instead")]
+    pub fn flowstep_r3_alias_probe(&self) -> DataObject {
+        self::scratch::skills::flowstep_r3_alias_probe()
+    }
+    #[deprecated(note = "use api::scratch::skills::flowstep_r3_persistent_probe instead")]
+    pub fn flowstep_r3_persistent_probe(&self, home: String) -> DataObject {
+        self::scratch::skills::flowstep_r3_persistent_probe(home)
+    }
+    #[deprecated(note = "use api::scratch::skills::phase3_provider instead")]
+    pub fn phase3_provider(&self, messages: DataArray, tools: DataArray) -> DataObject {
+        self::scratch::skills::phase3_provider(messages, tools)
+    }
 }
 impl old_scratch_flowstep_p0_progress {
     #[deprecated(note = "use api::scratch::flowstep_p0_progress::progress instead")]
     pub fn progress(&self) -> DataObject {
         self::scratch::flowstep_p0_progress::progress()
+    }
+}
+impl old_scratch_flowstep {
+    #[deprecated(note = "use api::scratch::flowstep::debug_step instead")]
+    pub fn debug_step(&self, session: String, mode: String, pick: DataObject) -> DataObject {
+        self::scratch::flowstep::debug_step(session, mode, pick)
+    }
+    #[deprecated(note = "use api::scratch::flowstep::debug_start instead")]
+    pub fn debug_start(&self, lib: String, ctl: String, cmd: String, body: DataObject, args: DataObject) -> DataObject {
+        self::scratch::flowstep::debug_start(lib, ctl, cmd, body, args)
+    }
+    #[deprecated(note = "use api::scratch::flowstep::debug_state instead")]
+    pub fn debug_state(&self, session: String) -> DataObject {
+        self::scratch::flowstep::debug_state(session)
+    }
+    #[deprecated(note = "use api::scratch::flowstep::debug_stop instead")]
+    pub fn debug_stop(&self, session: String) -> DataObject {
+        self::scratch::flowstep::debug_stop(session)
     }
 }
 impl old_security_security {

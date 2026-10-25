@@ -12,10 +12,35 @@
     <span class="pl-autonomy-help" hidden>Runs accepted and in-progress plan tasks autonomously.</span>
     <span class="pl-note lbl"></span>
   </header>
+  <div class="pl-activity-help lbl">Live model/tool activity is observed at execution boundaries. Handoff shows the bounded context the next turn actually receives; it is not a claim to expose private model reasoning.</div>
   <div class="pl-autonomy" role="status" aria-live="polite" aria-atomic="true" hidden>
     <span class="pl-autonomy-dot" aria-hidden="true"></span>
     <span class="pl-autonomy-text"></span>
   </div>
+  <section class="pl-activity" aria-label="Autonomous activity" hidden>
+    <header class="pl-activity-head">
+      <strong class="pl-activity-title">No active run</strong>
+      <span class="pl-activity-updated lbl"></span>
+      <span class="pl-activity-view">
+        <button type="button" data-aview="now">now</button>
+        <button type="button" data-aview="activity">activity</button>
+        <button type="button" data-aview="handoff">handoff</button>
+        <button type="button" data-aview="review">review</button>
+        <button type="button" data-aview="history">history</button>
+      </span>
+    </header>
+    <div class="pl-run-controls" hidden>
+      <span class="pl-control-state lbl"></span>
+      <button type="button" data-runact="pause">pause</button>
+      <button type="button" data-runact="stop">stop</button>
+      <button type="button" data-runact="resume">resume</button>
+      <input class="pl-resume-note" placeholder="optional guidance for the next turn" aria-label="Resume guidance">
+      <span class="pl-control-note lbl"></span>
+    </div>
+    <div class="pl-activity-body"></div>
+  </section>
+  <div class="pl-activity-grip" role="separator" aria-orientation="horizontal" tabindex="0"
+       aria-label="Resize autonomous activity" title="Drag to resize · double-click to reset"></div>
   <div class="pl-board"></div>
   <form class="pl-add">
     <input class="pl-add-claim" placeholder="new plan item — one atomic claim" aria-label="New plan item claim">

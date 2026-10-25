@@ -5,6 +5,84 @@
 }
 
 // --- helpers ----------------------------------------------------------------
+// Plan activity is derived at real execution boundaries, never model-authored
+// status. The prompt-only public command stays source-compatible: step_item
+// hands its run metadata through a one-shot dispatch record.
+fn activity_emit(run_id: &str, event: DataObject) {
+    if run_id.is_empty() { return; }
+    let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let cmd = Command::lookup("agent", "plan", "activity_emit");
+        let mut a = DataObject::new(); a.put_string("run_id", run_id);
+        a.put_object("event", event); let _ = cmd.execute(a);
+    }));
+}
+fn activity_field(run_id: &str, kind: &str, phase: &str, detail: &str, round: i64) {
+    let mut e = DataObject::new(); e.put_string("kind", kind);
+    e.put_string("phase", phase); e.put_string("state", phase);
+    e.put_string("detail", detail); e.put_int("round", round);
+    activity_emit(run_id, e);
+}
+fn safe_target(args: &str) -> String {
+    // Targets only: raw arguments may contain secrets, source, or large data.
+    match DataObject::try_from_string(&format!("{{\"a\":{}}}", args)) {
+        Ok(w) => if let Ok(a) = w.try_get_object("a") {
+            let target = if a.has("lib") && a.has("ctl") && a.has("cmd") {
+                format!("{}.{}.{}", a.get_string("lib"), a.get_string("ctl"), a.get_string("cmd"))
+            } else if a.has("lib") && a.has("ctl") && a.has("facet") {
+                format!("{}.{}:{}", a.get_string("lib"), a.get_string("ctl"), a.get_string("facet"))
+            } else if a.has("claim") { a.get_string("claim") }
+            else if a.has("name") { a.get_string("name") }
+            else { "arguments available in the bounded run record".to_string() };
+            target.chars().take(300).collect()
+        } else { "invalid argument object".to_string() },
+        Err(_) => "invalid argument JSON".to_string(),
+    }
+}
+let mut run_id = String::new();
+let mut run_turn = 0i64;
+let mut dispatch = DataObject::new();
+{
+    let mut g = DataStore::globals();
+    if let Ok(d) = g.try_get_object("AGENT_PLAN_DISPATCH") {
+        if d.try_get_string("prompt").unwrap_or_default() == prompt {
+            run_id = d.try_get_string("run_id").unwrap_or_default();
+            run_turn = d.try_get_int("turn").unwrap_or(0);
+            dispatch = d.deep_copy();
+            g.remove_property("AGENT_PLAN_DISPATCH");
+        }
+    }
+}
+if !run_id.is_empty() {
+    let mut e = DataObject::new(); e.put_string("kind", "start");
+    e.put_string("claim", &dispatch.try_get_string("claim").unwrap_or_default());
+    e.put_int("turn", run_turn);
+    e.put_string("previous_run_id", &dispatch.try_get_string("previous_run_id").unwrap_or_default());
+    e.put_boolean("recovered", dispatch.try_get_boolean("recovered").unwrap_or(false));
+    if let Ok(c) = dispatch.try_get_object("inherited_checkpoint") { e.put_object("inherited_checkpoint", c); }
+    if let Ok(c) = dispatch.try_get_object("context") { e.put_object("context", c); }
+    activity_emit(&run_id, e);
+}
+// Covers early returns and unwinding as well as the normal finish path. The
+// process may still be alive when the TURN is not; step_item's panic path is a
+// second safety net for failures before this guard can be constructed.
+struct ActivityGuard { run_id: String, closed: bool }
+impl Drop for ActivityGuard {
+    fn drop(&mut self) {
+        if self.closed || self.run_id.is_empty() { return; }
+        let mut e = DataObject::new(); e.put_string("kind", "finish");
+        e.put_string("phase", "interrupted"); e.put_string("state", "interrupted");
+        e.put_string("outcome", "ERROR");
+        e.put_string("detail", "The model/tool loop exited before its normal finish boundary; resume from the last saved observation, not an assumption of completion.");
+        activity_emit(&self.run_id, e);
+    }
+}
+let mut activity_guard = ActivityGuard { run_id: run_id.clone(), closed: run_id.is_empty() };
+// The provider-response receipt is real delivery evidence; also keep a
+// first-response recovery checkpoint so an early failure is not context-free.
+let mut first_response_checkpointed = false;
+fn label_next_is_missing(response: &str) -> bool {
+    !response.lines().any(|line| line.trim().trim_start_matches('#').trim().starts_with("NEXT:"))
+}
 fn extract_compile_errors(raw: &str) -> String {
   // Compile failures arrive as {"status":"err","kind":"compile_error","msg":"error[E0382]: ..."}
   // serialized to JSON, so newlines inside msg are escaped literals. Unescape, then keep
@@ -146,6 +224,9 @@ let mut tools = DataArray::new();
 for t in mcp_tools.objects() {
   let t = t.object();
   if !t.has("name") { continue; }
+  // Runtime telemetry is emitted by the execution substrate, never chosen by
+  // the model. Read-side activity/history remains available for continuity.
+  if ["agent-plan-activity_emit", "agent-plan-run_state", "agent-plan-test_run_control_contract", "agent-plan-test_continuity_contract", "agent-plan-test_parent_coordination_eligibility"].contains(&t.get_string("name").as_str()) { continue; }
   let mut f = DataObject::new();
   f.put_string("name", &t.get_string("name"));
   if t.has("description") { f.put_string("description", &t.get_string("description")); }
@@ -209,8 +290,35 @@ let mut last_sig = String::new(); // repeated-identical-call detection
 let mut consecutive_failures = 0;
 let mut repeat_count = 0;
 let mut last_err_head = String::new();
+let mut executed_calls = 0i64;
+let mut error_count = 0i64;
+let mut tool_calls_seen = 0i64;
+let mut pending_checkpoint = String::new();
+let mut checkpoint_reason = String::new();
+let mut last_action = String::new();
+let mut last_observation = String::new();
+let mut observed_work = DataArray::new();
+let mut assistant_progress = String::new();
+let mut applied_control = String::new();
+let mut applied_guidance = String::new();
 
 loop {
+    // Human control is applied only at a model/tool boundary. A pause request
+    // never kills a provider call or a tool halfway through; it prevents the
+    // next model round and leaves a resumable checkpoint.
+    if !run_id.is_empty() {
+        let control = crate::agent::plan::run_state::control(&run_id);
+        let requested = control.try_get_string("requested").unwrap_or_default();
+        if control.try_get_string("state").unwrap_or_default() == "requested" && (requested == "pause" || requested == "stop") {
+            let mut answer = format!("{} at a safe model/tool boundary. No new model round was started.\nPROGRESS: {}\nNEXT: Resume from the saved checkpoint when authorized.", if requested=="pause" {"Paused"} else {"Stopped"}, if assistant_progress.is_empty() { "The current activity and last observed result are saved." } else { &assistant_progress });
+            if let Ok(note)=control.try_get_string("note") { if !note.trim().is_empty() { answer.push_str(&format!("\nHUMAN GUIDANCE: {}",note)); } }
+            final_answer = answer;
+            applied_control = requested.clone();
+            applied_guidance = control.try_get_string("note").unwrap_or_default();
+            checkpoint_reason = if requested=="pause" {"Human pause requested; applied at a safe boundary.".to_string()} else {"Human stop requested; applied at a safe boundary.".to_string()};
+            break;
+        }
+    }
     if iterations >= max_iterations {
         // Budget exhausted: do NOT discard the work. Ask the model to compress
         // its own progress into a resumable checkpoint (one bounded extra
@@ -229,26 +337,64 @@ loop {
         } else {
             String::new()
         };
+        checkpoint_reason = format!("Tool-round budget exhausted at {}/{}; a resumable checkpoint was requested.", iterations, max_iterations);
         final_answer = if txt.trim().is_empty() {
             "Error: tool budget exhausted and no progress summary could be produced.".to_string()
         } else {
-            format!("[budget checkpoint - incomplete, resume next turn]\n{}", txt.trim())
+            pending_checkpoint = clamp(&format!("[budget checkpoint - incomplete, resume next turn]\n{}\nLAST ACTION: {}\nLAST RESULT:\n{}", txt.trim(),
+                if last_action.is_empty() { "none".to_string() } else { last_action.clone() },
+                if last_observation.is_empty() { "none".to_string() } else { clamp(&last_observation, 3000) }), 8000);
+            pending_checkpoint.clone()
         };
         break;
     }
     iterations += 1;
+    activity_field(&run_id, "model_wait", "waiting for model response",
+        "The model has the in-turn conversation; a response or tool request has not arrived yet.", iterations);
 
     let resp = chat_llm(messages.clone(), tools.clone());
+    if !run_id.is_empty() && iterations == 1 {
+        let mut delivered = DataObject::new(); delivered.put_string("kind", "context_delivered");
+        delivered.put_string("phase", "context acknowledged by provider");
+        delivered.put_string("detail", "The provider returned a response to the first prompt carrying this turn's context manifest; it was not merely queued.");
+        delivered.put_int("round", iterations);
+        if let Ok(c) = dispatch.try_get_object("context") { delivered.put_object("context", c); }
+        activity_emit(&run_id, delivered);
+        if !first_response_checkpointed {
+            first_response_checkpointed = true;
+            let mut ci = DataObject::new(); ci.put_string("kind", "delivered");
+            ci.put_string("status", "IN_PROGRESS"); ci.put_string("run_id", &run_id);
+            ci.put_string("previous_run_id", &dispatch.try_get_string("previous_run_id").unwrap_or_default());
+            ci.put_string("summary", "The provider responded to this turn's supplied context; work is still in progress.");
+            ci.put_string("next", "Use the observed model/tool activity to continue the current goal.");
+            ci.put_string("reason", "Delivery receipt, not a completion claim.");
+            ci.put_int("turn", run_turn); ci.put_int("round", iterations); ci.put_int("max_rounds", max_iterations);
+            let cp = crate::agent::plan::checkpoint::checkpoint(ci);
+            let mut ce = DataObject::new(); ce.put_string("kind", "checkpoint");
+            ce.put_string("checkpoint", &cp.get_string("text")); ce.put_object("handoff", cp);
+            activity_emit(&run_id, ce);
+        }
+    }
+    if !run_id.is_empty() {
+        let mut e = DataObject::new(); e.put_string("kind", "model_received");
+        e.put_string("phase", "model response received"); e.put_string("state", "processing model response");
+        e.put_int("round", iterations); e.put_int("max_rounds", max_iterations);
+        activity_emit(&run_id, e);
+    }
     let kind = resp.get_string("kind");
     println!("TL[{}] kind={}", iterations, kind);
   
     if kind == "error" {
+        error_count += 1;
+        activity_field(&run_id, "model_error", "model backend error", &resp.get_string("content"), iterations);
         final_answer = format!("LLM backend error: {}", resp.get_string("content"));
+        checkpoint_reason = "Model backend error ended the run before a model-authored summary.".to_string();
         break;
     }
 
     if kind == "text" {
         let content = resp.get_string("content");
+        activity_field(&run_id, "model_text", "model responded", "Received a text response; evaluating verification and status.", iterations);
         println!("TL[{}] text {} chars; dirty='{}' nudged={}", iterations, content.len(), dirty, nudged);
         // Verify nudge: the workflow's EXECUTE step, enforced once per modification cycle.
         if !dirty.is_empty() && !nudged {
@@ -258,6 +404,21 @@ loop {
             m.put_string("content", &format!("You modified `{}` but never executed it. Follow your workflow: verify with dev-code-invoke_command (or dev-code-evaluate_rust for a test harness) before giving your final answer. If you already verified it another way, state how and answer.", dirty));
             messages.push_object(m);
             nudged = true;
+            activity_field(&run_id, "verification_required", "verification pending", &format!("{} was modified but has not been executed yet.", dirty), iterations);
+            if !run_id.is_empty() {
+                let mut ci = DataObject::new(); ci.put_string("kind", "verification_pending");
+                ci.put_string("status", "IN_PROGRESS"); ci.put_string("response", &content);
+                ci.put_string("summary", &format!("{} was modified; execution/verification is still required.", dirty));
+                ci.put_string("next", &format!("Execute or test {} before treating it as complete.", dirty));
+                ci.put_string("verification_pending", &dirty); ci.put_string("run_id", &run_id);
+                ci.put_int("turn", run_turn); ci.put_int("round", iterations); ci.put_int("max_rounds", max_iterations);
+                ci.put_int("tool_calls", executed_calls); ci.put_int("errors", error_count);
+                ci.put_array("work", observed_work.clone());
+                let cp = crate::agent::plan::checkpoint::checkpoint(ci);
+                let mut ce = DataObject::new(); ce.put_string("kind", "checkpoint");
+                ce.put_string("checkpoint", &cp.get_string("text")); ce.put_object("handoff", cp);
+                activity_emit(&run_id, ce);
+            }
             continue;
         }
         final_answer = content;
@@ -265,27 +426,83 @@ loop {
     }
 
     // kind == "tool_calls"
+    if let Ok(am) = resp.try_get_object("assistant_message") {
+        if let Ok(content) = am.try_get_string("content") {
+            if !content.trim().is_empty() {
+                assistant_progress = clamp(&content, 4000);
+                activity_field(&run_id, "assistant_progress", "assistant progress", &clamp(&content, 2000), iterations);
+                if !run_id.is_empty() {
+                    let mut ci = DataObject::new(); ci.put_string("kind", "milestone");
+                    ci.put_string("status", "IN_PROGRESS"); ci.put_string("summary", &assistant_progress);
+                    // The free-form milestone summary is deliberately not
+                    // parsed as a final response; tool evidence is structured.
+                    ci.put_string("response", &assistant_progress);
+                    ci.put_string("reason", "The assistant reported progress between tool actions; this is not verified completion.");
+                    ci.put_string("run_id", &run_id); ci.put_string("previous_run_id", &dispatch.try_get_string("previous_run_id").unwrap_or_default());
+                    ci.put_int("turn", run_turn); ci.put_int("round", iterations); ci.put_int("max_rounds", max_iterations);
+                    ci.put_int("tool_calls", executed_calls); ci.put_int("errors", error_count);
+                    ci.put_string("last_action", &last_action); ci.put_string("last_result", &last_observation);
+                    ci.put_string("verification_pending", if dirty.is_empty() { "" } else { &dirty });
+                    ci.put_array("work", observed_work.clone());
+                    let cp = crate::agent::plan::checkpoint::checkpoint(ci);
+                    let mut ce = DataObject::new(); ce.put_string("kind", "checkpoint");
+                    ce.put_string("checkpoint", &cp.get_string("text")); ce.put_object("handoff", cp.clone());
+                    activity_emit(&run_id, ce);
+                }
+            }
+        }
+    }
     messages.push_object(resp.get_object("assistant_message"));
     let calls = resp.get_array("tool_calls");
     for c in calls.objects() {
+        if !run_id.is_empty() {
+            let control = crate::agent::plan::run_state::control(&run_id);
+            let requested = control.try_get_string("requested").unwrap_or_default();
+            if control.try_get_string("state").unwrap_or_default() == "requested" && (requested == "pause" || requested == "stop") {
+                final_answer = format!("{} before starting the next tool call. The current model response is complete; no additional tool was started.\nPROGRESS: {}\nNEXT: Resume from the saved checkpoint when authorized.", if requested=="pause" {"Paused"} else {"Stopped"}, if assistant_progress.is_empty() { "The current activity is saved." } else { &assistant_progress });
+                checkpoint_reason = "Human control requested before the next tool call.".to_string();
+                applied_control = requested.clone();
+                applied_guidance = control.try_get_string("note").unwrap_or_default();
+                break;
+            }
+        }
         let c = c.object();
         let name = c.get_string("name");
         let args_str = c.get_string("arguments");
         let call_id = c.get_string("id");
+        tool_calls_seen += 1;
+        let target = safe_target(&args_str);
+        let mut requested = DataObject::new(); requested.put_string("kind", "tool_requested");
+        requested.put_string("phase", "tool requested"); requested.put_string("tool", &name);
+        requested.put_string("target", &target); requested.put_int("round", iterations);
+        requested.put_int("tool_calls", tool_calls_seen); requested.put_string("detail", &call_id);
+        let mut pending = DataObject::new(); pending.put_string("tool", &name);
+        pending.put_string("target", &target); pending.put_int("round", iterations);
+        requested.put_object("pending_tool", pending); activity_emit(&run_id, requested);
         let sig = format!("{}::{}", &name, &args_str);
         let args_head: String = args_str.chars().take(200).collect();
         println!("TL[{}] -> {} args: {}", iterations, name, args_head.replace('\n', " "));
 
+        let duplicate = sig == last_sig;
         let observation = if sig == last_sig {
             repeat_count += 1;
+            let mut e = DataObject::new(); e.put_string("kind", "tool_skipped");
+            e.put_string("phase", "duplicate call suppressed"); e.put_string("tool", &name);
+            e.put_string("target", &target); e.put_int("round", iterations);
+            e.put_int("duplicate_streak", repeat_count); e.put_int("streak", repeat_count);
+            e.put_boolean("ok", false); e.put_string("detail", "Same tool and arguments as the preceding call; not executed again.");
+            activity_emit(&run_id, e);
             if repeat_count >= 3 {
                 final_answer = format!("Aborting: the model repeated the identical call to {} {} times despite being told the result will not change. Last real result from this tool is above in the transcript. This usually means the underlying operation is failing and the model has no viable alternative.", name, repeat_count + 1);
+                checkpoint_reason = "Repeated-identical-call guard stopped this run.".to_string();
                 break;
             }
             "You already called this exact tool with these exact arguments; the result will not change. Adjust the arguments or take a different approach.".to_string()
         } else {
             repeat_count = 0;
             last_sig = sig;
+            executed_calls += 1;
+            activity_field(&run_id, "tool_running", "tool running", &format!("{} — {}", name, target), iterations);
             let parsed = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                 DataObject::from_string(&args_str)
             }));
@@ -371,7 +588,33 @@ loop {
             || obs.starts_with("Tool panicked")
             || obs.starts_with("Compilation failed")
             || obs.contains("You already called this exact tool");
+        if !duplicate {
+            last_action = format!("{} — {}", name, target);
+            last_observation = obs.clone();
+            let mut work = DataObject::new(); work.put_string("tool", &name);
+            work.put_string("target", &target); work.put_boolean("ok", !is_failure);
+            work.put_string("result", &obs); observed_work.push_object(work);
+            while observed_work.len() > 16 { observed_work.remove_property(0); }
+            if !run_id.is_empty() {
+                let mut ci = DataObject::new(); ci.put_string("kind", "observation");
+                ci.put_string("status", "IN_PROGRESS"); ci.put_string("response", &assistant_progress);
+                ci.put_string("summary", "Observed tool activity; the model has not yet summarized this work as complete.");
+                ci.put_string("next", "Continue from the observed action/result; verify the next increment and do not repeat an identical failed call without new information.");
+                ci.put_string("reason", "Tool observation saved before a model-authored handoff; unfinished work is not verified completion.");
+                ci.put_string("run_id", &run_id); ci.put_string("previous_run_id", &dispatch.try_get_string("previous_run_id").unwrap_or_default());
+                ci.put_int("turn", run_turn); ci.put_int("round", iterations); ci.put_int("max_rounds", max_iterations);
+                ci.put_int("tool_calls", executed_calls); ci.put_int("errors", error_count);
+                ci.put_string("last_action", &last_action); ci.put_string("last_result", &last_observation);
+                ci.put_string("verification_pending", if dirty.is_empty() { "" } else { &dirty });
+                ci.put_array("work", observed_work.clone());
+                let cp = crate::agent::plan::checkpoint::checkpoint(ci);
+                let mut ce = DataObject::new(); ce.put_string("kind", "observation");
+                ce.put_string("checkpoint", &cp.get_string("text")); ce.put_object("handoff", cp);
+                activity_emit(&run_id, ce);
+            }
+        }
         if is_failure {
+            error_count += 1;
             let err_head: String = obs.chars().take(120).collect();
             if err_head == last_err_head {
                 consecutive_failures += 1;
@@ -383,12 +626,29 @@ loop {
             consecutive_failures = 0;
             last_err_head = String::new();
         }
+        {
+            let mut e = DataObject::new(); e.put_string("kind", "tool_result");
+            e.put_string("phase", if is_failure { "tool failed" } else { "tool succeeded" });
+            e.put_string("state", if is_failure { "tool failed" } else { "tool succeeded" });
+            e.put_string("tool", &name); e.put_string("target", &target);
+            e.put_boolean("ok", !is_failure && !duplicate);
+            e.put_int("round", iterations); e.put_int("tool_calls", executed_calls);
+            e.put_int("errors", error_count); e.put_int("failure_streak", consecutive_failures);
+            e.put_int("duplicate_streak", repeat_count); e.put_int("streak", consecutive_failures);
+            e.put_string("detail", &clamp(&obs, 4000)); activity_emit(&run_id, e);
+        }
         if consecutive_failures >= 3 {
             final_answer = format!("Aborting: the same failure occurred {} times in a row from {} with no change in outcome: {}", consecutive_failures, name, obs.chars().take(500).collect::<String>());
+            checkpoint_reason = "Consecutive identical failure guard stopped this run.".to_string();
             break;
         }
     }
-    if !final_answer.is_empty() { break; }
+    if !final_answer.is_empty() {
+        if checkpoint_reason.is_empty() && (final_answer.starts_with("Aborting:") || final_answer.starts_with("Error:") || final_answer.starts_with("LLM backend error:")) {
+            checkpoint_reason = "The run stopped before a verified completion.".to_string();
+        }
+        break;
+    }
 }
 
 // the archivist's intake (docs/memory.md): a completed loop is a turn.
@@ -489,7 +749,76 @@ if declared_done {
     }
 }
 
+if !run_id.is_empty() {
+    let checkpoint = if !pending_checkpoint.is_empty() { pending_checkpoint.clone() } else {
+        // If the model left an explicit NEXT, retain it verbatim instead of
+        // replacing it with a generic instruction. Always append observed
+        // action/result facts so an unfinished response is still resumable.
+        clamp(&format!("CONTINUATION FROM PREVIOUS PLAN TURN\nSTATUS: {}\nRESPONSE / EVIDENCE:\n{}\nLAST ACTION: {}\nLAST RESULT:\n{}\nNEXT: Resume from the response's NEXT/action when present; otherwise inspect run activity and choose a new concrete increment. Do not repeat an identical failed call without new information.",
+            status, final_answer, if last_action.is_empty() { "none".to_string() } else { last_action.clone() },
+            if last_observation.is_empty() { "none".to_string() } else { last_observation.clone() }), 8000)
+    };
+    let mut ci = DataObject::new(); ci.put_string("kind", "response");
+    let requested_now = applied_control.clone();
+    let controlled_now = (requested_now == "pause" || requested_now == "stop") && !checkpoint_reason.is_empty();
+    ci.put_string("status", if controlled_now && requested_now == "pause" { "PAUSED" } else if controlled_now && requested_now == "stop" { "STOPPED" } else { &status }); ci.put_string("response", &final_answer);
+    ci.put_string("reason", &checkpoint_reason); ci.put_string("run_id", &run_id);
+    ci.put_string("previous_run_id", &dispatch.try_get_string("previous_run_id").unwrap_or_default());
+    ci.put_int("turn", run_turn); ci.put_int("round", iterations); ci.put_int("max_rounds", max_iterations);
+    ci.put_int("tool_calls", executed_calls); ci.put_int("errors", error_count);
+    ci.put_string("last_action", &last_action); ci.put_string("last_result", &last_observation);
+    ci.put_string("verification_pending", if dirty.is_empty() { "" } else { &dirty });
+    ci.put_array("work", observed_work.clone());
+    if !applied_guidance.is_empty() { ci.put_string("guidance", &applied_guidance); }
+    // Keep the durable model NEXT when a final response omits its own label;
+    // the generic resume instruction must not erase actionable continuity.
+    if label_next_is_missing(&final_answer) {
+        if let Ok(old) = dispatch.try_get_object("inherited_checkpoint") {
+            if let Ok(next) = old.try_get_string("next") { ci.put_string("next", &next); }
+        }
+    }
+    let cp = crate::agent::plan::checkpoint::checkpoint(ci);
+    // Preserve the legacy budget prefix for downstream compatibility while
+    // attaching structured continuity for both old and new readers.
+    let checkpoint = if final_answer.starts_with("[budget checkpoint") { checkpoint } else { cp.get_string("text") };
+    let mut ce = DataObject::new(); ce.put_string("kind", "checkpoint");
+    ce.put_string("phase", "checkpoint saved"); ce.put_string("state", "checkpoint saved");
+    ce.put_string("detail", &checkpoint_reason); ce.put_string("checkpoint", &checkpoint);
+    let mut h = cp.deep_copy(); h.put_string("checkpoint", &checkpoint);
+    h.put_string("next", &cp.get_string("next"));
+    h.put_string("recovery", "Use the structured checkpoint and safe activity timeline. Raw tool arguments and provider transcripts are not retained.");
+    ce.put_object("handoff", h); activity_emit(&run_id, ce);
+    let mut e = DataObject::new(); e.put_string("kind", "finish");
+    let outcome_status = cp.get_string("status");
+    let interrupted = outcome_status == "ERROR" || outcome_status == "PAUSED" || outcome_status == "STOPPED" || !checkpoint_reason.is_empty();
+    let controlled_finish = applied_control.clone();
+    let phase = if controlled_finish == "pause" { "paused" } else if controlled_finish == "stop" { "stopped" } else if interrupted { "interrupted" } else { "finished" };
+    e.put_string("phase", phase);
+    e.put_string("state", if phase == "paused" || phase == "stopped" { phase } else if interrupted { "interrupted" } else { "run finished" });
+    e.put_string("outcome", &outcome_status); e.put_string("detail", &final_answer);
+    e.put_int("round", iterations); e.put_int("max_rounds", max_iterations);
+    e.put_int("tool_calls", executed_calls); e.put_int("errors", error_count);
+    e.put_int("failure_streak", consecutive_failures); e.put_int("duplicate_streak", repeat_count);
+    activity_emit(&run_id, e);
+    activity_guard.closed = true;
+}
+let control_status = applied_control.clone();
+if (control_status == "pause" || control_status == "stop") && !checkpoint_reason.is_empty() {
+    status = if control_status == "pause" { "PAUSED".to_string() } else { "STOPPED".to_string() };
+    // A late request against an already finished run must not rewrite its
+    // outcome. Only the request observed at a boundary controls this finish.
+    if !run_id.is_empty() {
+        let mut ce = DataObject::new(); ce.put_string("kind", "control_applied");
+        ce.put_string("requested", &control_status); ce.put_string("phase", if control_status=="pause" {"paused"} else {"stopped"});
+        ce.put_string("state", if control_status=="pause" {"paused"} else {"stopped"});
+        let mut applied = crate::agent::plan::run_state::control(&run_id);
+        applied.put_string("state", if control_status=="pause" {"paused"} else {"stopped"});
+        ce.put_object("control", applied); activity_emit(&run_id, ce);
+    }
+}
 let mut response = DataObject::new();
+if !run_id.is_empty() { response.put_string("run_id", &run_id); }
+response.put_string("control", &control_status);
 response.put_string("msg", &final_answer);
 response.put_string("status", &status);
 response.put_array("messages", messages);
