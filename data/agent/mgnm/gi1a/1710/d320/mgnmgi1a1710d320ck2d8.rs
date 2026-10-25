@@ -37,7 +37,7 @@ for x in b.get_array("entries").objects() {
                 (ps > 0 && r.try_get_int("process_start").unwrap_or(0) == ps);
             let stale = r.try_get_boolean("active").unwrap_or(false) &&
                 (r.try_get_int("pid").unwrap_or(0) != std::process::id() as i64 || !same_process ||
-                 (r.try_get_int("boot").unwrap_or(0) != 0 && boot != 0 && r.try_get_int("boot").unwrap_or(0) != boot));
+                 (r.try_get_int("boot").unwrap_or(0) != 0 && r.try_get_int("boot").unwrap_or(0) != boot));
             out.put_boolean("active", r.try_get_boolean("active").unwrap_or(false) && !stale);
             out.put_boolean("stale", stale);
             if stale { out.put_string("state", "interrupted"); out.put_boolean("interrupted", true); }
