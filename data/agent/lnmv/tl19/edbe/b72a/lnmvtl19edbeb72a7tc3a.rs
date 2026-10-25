@@ -298,7 +298,10 @@ loop {
         final_answer = if txt.trim().is_empty() {
             "Error: tool budget exhausted and no progress summary could be produced.".to_string()
         } else {
-            format!("[budget checkpoint - incomplete, resume next turn]\n{}", txt.trim())
+            pending_checkpoint = clamp(&format!("[budget checkpoint - incomplete, resume next turn]\n{}\nLAST ACTION: {}\nLAST RESULT:\n{}", txt.trim(),
+                if last_action.is_empty() { "none".to_string() } else { last_action.clone() },
+                if last_observation.is_empty() { "none".to_string() } else { clamp(&last_observation, 3000) }), 8000);
+            pending_checkpoint.clone()
         };
         break;
     }
@@ -307,6 +310,12 @@ loop {
         "The model has the in-turn conversation; a response or tool request has not arrived yet.", iterations);
 
     let resp = chat_llm(messages.clone(), tools.clone());
+    if !run_id.is_empty() {
+        let mut e = DataObject::new(); e.put_string("kind", "model_received");
+        e.put_string("phase", "model response received"); e.put_string("state", "processing model response");
+        e.put_int("round", iterations); e.put_int("max_rounds", max_iterations);
+        activity_emit(&run_id, e);
+    }
     let kind = resp.get_string("kind");
     println!("TL[{}] kind={}", iterations, kind);
   
@@ -329,6 +338,7 @@ loop {
             m.put_string("content", &format!("You modified `{}` but never executed it. Follow your workflow: verify with dev-code-invoke_command (or dev-code-evaluate_rust for a test harness) before giving your final answer. If you already verified it another way, state how and answer.", dirty));
             messages.push_object(m);
             nudged = true;
+            activity_field(&run_id, "verification_required", "verification pending", &format!("{} was modified but has not been executed yet.", dirty), iterations);
             continue;
         }
         final_answer = content;
@@ -367,6 +377,7 @@ loop {
             activity_emit(&run_id, e);
             if repeat_count >= 3 {
                 final_answer = format!("Aborting: the model repeated the identical call to {} {} times despite being told the result will not change. Last real result from this tool is above in the transcript. This usually means the underlying operation is failing and the model has no viable alternative.", name, repeat_count + 1);
+                checkpoint_reason = "Repeated-identical-call guard stopped this run.".to_string();
                 break;
             }
             "You already called this exact tool with these exact arguments; the result will not change. Adjust the arguments or take a different approach.".to_string()
