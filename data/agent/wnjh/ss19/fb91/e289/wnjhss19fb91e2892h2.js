@@ -195,6 +195,7 @@ async function init(host) {
     return t ? t.slice(0, 48) : "untitled session";
   }
   let sessId = null;        // minted server-side on the first save
+  let customTitle = null;   // the user's rename, if any — always wins over sessTitle
   const persist = async () => {
     if (!messages.length) return;   // empty sessions are never saved
     const me2 = (await userP()) ?? {};
@@ -212,7 +213,9 @@ async function init(host) {
       body: JSON.stringify({
         lib: "runtime", id: sessId, readers: [], writers: [],
         data: {
-          username: userName(me2), title: sessTitle(messages), time: Date.now(),
+          username: userName(me2), title: customTitle || sessTitle(messages),
+          ...(customTitle ? { custom_title: customTitle } : {}),
+          time: Date.now(),
           messages, transcript } }),
     });
     const w = await res.json();
@@ -230,6 +233,7 @@ async function init(host) {
     resetPad();
     messages = (rec && Array.isArray(rec.messages)) ? rec.messages : [];
     transcript = (rec && Array.isArray(rec.transcript)) ? rec.transcript : [];
+    customTitle = (rec && typeof rec.custom_title === "string" && rec.custom_title.trim()) ? rec.custom_title : null;
     thread.replaceChildren();
     for (const entry of transcript) thread.appendChild(cellEl(entry));
     thread.scrollTop = thread.scrollHeight;
@@ -237,6 +241,7 @@ async function init(host) {
   }
   function newSession() {
     sessId = null;
+    customTitle = null;
     resetPad();
     messages = [];
     transcript = [];
@@ -244,13 +249,71 @@ async function init(host) {
     renderSessions();
   }
   const sessListEl = host.querySelector(".ag-sess-list");
+  // ── session drag-and-drop reorder ── the dragged id is shared between the
+  // per-row handlers (wired in renderSessions) and these container handlers,
+  // which are attached ONCE so re-renders never stack listeners.
+  let dragSid = null;
+  const clearDropMarks = () => {
+    for (const el of sessListEl.querySelectorAll(".ag-drop-above")) el.classList.remove("ag-drop-above");
+  };
+  const sessOrderIds = () => Array.from(sessListEl.querySelectorAll(".ag-sess")).map((el) => el.dataset.sid);
+  async function applySessOrder(ids) {
+    await invokeP("agent", "chat", "session_index", { op: "reorder", id: "", arg: JSON.stringify(ids) });
+    await renderSessions();
+  }
+  // dropping in the empty space below the rows moves the session to the END
+  sessListEl.addEventListener("dragover", (ev) => {
+    if (!dragSid) return;
+    ev.preventDefault();
+    ev.dataTransfer.dropEffect = "move";
+  });
+  sessListEl.addEventListener("drop", async (ev) => {
+    if (!dragSid) return;
+    ev.preventDefault();
+    if (ev.target.closest && ev.target.closest(".ag-sess")) return; // row drops are handled on the row
+    const ids = sessOrderIds().filter((i) => i !== dragSid);
+    ids.push(dragSid);
+    clearDropMarks();
+    await applySessOrder(ids);
+  });
   async function renderSessions() {
-    const r = await invokeP("agent", "chat", "session_index", { op: "list", id: "" });
+    const r = await invokeP("agent", "chat", "session_index", { op: "list", id: "", arg: "" });
     const ix = (r.status === "ok" && r.data && r.data.list) ? r.data.list : [];
     sessListEl.replaceChildren();
     for (const s of ix) {
       const row = document.createElement("div");
       row.className = "ag-sess" + (s.id === sessId ? " on" : "");
+      row.dataset.sid = s.id;
+      row.draggable = true;
+      row.addEventListener("dragstart", (ev) => {
+        if (row.querySelector(".ag-sess-edit")) { ev.preventDefault(); return; } // renaming — don't drag
+        dragSid = s.id;
+        row.classList.add("dragging");
+        ev.dataTransfer.setData("text/plain", s.id);
+        ev.dataTransfer.effectAllowed = "move";
+      });
+      row.addEventListener("dragover", (ev) => {
+        if (!dragSid) return;
+        ev.preventDefault();
+        ev.dataTransfer.dropEffect = "move";
+        clearDropMarks();
+        if (s.id !== dragSid) row.classList.add("ag-drop-above"); // insert-above indicator
+      });
+      row.addEventListener("dragleave", () => row.classList.remove("ag-drop-above"));
+      row.addEventListener("drop", async (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        clearDropMarks();
+        if (!dragSid || dragSid === s.id) return; // drop on itself = no-op
+        const ids = sessOrderIds().filter((i) => i !== dragSid);
+        ids.splice(ids.indexOf(s.id), 0, dragSid); // insert ABOVE the target row
+        await applySessOrder(ids);
+      });
+      row.addEventListener("dragend", () => {
+        dragSid = null;
+        row.classList.remove("dragging");
+        clearDropMarks();
+      });
       const open = document.createElement("button");
       open.className = "ag-sess-open";
       open.textContent = s.title;
@@ -266,12 +329,68 @@ async function init(host) {
           setTimeout(() => { del.textContent = "✕"; }, 2500);
           return;
         }
-        await invokeP("agent", "chat", "session_index", { op: "delete", id: s.id });
+        await invokeP("agent", "chat", "session_index", { op: "delete", id: s.id, arg: "" });
         if (s.id === sessId) newSession(); else await renderSessions();
       });
-      row.append(open, del);
+      const ren = document.createElement("button");
+      ren.className = "ag-sess-ren";
+      ren.textContent = "✎";
+      ren.title = "rename this session";
+      ren.addEventListener("click", () => {
+        const inp = document.createElement("input");
+        inp.className = "ag-sess-edit";
+        inp.value = s.title;
+        inp.maxLength = 120;
+        let done = false;
+        const finish = async (commit) => {
+          if (done) return;
+          done = true;
+          if (commit) {
+            const t = inp.value.replace(/\s+/g, " ").trim();
+            if (t && t !== s.title) {
+              // open session: stamp the title locally BEFORE the server call —
+              // a persist() racing in from a reply in progress must already
+              // carry it, or a reload loses the rename. Roll back on failure;
+              // on success persist() rewrites the record with custom_title.
+              const mine = s.id === sessId;
+              const prev = customTitle;
+              if (mine) customTitle = t;
+              const rr = await invokeP("agent", "chat", "session_index", { op: "rename", id: s.id, arg: t });
+              if (rr && rr.status === "ok") { if (mine) persist(); }
+              else if (mine) customTitle = prev;
+            }
+          }
+          await renderSessions();
+        };
+        inp.addEventListener("keydown", (e) => {
+          if (e.key === "Enter") finish(true);
+          else if (e.key === "Escape") finish(false);
+        });
+        inp.addEventListener("blur", () => finish(false));
+        row.replaceChildren(inp);
+        inp.focus();
+        inp.select();
+      });
+      row.append(open, ren, del);
       sessListEl.appendChild(row);
     }
+  }
+
+  // one clipboard write for every copy affordance: navigator.clipboard only
+  // exists on https/localhost, so on any throw fall back to the hidden
+  // textarea — covers plain http from another machine on the LAN.
+  async function copyText(txt) {
+    try { await navigator.clipboard.writeText(txt); return true; } catch (e) {}
+    let ok = false;
+    const ta = document.createElement("textarea");
+    ta.value = txt;
+    ta.style.position = "fixed";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.select();
+    try { ok = document.execCommand("copy"); } catch (e) {}
+    ta.remove();
+    return ok;
   }
 
   function cellEl(entry) {
@@ -294,6 +413,65 @@ async function init(host) {
     body.className = "ag-cell-body";
     renderRich(body, entry.text ?? "", entry.kind === "agent");
     div.appendChild(body);
+     // quiet meta row: timestamp (only when the entry has one — never invented)
+    // + copy on user and agent messages. Tool/stage/snap/busy cells get nothing.
+    const wantCopy = entry.kind === "agent" || entry.kind === "user";
+    const wantTime = (entry.kind === "user" || entry.kind === "agent") && entry.time;
+    if (wantCopy || wantTime) {
+      const meta = document.createElement("div");
+      meta.className = "ag-cell-meta";
+      if (wantTime) {
+        const d = new Date(entry.time);
+        const ts = document.createElement("span");
+        ts.className = "ag-cell-time";
+        const t = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+        ts.textContent = d.toDateString() === new Date().toDateString()
+          ? t
+          : d.toLocaleDateString([], { year: "numeric", month: "short", day: "numeric" }) + " " + t;
+        ts.title = d.toLocaleString();
+        meta.appendChild(ts);
+      }
+      if (wantCopy) {
+        const cp = document.createElement("button");
+        cp.type = "button";
+        cp.className = "ag-cell-copy";
+        cp.textContent = "copy";
+        cp.title = entry.kind === "user" ? "copy this message"
+          : "copy this reply's Markdown";
+        cp.onclick = async () => {
+          // user cells: entry.typed is what was actually typed, without the
+          // [ATTACHED FILES] block; older entries fall back to the full text.
+          const ok = await copyText(entry.typed ?? entry.text ?? "");
+          cp.textContent = ok ? "✓ copied" : "copy failed";
+          setTimeout(() => { cp.textContent = "copy"; }, 1500);
+        };
+        meta.appendChild(cp);
+      }
+      div.appendChild(meta);
+    }
+    // per-code-block copy: each fenced block in a user/agent cell gets its
+    // own hover button (top-right). The button lives in a wrapper, never
+    // inside the pre, so pre.textContent stays exactly the code. Tool cells
+    // are excluded — their clipped-expansion path re-renders its own body.
+    if (entry.kind === "user" || entry.kind === "agent") {
+      body.querySelectorAll("pre").forEach((pre) => {
+        const wrap = document.createElement("div");
+        wrap.className = "ag-code-wrap";
+        pre.replaceWith(wrap);
+        wrap.appendChild(pre);
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "ag-code-copy";
+        btn.textContent = "copy";
+        btn.title = "copy this code block";
+        btn.onclick = async () => {
+          const ok = await copyText(pre.textContent);
+          btn.textContent = ok ? "✓" : "✗";
+          setTimeout(() => { btn.textContent = "copy"; }, 1500);
+        };
+        wrap.appendChild(btn);
+      });
+    }
     if (entry.kind === "stage") {
       // a mount note. Replay never re-runs a control's code on its own: once
       // the live instance is gone (reload, session switch) the note offers it.
@@ -521,13 +699,14 @@ async function init(host) {
   }
 
   function pushCell(entry) {
+    if (entry.time == null) entry.time = Date.now();
     transcript.push(entry);
     thread.appendChild(cellEl(entry));
     thread.scrollTop = thread.scrollHeight;
     persist();
     return entry;
   }
-  { const r = await invokeP("agent", "chat", "session_index", { op: "list", id: "" });
+  { const r = await invokeP("agent", "chat", "session_index", { op: "list", id: "", arg: "" });
     const ix = (r.status === "ok" && r.data && r.data.list) ? r.data.list : [];
     ix.length ? await openSession(ix[0].id) : await renderSessions(); }
 
@@ -535,6 +714,96 @@ async function init(host) {
   host.querySelector(".ag-newsession").addEventListener("click", newSession);
   host.querySelector(".ag-sess-new").addEventListener("click", newSession);
 
+  // ── sessions ↔ chat divider: drag to resize, dblclick resets, width persists ──
+  const sessAside = host.querySelector(".ag-sessions");
+  const sdiv = host.querySelector(".ag-sdiv");
+  const SESSW_KEY = "agent.chat.sessw";
+  // blocked storage throws on any touch — a throw during init would kill the
+  // rest of the chat setup, so every localStorage access goes through these.
+  const lsGet = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } };
+  const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} };
+  const lsDel = (k) => { try { localStorage.removeItem(k); } catch (e) {} };
+  // restore through the same limits the drag enforces (min 140px, max half
+  // the window) — a width saved on a big monitor must fit a laptop.
+  const clampSessW = () => {
+    const savedW = parseInt(lsGet(SESSW_KEY), 10);
+    if (savedW) sessAside.style.width =
+      Math.min(Math.max(140, savedW), Math.floor(window.innerWidth / 2)) + "px";
+  };
+  clampSessW();
+  sdiv.addEventListener("pointerdown", (ev) => {
+    ev.preventDefault();
+    sdiv.setPointerCapture(ev.pointerId);
+    sdiv.classList.add("drag");
+    const startX = ev.clientX;
+    const startW = sessAside.getBoundingClientRect().width;
+    const move = (e) => {
+      const w = Math.min(Math.max(140, startW + e.clientX - startX),
+                         Math.floor(window.innerWidth / 2));
+      sessAside.style.width = w + "px";
+    };
+    const up = () => {
+      sdiv.classList.remove("drag");
+      sdiv.removeEventListener("pointermove", move);
+      sdiv.removeEventListener("pointerup", up);
+      sdiv.removeEventListener("pointercancel", up);
+      lsSet(SESSW_KEY,
+        String(Math.round(sessAside.getBoundingClientRect().width)));
+    };
+    sdiv.addEventListener("pointermove", move);
+    sdiv.addEventListener("pointerup", up);
+    sdiv.addEventListener("pointercancel", up); // a cancelled drag must not stick
+  });
+  sdiv.addEventListener("dblclick", () => {
+    lsDel(SESSW_KEY);
+    sessAside.style.removeProperty("width");
+  });
+
+  // ── thread ↔ input divider: drag up to grow the message box, dblclick resets ──
+  const askInput = host.querySelector(".ag-input");
+  const adiv = host.querySelector(".ag-adiv");
+  const INPUTH_KEY = "agent.chat.inputh";
+  // same limits as the drag: input never under 52px, thread keeps >= 120px.
+  const clampInputH = () => {
+    const savedH = parseInt(lsGet(INPUTH_KEY), 10);
+    if (!savedH) return;
+    const room = askInput.getBoundingClientRect().height
+      + thread.getBoundingClientRect().height - 120;
+    if (room <= 0) return; // a hidden pane measures 0 — don't clamp on a resize there
+    askInput.style.height = Math.max(52, Math.min(savedH, room)) + "px";
+  };
+  clampInputH();
+  adiv.addEventListener("pointerdown", (ev) => {
+    ev.preventDefault();
+    adiv.setPointerCapture(ev.pointerId);
+    adiv.classList.add("drag");
+    const startY = ev.clientY;
+    const startH = askInput.getBoundingClientRect().height;
+    const maxH = startH + thread.getBoundingClientRect().height - 120;
+    const move = (e) => {
+      const h = Math.min(Math.max(52, startH + startY - e.clientY), maxH);
+      askInput.style.height = h + "px";
+    };
+    const up = () => {
+      adiv.classList.remove("drag");
+      adiv.removeEventListener("pointermove", move);
+      adiv.removeEventListener("pointerup", up);
+      adiv.removeEventListener("pointercancel", up);
+      lsSet(INPUTH_KEY,
+        String(Math.round(askInput.getBoundingClientRect().height)));
+    };
+    adiv.addEventListener("pointermove", move);
+    adiv.addEventListener("pointerup", up);
+    adiv.addEventListener("pointercancel", up); // a cancelled drag must not stick
+  });
+  adiv.addEventListener("dblclick", () => {
+    lsDel(INPUTH_KEY);
+    askInput.style.removeProperty("height");
+  });
+  // a shrinking window re-applies both saved sizes through their limits, so
+  // a tall box or wide sidebar from a big monitor never squeezes the thread.
+  const onWinResize = () => { clampSessW(); clampInputH(); };
+  window.addEventListener("resize", onWinResize);
   // ── the tool model (the notebook's ceremony, this venue's chrome) ────
   const confirmEl = host.querySelector(".ag-confirm");
   const askConfirmed = new Set();
@@ -740,6 +1009,7 @@ async function init(host) {
   form.addEventListener("submit", async (ev) => {
     ev.preventDefault();
     let message = input.value.trim();
+    const typed = message;  // before the [ATTACHED FILES] block — copy uses this
     if ((!message && !attachments.length) || sendBtn.disabled) return;
     input.value = "";
     sendBtn.disabled = true;
@@ -760,7 +1030,7 @@ async function init(host) {
         return;
       }
     }
-    pushCell({ kind: "user", text: message });
+    pushCell({ kind: "user", text: message, typed });
     const busy = pushCell({ kind: "busy", text: "thinking…" });
     const busyEl = thread.lastElementChild;
     try {
@@ -1779,7 +2049,7 @@ async function init(host) {
     setTimeout(() => { if (el.textContent === text) el.textContent = ""; }, 6000);
   }
 
-  return { dispose() { /* nothing persistent beyond localStorage */ } };
+  return { dispose() { window.removeEventListener("resize", onWinResize); } };
 }
 
   return init(ME, ME.DATA || {});

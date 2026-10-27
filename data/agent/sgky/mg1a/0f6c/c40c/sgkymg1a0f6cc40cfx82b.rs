@@ -28,7 +28,9 @@ let store = DataStore::new();
 if !store.exists("runtime", &id) { return err("no such session"); }
 let data = store.get_data("runtime", &id).get_object("data");
 if data.get_string("username") != username { return err("not your session"); }
-let title = if data.has("title") { data.get_string("title") } else { "untitled session".to_string() };
+let title = if data.has("custom_title") && !data.get_string("custom_title").trim().is_empty() { data.get_string("custom_title") }
+            else if data.has("title") { data.get_string("title") }
+            else { "untitled session".to_string() };
 let t = if data.has("time") { data.get_int("time") } else { time() };
 
 // upsert the row only if no live row for this id exists
