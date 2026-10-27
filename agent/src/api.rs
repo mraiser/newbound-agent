@@ -3642,6 +3642,24 @@ pub mod genmore {
         }
 
     }
+    pub mod moss {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+        pub fn install() -> DataObject {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("umvuiw1a173a7a1d3k1c6").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn generate(job: DataObject) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_object("job", job);
+            ::flowlang::rustcmd::RustCmd::new("xvtmus1a173a82034p1c9").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+    }
 }
 
 pub mod grabmore {
@@ -4303,6 +4321,47 @@ pub mod gudrun {
             ::flowlang::rustcmd::RustCmd::new("whssht1a03e666a7bh1").execute(d).expect("Rust command execution failed").get_object("a")
         }
 
+        pub fn logout(nn_sessionid: String) -> String {
+            let mut d = DataObject::new();
+            d.put_string("nn_sessionid", &nn_sessionid);
+            ::flowlang::rustcmd::RustCmd::new("tlzxtg1a12fcc4c35s13d").execute(d).expect("Rust command execution failed").get_string("a")
+        }
+
+        pub fn google_signin(sub: String, email: String, nn_sessionid: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("sub", &sub);
+            d.put_string("email", &email);
+            d.put_string("nn_sessionid", &nn_sessionid);
+            ::flowlang::rustcmd::RustCmd::new("qrhqtg1a13a2b6cb2r161e").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn google_unlink(nn_sessionid: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("nn_sessionid", &nn_sessionid);
+            ::flowlang::rustcmd::RustCmd::new("nrmklr1a14eebbe4eg10f").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn google_login(nn_sessionid: String) -> String {
+            let mut d = DataObject::new();
+            d.put_string("nn_sessionid", &nn_sessionid);
+            ::flowlang::rustcmd::RustCmd::new("khvmuq1a1594909fcs222").execute(d).expect("Rust command execution failed").get_string("a")
+        }
+
+        pub fn google_callback(code: Data, state: String, error: Data, nn_sessionid: String) -> String {
+            let mut d = DataObject::new();
+            d.set_property("code", code);
+            d.put_string("state", &state);
+            d.set_property("error", error);
+            d.put_string("nn_sessionid", &nn_sessionid);
+            ::flowlang::rustcmd::RustCmd::new("gilwkw1a159755187u292").execute(d).expect("Rust command execution failed").get_string("a")
+        }
+
+        pub fn establish(permalink: String) -> String {
+            let mut d = DataObject::new();
+            d.put_string("permalink", &permalink);
+            ::flowlang::rustcmd::RustCmd::new("plupvu1a1694f5313q1").execute(d).expect("Rust command execution failed").get_string("a")
+        }
+
     }
     pub mod health {
         use ::ndata::dataobject::DataObject;
@@ -4797,6 +4856,20 @@ pub mod gudrun {
 
     }
     pub mod image_edit {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+    }
+    pub mod profile {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+    }
+    pub mod workspace_page {
         use ::ndata::dataobject::DataObject;
         use ::ndata::dataarray::DataArray;
         use ::ndata::databytes::DataBytes;
@@ -6381,11 +6454,35 @@ pub mod scratch {
             ::flowlang::rustcmd::RustCmd::new("islnzw1a170702e2ci187").execute(d).expect("Rust command execution failed").get_object("a")
         }
 
-        pub fn phase3_provider(messages: DataArray, tools: DataArray) -> DataObject {
+        pub fn flowstep_r3_branch_probe(home: String) -> DataObject {
             let mut d = DataObject::new();
-            d.put_array("messages", messages);
-            d.put_array("tools", tools);
-            ::flowlang::rustcmd::RustCmd::new("nxkqqv1a172b3e237o72a").execute(d).expect("Rust command execution failed").get_object("a")
+            d.put_string("home", &home);
+            ::flowlang::rustcmd::RustCmd::new("swqjhk1a172d3a65ei5c").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn flowstep_r3_fork_everywhere(home: String, only: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("home", &home);
+            d.put_string("only", &only);
+            ::flowlang::rustcmd::RustCmd::new("rlmyqy1a1733b1bc5n5d").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn flowstep_r3_trim(home: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("home", &home);
+            ::flowlang::rustcmd::RustCmd::new("khvpjp1a17342f1b9h94").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn flowstep_r3_helpers_prep(home: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("home", &home);
+            ::flowlang::rustcmd::RustCmd::new("kvmzky1a1735fc524u72").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn flowstep_r3_pjoin_check(home: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("home", &home);
+            ::flowlang::rustcmd::RustCmd::new("ziprzi1a17362d4e9s80").execute(d).expect("Rust command execution failed").get_object("a")
         }
 
     }
@@ -6544,6 +6641,13 @@ pub mod scratch {
 
     }
     pub mod flowstep_r3_progress {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+    }
+    pub mod moss_image_progress {
         use ::ndata::dataobject::DataObject;
         use ::ndata::dataarray::DataArray;
         use ::ndata::databytes::DataBytes;
@@ -7051,6 +7155,24 @@ pub mod trainmore {
         }
 
     }
+    pub mod moss {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+        pub fn install() -> DataObject {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("suktvk1a1738fc325m141").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn train(job: DataObject) -> String {
+            let mut d = DataObject::new();
+            d.put_object("job", job);
+            ::flowlang::rustcmd::RustCmd::new("ivlrqn1a173908515q147").execute(d).expect("Rust command execution failed").get_string("a")
+        }
+
+    }
 }
 
 pub mod workspace {
@@ -7169,6 +7291,7 @@ pub struct old_genmore_wan {}
 pub struct old_genmore_wan22 {}
 pub struct old_genmore_zimg {}
 pub struct old_genmore_krea2 {}
+pub struct old_genmore_moss {}
 pub struct old_grabmore_grabmore {}
 pub struct old_grabmore_imageproc {}
 pub struct old_grabmore_selenium {}
@@ -7223,6 +7346,8 @@ pub struct old_gudrun_lora_to_mhm {}
 pub struct old_gudrun_select_lora {}
 pub struct old_gudrun_import_lora {}
 pub struct old_gudrun_image_edit {}
+pub struct old_gudrun_profile {}
+pub struct old_gudrun_workspace_page {}
 pub struct old_hagarmap_hagarmap {}
 pub struct old_hollis_hollis {}
 pub struct old_hollis_audio {}
@@ -7305,6 +7430,7 @@ pub struct old_scratch_flowstep_p5_progress {}
 pub struct old_scratch_flowstep_r2_progress {}
 pub struct old_scratch_flowstep {}
 pub struct old_scratch_flowstep_r3_progress {}
+pub struct old_scratch_moss_image_progress {}
 pub struct old_security_security {}
 pub struct old_storage_storage {}
 pub struct old_trainmore_common {}
@@ -7321,6 +7447,7 @@ pub struct old_trainmore_wan {}
 pub struct old_trainmore_wan22 {}
 pub struct old_trainmore_zimg {}
 pub struct old_trainmore_krea2 {}
+pub struct old_trainmore_moss {}
 pub struct old_workspace_workspace {}
 pub struct old_agent {
     pub agent: old_agent_agent,
@@ -7438,6 +7565,7 @@ pub struct old_genmore {
     pub wan22: old_genmore_wan22,
     pub zimg: old_genmore_zimg,
     pub krea2: old_genmore_krea2,
+    pub moss: old_genmore_moss,
 }
 pub struct old_grabmore {
     pub grabmore: old_grabmore_grabmore,
@@ -7496,6 +7624,8 @@ pub struct old_gudrun {
     pub select_lora: old_gudrun_select_lora,
     pub import_lora: old_gudrun_import_lora,
     pub image_edit: old_gudrun_image_edit,
+    pub profile: old_gudrun_profile,
+    pub workspace_page: old_gudrun_workspace_page,
 }
 pub struct old_hagarmap {
     pub hagarmap: old_hagarmap_hagarmap,
@@ -7600,6 +7730,7 @@ pub struct old_scratch {
     pub flowstep_r2_progress: old_scratch_flowstep_r2_progress,
     pub flowstep: old_scratch_flowstep,
     pub flowstep_r3_progress: old_scratch_flowstep_r3_progress,
+    pub moss_image_progress: old_scratch_moss_image_progress,
 }
 pub struct old_security {
     pub security: old_security_security,
@@ -7622,6 +7753,7 @@ pub struct old_trainmore {
     pub wan22: old_trainmore_wan22,
     pub zimg: old_trainmore_zimg,
     pub krea2: old_trainmore_krea2,
+    pub moss: old_trainmore_moss,
 }
 pub struct old_workspace {
     pub workspace: old_workspace_workspace,
@@ -7772,6 +7904,7 @@ pub const fn new() -> api {
             wan22: old_genmore_wan22 {},
             zimg: old_genmore_zimg {},
             krea2: old_genmore_krea2 {},
+            moss: old_genmore_moss {},
         },
         grabmore: old_grabmore {
             grabmore: old_grabmore_grabmore {},
@@ -7830,6 +7963,8 @@ pub const fn new() -> api {
             select_lora: old_gudrun_select_lora {},
             import_lora: old_gudrun_import_lora {},
             image_edit: old_gudrun_image_edit {},
+            profile: old_gudrun_profile {},
+            workspace_page: old_gudrun_workspace_page {},
         },
         hagarmap: old_hagarmap {
             hagarmap: old_hagarmap_hagarmap {},
@@ -7934,6 +8069,7 @@ pub const fn new() -> api {
             flowstep_r2_progress: old_scratch_flowstep_r2_progress {},
             flowstep: old_scratch_flowstep {},
             flowstep_r3_progress: old_scratch_flowstep_r3_progress {},
+            moss_image_progress: old_scratch_moss_image_progress {},
         },
         security: old_security {
             security: old_security_security {},
@@ -7956,6 +8092,7 @@ pub const fn new() -> api {
             wan22: old_trainmore_wan22 {},
             zimg: old_trainmore_zimg {},
             krea2: old_trainmore_krea2 {},
+            moss: old_trainmore_moss {},
         },
         workspace: old_workspace {
             workspace: old_workspace_workspace {},
@@ -9739,6 +9876,16 @@ impl old_genmore_krea2 {
         self::genmore::krea2::generate(job)
     }
 }
+impl old_genmore_moss {
+    #[deprecated(note = "use api::genmore::moss::install instead")]
+    pub fn install(&self) -> DataObject {
+        self::genmore::moss::install()
+    }
+    #[deprecated(note = "use api::genmore::moss::generate instead")]
+    pub fn generate(&self, job: DataObject) -> DataObject {
+        self::genmore::moss::generate(job)
+    }
+}
 impl old_grabmore_grabmore {
     #[deprecated(note = "use api::grabmore::grabmore::crop_raw instead")]
     pub fn crop_raw(&self, workdir: String, threshold: f64, num_threads: i64, ref_img: Data) -> DataObject {
@@ -10067,6 +10214,30 @@ impl old_gudrun_gudrun {
     #[deprecated(note = "use api::gudrun::gudrun::dataset_captions instead")]
     pub fn dataset_captions(&self, jobid: String, nn_sessionid: String) -> DataObject {
         self::gudrun::gudrun::dataset_captions(jobid, nn_sessionid)
+    }
+    #[deprecated(note = "use api::gudrun::gudrun::logout instead")]
+    pub fn logout(&self, nn_sessionid: String) -> String {
+        self::gudrun::gudrun::logout(nn_sessionid)
+    }
+    #[deprecated(note = "use api::gudrun::gudrun::google_signin instead")]
+    pub fn google_signin(&self, sub: String, email: String, nn_sessionid: String) -> DataObject {
+        self::gudrun::gudrun::google_signin(sub, email, nn_sessionid)
+    }
+    #[deprecated(note = "use api::gudrun::gudrun::google_unlink instead")]
+    pub fn google_unlink(&self, nn_sessionid: String) -> DataObject {
+        self::gudrun::gudrun::google_unlink(nn_sessionid)
+    }
+    #[deprecated(note = "use api::gudrun::gudrun::google_login instead")]
+    pub fn google_login(&self, nn_sessionid: String) -> String {
+        self::gudrun::gudrun::google_login(nn_sessionid)
+    }
+    #[deprecated(note = "use api::gudrun::gudrun::google_callback instead")]
+    pub fn google_callback(&self, code: Data, state: String, error: Data, nn_sessionid: String) -> String {
+        self::gudrun::gudrun::google_callback(code, state, error, nn_sessionid)
+    }
+    #[deprecated(note = "use api::gudrun::gudrun::establish instead")]
+    pub fn establish(&self, permalink: String) -> String {
+        self::gudrun::gudrun::establish(permalink)
     }
 }
 impl old_gudrun_job {
@@ -10974,9 +11145,25 @@ impl old_scratch_skills {
     pub fn flowstep_r3_persistent_probe(&self, home: String) -> DataObject {
         self::scratch::skills::flowstep_r3_persistent_probe(home)
     }
-    #[deprecated(note = "use api::scratch::skills::phase3_provider instead")]
-    pub fn phase3_provider(&self, messages: DataArray, tools: DataArray) -> DataObject {
-        self::scratch::skills::phase3_provider(messages, tools)
+    #[deprecated(note = "use api::scratch::skills::flowstep_r3_branch_probe instead")]
+    pub fn flowstep_r3_branch_probe(&self, home: String) -> DataObject {
+        self::scratch::skills::flowstep_r3_branch_probe(home)
+    }
+    #[deprecated(note = "use api::scratch::skills::flowstep_r3_fork_everywhere instead")]
+    pub fn flowstep_r3_fork_everywhere(&self, home: String, only: String) -> DataObject {
+        self::scratch::skills::flowstep_r3_fork_everywhere(home, only)
+    }
+    #[deprecated(note = "use api::scratch::skills::flowstep_r3_trim instead")]
+    pub fn flowstep_r3_trim(&self, home: String) -> DataObject {
+        self::scratch::skills::flowstep_r3_trim(home)
+    }
+    #[deprecated(note = "use api::scratch::skills::flowstep_r3_helpers_prep instead")]
+    pub fn flowstep_r3_helpers_prep(&self, home: String) -> DataObject {
+        self::scratch::skills::flowstep_r3_helpers_prep(home)
+    }
+    #[deprecated(note = "use api::scratch::skills::flowstep_r3_pjoin_check instead")]
+    pub fn flowstep_r3_pjoin_check(&self, home: String) -> DataObject {
+        self::scratch::skills::flowstep_r3_pjoin_check(home)
     }
 }
 impl old_scratch_flowstep_p0_progress {
@@ -11281,6 +11468,16 @@ impl old_trainmore_krea2 {
     #[deprecated(note = "use api::trainmore::krea2::train instead")]
     pub fn train(&self, job: DataObject) -> String {
         self::trainmore::krea2::train(job)
+    }
+}
+impl old_trainmore_moss {
+    #[deprecated(note = "use api::trainmore::moss::install instead")]
+    pub fn install(&self) -> DataObject {
+        self::trainmore::moss::install()
+    }
+    #[deprecated(note = "use api::trainmore::moss::train instead")]
+    pub fn train(&self, job: DataObject) -> String {
+        self::trainmore::moss::train(job)
     }
 }
 impl old_workspace_workspace {
