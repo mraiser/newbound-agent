@@ -47,6 +47,7 @@ let file = dir.join(format!("{}.jsonl", safe));
 // records in the store are truth; this file is rebuilt meaning, never data.
 let fold = || -> DataArray {
     let mut order: Vec<String> = Vec::new();            // first-seen order, for stability
+    let mut ord: Vec<String> = Vec::new();              // the user's saved ordering: the LATEST order row wins
     let mut latest: Vec<(String, DataObject)> = Vec::new();
     if let Ok(text) = std::fs::read_to_string(&file) {
         for line in text.lines() {
@@ -55,6 +56,16 @@ let fold = || -> DataArray {
             let row = match DataObject::try_from_string(line) {
                 Ok(r) => r, Err(_) => continue,
             };
+            if row.has("order") {
+                // an order row: {order:[ids], time} — replaces the saved ordering
+                // wholesale, so the latest order row in the file wins.
+                if let ndata::data::Data::DArray(_) = row.get_property("order") {
+                    ord = row.get_array("order").objects().into_iter()
+                        .filter_map(|d| match d { ndata::data::Data::DString(s) => Some(s), _ => None })
+                        .collect();
+                }
+                continue;
+            }
             if !row.has("id") { continue; }
             let id = row.get_string("id");
             if let Some(pos) = latest.iter().position(|(i, _)| *i == id) {
@@ -79,6 +90,19 @@ let fold = || -> DataArray {
     // newest first, by the row's recorded time
     let mut v: Vec<DataObject> = out.objects().into_iter().map(|d| d.object()).collect();
     v.sort_by(|a, b| b.get_int("time").cmp(&a.get_int("time")));
+    // apply the user's saved ordering: ids NOT in it come FIRST in their
+    // newest-first relative order (brand-new sessions land on top), then the
+    // ordered ids in sequence; deleted or absent ids are simply skipped.
+    if !ord.is_empty() {
+        let mut arranged: Vec<DataObject> = Vec::new();
+        for o in &v {
+            if !ord.contains(&o.get_string("id")) { arranged.push(o.clone()); }
+        }
+        for want in &ord {
+            if let Some(o) = v.iter().find(|o| o.get_string("id") == *want) { arranged.push(o.clone()); }
+        }
+        v = arranged;
+    }
     let mut out2 = DataArray::new();
     for o in v { out2.push_object(o); }
     out2
@@ -102,4 +126,74 @@ if op_l == "delete" {
     }
     return ok_list(fold());
 }
-err("op must be list | delete")
+if op_l == "rename" {
+    let id = id.trim();
+    if id.is_empty() { return err("id is required for rename"); }
+    let new_title = arg.replace('\n', " ").trim().to_string();
+    if new_title.is_empty() { return err("arg (the new title) is required for rename"); }
+    // truth first: stamp the custom title on the session record itself, ownership-checked,
+    // through the same gated door the chat uses (app.write) — openSession restores it, and
+    // session_touch can rebuild a lost index row with the rename intact
+    if !store.exists("runtime", id) { return err("no such session"); }
+    let mut data = store.get_data("runtime", id).get_object("data");
+    if !data.has("username") || data.get_string("username") != username { return err("not your session"); }
+    data.put_string("custom_title", &new_title);
+    data.put_string("title", &new_title);
+    let mut a = DataObject::new();
+    a.put_string("lib", "runtime");
+    a.put_string("id", id);
+    a.put_object("data", data);
+    a.put_array("readers", DataArray::new());
+    a.put_array("writers", DataArray::new());
+    a.put_string("nn_sessionid", &nn_sessionid);
+    if Command::lookup("app", "app", "write").execute(a).is_err() {
+        return err("could not update the session record");
+    }
+    // then meaning: append an index row with the new title, REUSING the old row's time
+    // so a rename never changes the sidebar's order
+    let mut t = 0i64;
+    for d in fold().objects() {
+        let o = d.object();
+        if o.get_string("id") == id { t = o.get_int("time"); break; }
+    }
+    if t == 0 { t = time(); }
+    if std::fs::create_dir_all(&dir).is_err() { return err("cannot create the index dir"); }
+    use std::io::Write;
+    let mut row = DataObject::new();
+    row.put_string("id", id);
+    row.put_string("title", &new_title);
+    row.put_int("time", t);
+    if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(&file) {
+        let _ = writeln!(f, "{}", row.to_string().replace('\n', " "));
+    }
+    return ok_list(fold());
+}
+if op_l == "reorder" {
+    // `id` is ignored; `arg` is a JSON array of session ids, top to bottom.
+    // House idiom for non-object JSON: wrap it in an object and read it back
+    // (try_from_string PANICS on well-formed non-object JSON, so never parse
+    // the bare array).
+    let wrapped = match DataObject::try_from_string(&format!("{{\"a\":{}}}", arg)) {
+        Ok(o) => o,
+        Err(_) => return err("arg must be a JSON array of session ids"),
+    };
+    let mut idvec: Vec<String> = Vec::new();
+    if let ndata::data::Data::DArray(_) = wrapped.get_property("a") {
+        for d in wrapped.get_array("a").objects() {
+            if let ndata::data::Data::DString(s) = d { idvec.push(s); }
+        }
+    }
+    if idvec.is_empty() { return err("arg must be a JSON array of session ids"); }
+    if std::fs::create_dir_all(&dir).is_err() { return err("cannot create the index dir"); }
+    use std::io::Write;
+    let mut ids = DataArray::new();
+    for s in &idvec { ids.push_string(s); }
+    let mut row = DataObject::new();
+    row.put_array("order", ids);
+    row.put_int("time", time());
+    if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(&file) {
+        let _ = writeln!(f, "{}", row.to_string().replace('\n', " "));
+    }
+    return ok_list(fold());
+}
+err("op must be list | delete | rename | reorder")

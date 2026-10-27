@@ -37,6 +37,19 @@
 .ag-sess-del { flex: none; background: none; border: none; color: var(--text-faint);
   cursor: pointer; }
 .ag-sess-del:hover { color: var(--bad, #c0564f); }
+.ag-sess.ag-drop-above { box-shadow: inset 0 2px 0 var(--accent, #f0a63c); }
+.ag-sess.dragging { opacity: 0.5; }
+/* opacity, not visibility: the pencil stays in the Tab order */
+.ag-app .ag-sess-ren { flex: none; background: none; border: none; padding: 0 2px; color: var(--text-faint); cursor: pointer; opacity: 0; }
+.ag-sess:hover .ag-sess-ren, .ag-sess.on .ag-sess-ren, .ag-app .ag-sess-ren:focus-visible { opacity: 1; }
+.ag-app .ag-sess-ren:hover { color: var(--accent, #f0a63c); }
+.ag-app .ag-sess-edit { flex: 1; min-width: 0; padding: 5px 9px; font: inherit; }
+.ag-sdiv { flex: none; width: 6px; cursor: col-resize; align-self: stretch;
+  margin-left: -3px; background: transparent; }
+.ag-sdiv:hover, .ag-sdiv.drag { background: var(--accent, #f0a63c); opacity: 0.35; }
+.ag-adiv { flex: none; height: 6px; cursor: row-resize; margin-bottom: -3px;
+  position: relative; z-index: 1; background: transparent; }
+.ag-adiv:hover, .ag-adiv.drag { background: var(--accent, #f0a63c); opacity: 0.35; }
 .ag-chat-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .ag-thread { flex: 1; overflow-y: auto; padding: 18px 16px;
   display: flex; flex-direction: column; gap: 10px; }
@@ -77,8 +90,24 @@
 .ag-cell-title.clamped { max-height: 44px; overflow: hidden;
   -webkit-mask-image: linear-gradient(to bottom, black 45%, transparent);
   mask-image: linear-gradient(to bottom, black 45%, transparent); }
+.ag-cell-meta { display: flex; gap: 10px; align-items: center; margin-top: 4px;
+  font-size: 11px; color: var(--text-faint); }
+.ag-user .ag-cell-meta { justify-content: flex-end; }
+.ag-app .ag-cell-copy { background: none; border: none; border-radius: 0;
+  padding: 0; color: var(--text-faint); font: inherit; cursor: pointer; }
+.ag-app .ag-cell-copy:hover { color: var(--accent, #f0a63c); }
 .ag-cell-body pre { background: var(--panel); border: 1px solid var(--line);
   border-radius: 8px; padding: 8px; overflow-x: auto; font-size: 12px; }
+/* per-code-block copy: the wrapper hosts the button so the pre's textContent
+   stays exactly the code; hover reveals it. `.ag-cell-body pre` still matches
+   through the wrapper, so block styling is untouched. */
+.ag-code-wrap { position: relative; }
+.ag-app .ag-code-copy { position: absolute; top: 4px; right: 4px; padding: 1px 7px;
+  font-size: 11px; background: var(--panel); border: 1px solid var(--line);
+  border-radius: 6px; color: var(--text-faint); cursor: pointer;
+  opacity: 0; transition: opacity .12s; }
+.ag-code-wrap:hover .ag-code-copy { opacity: 1; }
+.ag-app .ag-code-copy:hover { color: var(--accent, #f0a63c); }
 /* long tool outputs clamp visually, never lost — .clamped caps the height
    with a fade; clampVisually (js) adds a more/less toggle only on genuine
    overflow. Complements the capture-store expander, which is for text that
