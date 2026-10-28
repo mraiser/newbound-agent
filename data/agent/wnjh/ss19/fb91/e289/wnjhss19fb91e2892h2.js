@@ -1484,17 +1484,15 @@ async function init(host) {
     }
   }
 
-  // ── the mind tab (docs/understandingloop.md): the autonomous agent's
-  // status, statistics, tools, and configuration in one pane. Status is
-  // polled while the pane is open; every mutating button is an existing
-  // platform command - this pane owns no state of its own. ────────────
+  // ── the mind tab (docs/understandingloop.md; mind-tab-spec 2026-10-28):
+  // a sectioned settings workspace. Status is polled every 5s while the
+  // pane is open; the instant switches and service buttons call the same
+  // platform commands as before; rates, settings and persona edits
+  // collect in a DRAFT and are saved via Review changes → Apply. This
+  // pane owns no state of its own beyond that draft. ───────────────────
   let mindWired = false;
   let mindTimer = null;
   const mEsc = (s) => { const d = document.createElement("span"); d.textContent = String(s ?? ""); return d.innerHTML; };
-  const mKv = (pairs) => pairs.map(([k, v, cls]) =>
-    `<span class="ag-kv-row"><span class="ag-kv-k lbl">${mEsc(k)}</span>` +
-    `<span class="ag-kv-v ${cls || ""}">${mEsc(v)}</span></span>`).join("");
-  const mChip = (txt, cls) => `<span class="ag-chip ${cls}">${mEsc(txt)}</span>`;
   // The HTTP exec envelope nests the command's own result under .data
   // ({status, pid, nn_return_type, data:{...}}); unwrap it, letting an
   // inner status (our commands carry one) win over the transport's.
@@ -1503,70 +1501,96 @@ async function init(host) {
     const e = r.envelope;
     return (e.data && typeof e.data === "object") ? { status: e.status, ...e.data } : e;
   };
+  const mKv = (pairs, cls) => `<div class="kv ${cls || ""}">` + pairs.map(([k, v, c]) =>
+    `<span class="kv-row"><span class="k lbl">${mEsc(k)}</span>` +
+    `<span class="v ${c || ""}" title="${mEsc(v)}">${mEsc(v)}</span></span>`).join("") + `</div>`;
+  const mChip = (txt, cls) => `<span class="chip ${cls || ""}">${mEsc(txt)}</span>`;
+  const mChips = (s) => `<div class="chips">${s}</div>`;
+
+  const M_LABEL = {
+    LLM: "Chat provider", LLM_CTL: "Custom command", VLLM_URL: "vLLM server address", VLLM_MODEL: "vLLM model",
+    OPENAI_MODEL: "OpenAI model", OPENAI_URL: "OpenAI endpoint", ANTHROPIC_MODEL: "Anthropic model", ANTHROPIC_URL: "Anthropic endpoint",
+    GEMINI_MODEL: "Gemini model", GEMINI_URL: "Gemini endpoint", OLLAMA_URL: "Ollama address", OLLAMA_MODEL: "Ollama model",
+    LLM_REMOTE: "Remote peer", LLM_REMOTE_ID: "Remote command id", LLM_REMOTE_SPLIT: "Split large requests",
+    CLAUDE_CODE_MODEL: "Claude Code model", CLAUDE_CODE_PERMISSION_MODE: "Claude Code permission mode", CLAUDE_CODE_SYSTEM_MODE: "Claude Code system prompt",
+    CLAUDE_CODE_TIMEOUT: "Claude Code timeout", CLAUDE_CODE_IDLE_TIMEOUT: "Claude Code idle timeout", CLAUDE_CODE_TOOLS: "Claude Code tools", CLAUDE_CODE_MCP: "Claude Code MCP servers",
+    CLAUDE_CODE_CWD: "Claude Code working folder", CLAUDE_CODE_BIN: "Claude Code CLI path",
+    "@drive": "Self-initiated activity", MAX_PLAN_STEPS: "Steps per plan item", PLAN_STEPS_PER_HOUR: "Plan steps per hour",
+    SALIENCE: "Score what matters locally", MODEL_TRAIN: "Train the resident model", USER_GATE: "Release learned updates",
+    MODEL_CHECKPOINT: "Resident model checkpoint", MODEL_SERVICE_PORT: "Local service port", MODEL_TRAIN_LR: "Learning rate",
+    MODEL_MIX: "Training mix", MODEL_GATE: "Evaluation gate", MODEL_TRAIN_INTERVAL: "Training interval", USER_LORA: "Personality adapter",
+    SALIENCE_STEER: "Steer by salience", SALIENCE_BANDS: "Salience bands", NANOCHAT_TRAIN_ARGS: "Base training arguments",
+    NANOCHAT_REPO: "nanochat repository", NANOCHAT_DIST: "nanochat distribution",
+  };
+  const mSectionOf = (k) =>
+    k === "LLM" || k.startsWith("LLM_") || /^(VLLM|OPENAI|ANTHROPIC|GEMINI|OLLAMA|CLAUDE_CODE)_/.test(k) ? "conversation"
+    : ["@drive", "MAX_PLAN_STEPS", "PLAN_STEPS_PER_HOUR", "PLAN_AUTONOMY"].includes(k) ? "activity"
+    : ["SALIENCE", "MODEL_TRAIN", "USER_GATE"].includes(k) ? "learning" : "advanced";
+  const M_SECTIONS = [
+    ["conversation", "Conversation", "The model that answers you in chat.", '<path d="M3 4h14v9H8l-4 3v-3H3z"/>'],
+    ["activity", "Background activity", "Decide what happens between your messages.", '<polyline points="2,10 6,10 8,4 12,16 14,10 18,10"/>'],
+    ["learning", "Local learning", "The resident model, its training, and what reaches chat.", '<path d="M10 17V9"/><path d="M10 9c0-3 2-5 6-5 0 4-2 5-6 5z"/><path d="M10 12c0-2-2-4-5-4 0 3 2 4 5 4z"/>'],
+    ["personality", "Local personality", "Teach the local model through example exchanges.", '<circle cx="10" cy="7" r="3"/><path d="M4 17c0-3 3-5 6-5s6 2 6 5"/>'],
+    ["insights", "Insights", "What the agent grew this week, and how its judge is doing.", '<path d="M4 16V10M10 16V5M16 16v-8"/>'],
+    ["advanced", "Advanced", "Technical configuration, when you need it.", '<path d="M3 6h14M3 14h14"/><circle cx="7" cy="6" r="2"/><circle cx="13" cy="14" r="2"/>'],
+  ];
+
+  // ── draft model: baselines come from the 5s poll (get_settings + the
+  // executive's live drive); a key counts as changed only while the draft
+  // differs from the baseline, and the poll never overwrites a drafted or
+  // focused field. ─────────────────────────────────────────────────────
+  let mSection = "conversation";
+  let mDraft = {};
+  let mSet = {};                 // key -> {v, d, t, set, locked} from get_settings
+  let mDrive = "";               // live drive baseline (executive.status)
+  let mLiveState = { executive: false, sensor: false, plan: false };
+  let mRepos = [];
+  let mReposEnabled = 0;
+  let mDots = {};
+  let mDotTips = {};             // sec -> the dot's tooltip (title + aria-label)
+  let mShowKeys = lsGet("ag-mind-showkeys") === "1";
+  const mBaseVal = (k) => k === "@drive" ? String(mDrive ?? "") : (mSet[k] ? String(mSet[k].v ?? "") : "");
+  const mCur = (k) => (k in mDraft ? mDraft[k] : mBaseVal(k));
+  const mSetDraft = (k, v) => { if (String(v) === mBaseVal(k)) delete mDraft[k]; else mDraft[k] = String(v); };
+  const mEff = (k, dflt) => (String(mCur(k)).trim() || dflt);
+  const mGateMode = (s) => (/(^|,)mode=([^,]*)/.exec(s || "") || [])[2] || "manual";
+  const mWithGateMode = (s, m) => /(^|,)mode=/.test(s) ? s.replace(/(^|,)mode=[^,]*/, `$1mode=${m}`) : `mode=${m},${s}`;
+  const M_TAKES = (k) => (mSet[k] && mSet[k].t) || (k === "@drive" ? "immediately"
+    : /^(OPENAI|ANTHROPIC|GEMINI|OLLAMA|LLM_REMOTE|CLAUDE_CODE)/.test(k) ? "next frontier call"
+    : /PLAN/.test(k) ? "as the plan worker next reads it" : "when its command next reads it");
+  const mCmdOf = (k) => k === "@drive" ? "agent.executive.set_drive"
+    : (k === "PLAN_STEPS_PER_HOUR" && !mDraft[k]) ? `agent.model.set_setting ${k} = "" (removes the key)`
+    : `agent.model.set_setting ${k}`;
+  function mPretty(k, v) {
+    v = String(v ?? "");
+    if (k === "USER_GATE") return mGateMode(v) === "auto" ? "release automatically" : "ask me to approve";
+    if (k === "LLM") {
+      const o = host.querySelector(`[data-provider] option[value="${v}"]`);
+      return o ? o.textContent : (v || "VLLM (default)");
+    }
+    if (k === "@drive") return v + " acts/hr";
+    if (k === "PLAN_STEPS_PER_HOUR" && (!v || v === "0")) return "no cap";
+    if (v === "") return mSet[k] && mSet[k].d ? `default (${mSet[k].d})` : "not set";
+    return v.length > 64 ? v.slice(0, 64) + "…" : v;
+  }
 
   // ── the persona editor: the corpus the 8b adapter derives from.
-  // Loaded once per session (the 5s poll never stomps edits); the
-  // empty corpus shows the shipped default seed until the owner saves.
+  // Loaded once per session (the 5s poll never stomps edits); the empty
+  // corpus shows the shipped default seed until the owner saves. Edits
+  // join the draft; Apply serializes exactly as the old save did (raw
+  // rows re-parsed, pairs as {user, assistant}, both-empty pairs
+  // skipped - so an added empty row is not a pending change). ──────────
   let personaRows = null;
-  let personaDirty = false;
-  function renderPersona() {
-    const box = host.querySelector("[data-persona]");
-    box.textContent = "";
-    (personaRows || []).forEach((row, i) => {
-      const div = document.createElement("div");
-      div.className = "ag-persona-row";
-      const isPair = row && typeof row === "object" && !("messages" in row)
-        && ("user" in row || "assistant" in row) && row.__rawText == null;
-      if (isPair) {
-        const tu = document.createElement("textarea");
-        tu.placeholder = "user says…";
-        tu.value = row.user ?? "";
-        tu.addEventListener("input", () => { row.user = tu.value; personaDirty = true; });
-        const ta = document.createElement("textarea");
-        ta.placeholder = "the agent answers…";
-        ta.value = row.assistant ?? "";
-        ta.addEventListener("input", () => { row.assistant = ta.value; personaDirty = true; });
-        div.append(tu, ta);
-      } else {
-        const tr = document.createElement("textarea");
-        tr.className = "ag-persona-raw";
-        tr.value = row.__rawText != null ? row.__rawText : JSON.stringify(row);
-        tr.addEventListener("input", () => { row.__rawText = tr.value; personaDirty = true; });
-        div.append(tr);
-      }
-      const del = document.createElement("button");
-      del.className = "ag-mind-btn ag-persona-del";
-      del.textContent = "×";
-      del.title = "remove this exchange";
-      del.addEventListener("click", () => {
-        personaRows.splice(i, 1); personaDirty = true; renderPersona();
-      });
-      div.append(del);
-      box.append(div);
-    });
-  }
-  async function loadPersona(force) {
-    if (personaDirty && !force) return;
-    const r = mEnv(await invoke("agent", "model", "persona_read", {}));
-    const state = host.querySelector("[data-persona-state]");
-    if (!r || r.status !== "ok") {
-      state.textContent = "persona read failed: " + ((r && r.msg) || "no reply");
-      return;
-    }
-    personaRows = r.rows || [];
-    personaDirty = false;
-    renderPersona();
-    state.textContent = r.seed
-      ? "showing the DEFAULT SEED — nothing saved yet; edit to taste, then save to adopt it"
-      : `${personaRows.length} rows on disk`
-        + (r.invalid ? ` · ${r.invalid} unparseable lines skipped` : "");
-  }
-  async function savePersona() {
-    const lines = [];
-    for (const row of personaRows || []) {
+  let personaLoaded = null;       // deep clone of the last load (Discard target)
+  let personaBaseStr = "";        // normalized serialization of the last load
+  let pSeed = false, pInvalid = 0, pReadErr = "", pAdopt = false; // pAdopt: "Use this seed" marked the unedited default seed as a draft change
+  const pClone = (x) => JSON.parse(JSON.stringify(x || []));
+  const personaLines = (rows) => {
+    const lines = []; let bad = false;
+    for (const row of rows || []) {
       if (row.__rawText != null) {
         try { lines.push(JSON.stringify(JSON.parse(row.__rawText))); }
-        catch { mindNote("persona", "a raw row is not valid JSON — fix it before saving", true); return; }
+        catch { bad = true; lines.push("\u0000invalid"); }
       } else if ("user" in row || "assistant" in row) {
         if (!(row.user || "").trim() && !(row.assistant || "").trim()) continue;
         lines.push(JSON.stringify({ user: row.user || "", assistant: row.assistant || "" }));
@@ -1574,26 +1598,438 @@ async function init(host) {
         lines.push(JSON.stringify(row));
       }
     }
-    const r = mEnv(await invoke("agent", "model", "persona_write", { content: lines.join("\n") }));
-    if (r && r.status === "ok") {
-      mindNote("persona", `saved ${r.rows} rows (${r.heldout} held out for the probe)`);
-      loadPersona(true);
-      loadMind();
-    } else {
-      mindNote("persona", "save failed: " + ((r && r.msg) || "no reply"), true);
+    return { lines, bad };
+  };
+  const personaDirtyNow = () => personaRows !== null && personaLines(personaRows).lines.join("\n") !== personaBaseStr;
+  const personaBadNow = () => personaRows !== null && personaLines(personaRows).bad;
+  function renderPersona() {
+    const box = host.querySelector("[data-persona]");
+    if (!box) return;
+    box.textContent = "";
+    (personaRows || []).forEach((row, i) => {
+      const div = document.createElement("div");
+      const isPair = row && typeof row === "object" && !("messages" in row)
+        && ("user" in row || "assistant" in row) && row.__rawText == null;
+      div.className = "prow" + (isPair ? "" : " raw");
+      if (i % 5 === 4) {
+        const held = document.createElement("span");
+        held.className = "lbl held";
+        held.textContent = "held out for the check";
+        div.append(held);
+      }
+      if (isPair) {
+        const tu = document.createElement("textarea");
+        tu.placeholder = "user says…";
+        tu.setAttribute("aria-label", "User message");
+        tu.value = row.user ?? "";
+        tu.addEventListener("input", () => { row.user = tu.value; mindRefresh(); });
+        const ta = document.createElement("textarea");
+        ta.placeholder = "the agent answers…";
+        ta.setAttribute("aria-label", "Agent answer");
+        ta.value = row.assistant ?? "";
+        ta.addEventListener("input", () => { row.assistant = ta.value; mindRefresh(); });
+        div.append(tu, ta);
+      } else {
+        const tr = document.createElement("textarea");
+        tr.className = "mono";
+        tr.setAttribute("aria-label", "Raw exchange");
+        tr.value = row.__rawText != null ? row.__rawText : JSON.stringify(row);
+        tr.addEventListener("input", () => {
+          row.__rawText = tr.value;
+          let bad = false; try { JSON.parse(tr.value); } catch (e) { bad = true; }
+          div.classList.toggle("bad", bad);
+          mindRefresh();
+        });
+        div.append(tr);
+      }
+      const del = document.createElement("button");
+      del.className = "del";
+      del.textContent = "×";
+      del.title = "remove this exchange";
+      del.addEventListener("click", () => { personaRows.splice(i, 1); renderPersona(); mindRefresh(); });
+      div.append(del);
+      box.append(div);
+    });
+    renderPersonaState();
+  }
+  function renderPersonaState() {
+    const state = host.querySelector("[data-pstate]");
+    if (!state) return;
+    state.textContent = pReadErr ? "persona read failed: " + pReadErr
+      : (pSeed && !personaDirtyNow())
+      ? "showing the DEFAULT SEED — nothing saved yet; edit to taste, then save to adopt it"
+      : `${(personaRows || []).length} rows ${personaDirtyNow() ? "· edited (unsaved)" : "on disk"}`
+        + (pInvalid ? ` · ${pInvalid} unparseable lines skipped` : "");
+    // "Use this seed": only while the unedited default seed is showing; a
+    // pending adopt hides it (the draft now carries the change — Discard
+    // or Reload from disk brings it back).
+    const adopt = host.querySelector("[data-padopt]");
+    if (adopt) adopt.hidden = !(pSeed && !pReadErr && !personaDirtyNow() && !pAdopt);
+  }
+  async function loadPersona(force) {
+    if ((personaDirtyNow() || pAdopt) && !force) return;
+    const r = mEnv(await invoke("agent", "model", "persona_read", {}));
+    if (!r || r.status !== "ok") {
+      pReadErr = (r && r.msg) || "no reply";
+      renderPersonaState();
+      return;
     }
+    pReadErr = "";
+    pSeed = !!r.seed;
+    pAdopt = false; // a fresh load (Reload from disk, the post-Apply reload) clears a pending adopt
+    pInvalid = r.invalid || 0;
+    personaRows = r.rows || [];
+    personaLoaded = pClone(personaRows);
+    personaBaseStr = personaLines(personaRows).lines.join("\n");
+    renderPersona();
+    mindRefresh();
+  }
+
+  // today's per-card note, grown the spec's way: a one-line message, red
+  // on failure, with the command's full JSON reply behind a collapsed
+  // "full reply" <details> when there is one.
+  function mResult(where, msg, isErr, raw) {
+    const el = host.querySelector(`[data-res="${where}"]`);
+    if (!el) return;
+    el.classList.toggle("err", !!isErr);
+    el.innerHTML = `<div class="msg">${mEsc(msg)}</div>` +
+      (raw ? `<details><summary>full reply</summary><pre>${mEsc(JSON.stringify(raw, null, 1))}</pre></details>` : "");
+  }
+  // the unsaved-changes bar: hidden (and inert) until something is drafted,
+  // then slides up over the pane bottom; hidden again while the Review or
+  // result screen is open — the result screen is the confirmation, and after
+  // Done it returns only if changes are still pending (a failed change kept
+  // in the draft). Instant "applies now" switches never touch the draft, so
+  // they never show it.
+  function mBarSync(count) {
+    const mx = host.querySelector('[data-pane="mind"] .mx');
+    if (!mx) return;
+    const bar = mx.querySelector(".mx-foot");
+    const on = count > 0 && mx.querySelector(".mx-review").hidden;
+    bar.classList.toggle("show", on);
+    bar.inert = !on;
+    mx.querySelector(".mx-content").classList.toggle("padbar", on);
+  }
+
+  // ── building the workspace: sidebar + panes from the section templates,
+  // one delegated listener set for drafts, switches and actions. ───────
+  function mindBuild() {
+    const mx = host.querySelector('[data-pane="mind"] .mx');
+    if (!mx) return;
+    const side = mx.querySelector(".mx-side");
+    const panes = mx.querySelector(".mx-panes");
+    for (const [id, label, sub, icon] of M_SECTIONS) {
+      const b = document.createElement("button");
+      b.className = "mx-nav";
+      b.dataset.sec = id;
+      b.innerHTML = `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${icon}</svg><span>${label}</span><span class="dirty"></span><span class="dot"></span>`;
+      side.append(b);
+      const pane = document.createElement("section");
+      pane.dataset.msec = id;
+      pane.innerHTML = `<div class="mx-head"><span class="ico"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${icon}</svg></span><div><h3>${label}</h3><p>${sub}</p></div></div>`;
+      const t = host.querySelector(`template[data-mt="${id}"]`);
+      if (t) pane.append(t.content.cloneNode(true));
+      panes.append(pane);
+    }
+
+    const sk = mx.querySelector(".mx-showkeys");
+    sk.checked = mShowKeys;
+    mx.classList.toggle("showkeys", mShowKeys);
+    sk.addEventListener("change", () => {
+      mShowKeys = sk.checked;
+      lsSet("ag-mind-showkeys", mShowKeys ? "1" : "0");
+      mx.classList.toggle("showkeys", mShowKeys);
+    });
+
+    // drafts: every data-key field (friendly or raw) and the gate-mode view
+    mx.addEventListener("input", (e) => {
+      const el = e.target;
+      if (el.classList.contains("mx-cfgfilter")) { renderCfg(); return; }
+      if (el.dataset.key && !el.dataset.live) {
+        const k = el.dataset.key;
+        let v = el.type === "checkbox" ? (el.checked ? (el.dataset.on || "on") : (el.dataset.off || "off")) : el.value;
+        if (!el.closest(".cfg")) {
+          if (k === "PLAN_STEPS_PER_HOUR" && v.trim() === "0") v = "";       // 0 removes the key: unlimited is the default
+          if (k === "MAX_PLAN_STEPS" && v.trim() === "20" && mBaseVal(k) === "") v = "";
+        }
+        mSetDraft(k, v);
+        if (k === "LLM" && v === "CLAUDECODE" && mBaseVal("LLM_CTL") !== "agent:llm:claude_code") mSetDraft("LLM_CTL", "agent:llm:claude_code");
+        if (k === "LLM" && v !== "CLAUDECODE" && v !== "CUSTOM") delete mDraft["LLM_CTL"];
+        mBack(); mindRefresh();
+      } else if (el.dataset.virtual === "gateMode") {
+        mSetDraft("USER_GATE", mWithGateMode(mCur("USER_GATE"), el.value));
+        mBack(); mindRefresh();
+      }
+    });
+
+    // instant switches: the same commands and messages as the old buttons
+    mx.addEventListener("change", async (e) => {
+      const el = e.target;
+      if (el.dataset.live) {
+        const which = el.dataset.live;
+        el.disabled = true;
+        try {
+          if (which === "executive" || which === "sensor") {
+            const st = mEnv(await invoke("agent", which, "status", {}));
+            const cmd = st && st.running ? "stop" : "start";
+            const r = mEnv(await invoke("agent", which, cmd, {}));
+            mResult("loop", r && r.status === "ok" ? `${which} ${cmd} ok` : `${which} ${cmd} failed`, !(r && r.status === "ok"));
+          } else if (which === "plan") {
+            const gs2 = mEnv(await invoke("agent", "model", "get_settings", {}));
+            const row = ((gs2 && gs2.settings) || []).find((s) => s.key === "PLAN_AUTONOMY");
+            const cur = row ? String(row.value || "").trim().toLowerCase() : "off";
+            const on = ["on", "true", "1", "yes"].includes(cur);
+            // armed -> disarm (set off); disarmed -> arm (set on). set_setting
+            // updates the LIVE globals + persists botd.properties.
+            const next = on ? "off" : "on";
+            const r = mEnv(await invoke("agent", "model", "set_setting", { key: "PLAN_AUTONOMY", value: next }));
+            // The plan worker follows PLAN_AUTONOMY live; arming only has to make
+            // sure its thread exists (the worker_boot timer normally starts it).
+            if (next === "on" && r && r.status === "ok") {
+              const ws = mEnv(await invoke("agent", "plan", "worker_status", {}));
+              if (!ws || !ws.alive) await invoke("agent", "plan", "worker_start", {});
+            }
+            mResult("plan", r && r.status === "ok" ? `plan autonomy ${next}` : "set_setting failed", !(r && r.status === "ok"));
+          }
+        } finally { el.disabled = false; }
+        loadMind();
+      } else if (el.dataset.repo != null) {
+        const repo = el.dataset.repo;
+        el.disabled = true;
+        try {
+          const cm = mEnv(await invoke("agent", "committer", "status", {}));
+          const cur = (cm && (cm.all || []).find((r) => r.repo === repo)) || {};
+          const turnOn = !cur.agent_commit;
+          const r = mEnv(await invoke("agent", "committer", "set_enabled", { repo, enabled: turnOn }));
+          let msg = r && r.status === "ok" ? `${repo} agent-commit ${turnOn ? "on" : "off"}` : "set_enabled failed";
+          let err = !(r && r.status === "ok");
+          // turning ON a repo dev still mechanically drives: hand it to the agent
+          if (!err && turnOn && cur.dev_autocommit) {
+            const d = mEnv(await invoke("dev", "git", "set_autocommit", { name: repo, autocommit: false }));
+            msg += d && d.status === "ok" ? " · dev autocommit off (agent now drives it)" : " · WARN: dev autocommit still on - shadowed";
+            if (!(d && d.status === "ok")) err = true;
+          }
+          mResult("committer", msg, err);
+        } finally { el.disabled = false; }
+        loadMind();
+      }
+    });
+
+    // navigation, review, undo, instant action buttons
+    mx.addEventListener("click", async (e) => {
+      const t = e.target.closest("button, a");
+      if (!t || !mx.contains(t)) return;
+      if (t.classList.contains("mx-nav")) { mSection = t.dataset.sec; mBack(); mindRefresh(); return; }
+      if (t.dataset.goto) { e.preventDefault(); mSection = t.dataset.goto; mBack(); mindRefresh(); return; }
+      if (t.dataset.revert) {
+        const k = t.dataset.revert;
+        delete mDraft[k];
+        if (k === "LLM") delete mDraft["LLM_CTL"];
+        mindRefresh(); return;
+      }
+      if (t.classList.contains("mx-discard")) {
+        mDraft = {};
+        pAdopt = false;
+        personaRows = pClone(personaLoaded);
+        renderPersona(); mBack(); mindRefresh(); return;
+      }
+      if (t.classList.contains("mx-reviewbtn")) { mShowReview(); return; }
+      const act = t.dataset.act;
+      if (!act) return;
+      if (act === "back") { mBack(); mindRefresh(); return; }
+      if (act === "apply") { t.disabled = true; await mApply(); return; }
+      if (act === "persona-add") {
+        (personaRows = personaRows || []).push({ user: "", assistant: "" });
+        renderPersona(); mindRefresh(); return;
+      }
+      if (act === "persona-adopt") { pAdopt = true; mindRefresh(); return; }
+      if (act === "persona-reload") { loadPersona(true); return; }
+      if (act === "sweep") {
+        t.disabled = true;
+        mResult("committer", "sweep running - grouping units, composing messages…");
+        const r = mEnv(await invoke("agent", "committer", "sweep", {}));
+        t.disabled = false;
+        const ok = r && r.status === "ok";
+        mResult("committer", ok
+          ? `swept ${r.swept ?? 0} · committed ${r.units_committed ?? 0} units (${r.commits ?? 0} commits) · pushed ${r.pushed ?? 0}`
+          : (r && r.msg) || "sweep failed", !ok);
+        loadMind(); return;
+      }
+      if (act === "bootstrap") {
+        t.disabled = true;
+        mResult("judge", "bootstrap running — installs and training can take a while…");
+        const r = mEnv(await invoke("agent", "model", "bootstrap", {}));
+        t.disabled = false;
+        mResult("judge", r ? (r.status === "ok" ? "bootstrap ok" : "bootstrap failed") : "bootstrap: no reply", !(r && r.status === "ok"), r);
+        loadMind(); return;
+      }
+      if (act === "promote") {
+        const r = mEnv(await invoke("agent", "model", "promote_pointer", {}));
+        mResult("judge", r ? (r.status === "ok" ? "promote_pointer ok" : "promote failed") : "promote: no reply", !(r && r.status === "ok"), r);
+        loadMind(); return;
+      }
+      if (act === "release") {
+        const r = mEnv(await invoke("agent", "model", "service_stop", {}));
+        mResult("judge", r && r.status === "ok"
+          ? "GPU released - the judge is down by request; resume with bootstrap (it reloads the newest ring checkpoint)"
+          : `release: ${r ? r.msg : "no reply"}`, !(r && r.status === "ok"));
+        loadMind(); return;
+      }
+      if (act === "user-promote") {
+        const r = mEnv(await invoke("agent", "model", "user_promote", {}));
+        mResult("judge", r ? (r.status === "ok" ? "user_promote ok" : "user promote failed") : "user promote: no reply", !(r && r.status === "ok"), r);
+        loadMind(); return;
+      }
+      if (act === "user-rollback") {
+        const r = mEnv(await invoke("agent", "model", "user_rollback", {}));
+        mResult("judge", r ? (r.status === "ok" ? "user_rollback ok" : "user rollback failed") : "user rollback: no reply", !(r && r.status === "ok"), r);
+        loadMind(); return;
+      }
+      if (act === "rederive") {
+        t.disabled = true;
+        mResult("persona", "deriving the personality adapter — a LoRA training run; this can take a few minutes…");
+        const r = mEnv(await invoke("agent", "model", "persona_rederive", {}));
+        t.disabled = false;
+        mResult("persona", r ? (r.status === "ok" ? "persona_rederive ok" : "re-derive failed") : "re-derive: no reply", !(r && r.status === "ok"), r);
+        loadMind(); return;
+      }
+      if (act === "export") {
+        const ts = new Date().toISOString().replace(/[-:T]/g, "").slice(0, 14);
+        const r = mEnv(await invoke("agent", "model", "curriculum_export",
+          { path: `runtime/agent/model/ingest/batch-${ts}.jsonl` }));
+        mResult("flywheel", r && r.status === "ok"
+          ? `exported ${r.total} samples (${r.salience_pairs} pairs, ${r.claims} claims, ${r.curation_traces} traces) — the trainer drains ingest within seconds`
+          : `export failed: ${r ? r.msg : "no reply"}`, !(r && r.status === "ok"));
+        loadMind(); return;
+      }
+    });
+  }
+
+  // one switch per dev-registered repo (never hardcoded names); skipped
+  // while a switch is in flight so the rebuild can't eat its busy state.
+  function renderRepos() {
+    const box = host.querySelector("[data-repos]");
+    if (!box) return;
+    if ([...box.querySelectorAll("input")].some((i) => i.disabled)) return;
+    const say = { active: "agent commits", shadowed_by_dev_autocommit: "shadowed by dev autocommit", refused_default_branch: "refused: on its default branch", "dev mechanical": "dev mechanical", off: "off" };
+    box.innerHTML = mRepos.length ? mRepos.map((r) => {
+      const st = r.state || (r.agent_commit ? "active" : (r.dev_autocommit ? "dev mechanical" : "off"));
+      const cls = st === "active" ? "ok" : (st === "shadowed_by_dev_autocommit" ? "warn" : (st === "refused_default_branch" ? "err" : "off"));
+      return `<div class="repo"><span class="name">${mEsc(r.repo)}</span>${mChip(say[st] || st, cls)}` +
+        `<span class="tg"><input type="checkbox" data-repo="${mEsc(r.repo)}" ${r.agent_commit ? "checked" : ""} aria-label="Agent commits for ${mEsc(r.repo)}" title="on a repo dev still autocommits, turning this on also turns dev's mechanical autocommit OFF so the agent drives it"><span></span></span></div>`;
+    }).join("") : mChip("no dev-registered repos", "off");
+    const rc = host.querySelector("[data-repocount]");
+    if (rc) rc.textContent = `agent-commit repos: ${mReposEnabled}`;
+  }
+
+  // the all-settings list: every key get_settings returns (known keys plus
+  // whatever else the file holds) + any freshly drafted key; never rebuilt
+  // while the user is typing in it.
+  function renderCfg() {
+    const mx = host.querySelector('[data-pane="mind"] .mx');
+    if (!mx) return;
+    const cfg = mx.querySelector(".cfg");
+    if (!cfg || cfg.contains(document.activeElement)) return;
+    const f = ((mx.querySelector(".mx-cfgfilter") || {}).value || "").toLowerCase();
+    const keys = Object.keys(mSet);
+    for (const k of Object.keys(mDraft)) if (!(k in mSet) && k !== "@drive") keys.push(k);
+    cfg.innerHTML = keys.filter((k) => k.toLowerCase().includes(f)).map((k) => {
+      const s = mSet[k] || { v: "", d: "", t: "", set: false, locked: false };
+      return `<span class="ck ${s.set ? "set" : ""} ${k in mDraft ? "changed" : ""}" data-k="${mEsc(k)}" title="${s.set ? "explicitly set" : "default"}">${mEsc(k)}</span>` +
+        (s.locked ? `<span class="locked">${mEsc(s.v)} (file-only)</span>`
+          : `<input data-key="${mEsc(k)}" value="${mEsc(mCur(k))}" placeholder="${mEsc(s.d)}" aria-label="${mEsc(k)}">`) +
+        `<span class="ct">${s.d ? "default " + mEsc(s.d.length > 44 ? s.d.slice(0, 44) + "…" : s.d) + (s.t ? " · " : "") : ""}${s.t ? "takes effect: " + mEsc(s.t) : ""}</span>`;
+    }).join("");
+  }
+
+  // bind current values (draft over baseline) into every field; a focused
+  // field is never touched, so the 5s poll can't stomp an edit in progress.
+  function mBindValues() {
+    for (const el of host.querySelectorAll('[data-pane="mind"] [data-key]')) {
+      const k = el.dataset.key;
+      if (el.type === "checkbox") el.checked = String(mCur(k)).toLowerCase() === (el.dataset.on || "on");
+      else if (document.activeElement !== el) el.value =
+        (k === "MAX_PLAN_STEPS" && !el.closest(".cfg")) ? mEff(k, "20")
+        : (k === "PLAN_STEPS_PER_HOUR" && !el.closest(".cfg")) ? mEff(k, "0")
+        : (k === "LLM") ? (mCur(k) || (mSet.LLM && mSet.LLM.d) || "VLLM")
+        : mCur(k);
+      const wrap = el.closest(".fld, .sw");
+      if (wrap && !el.closest(".cfg")) mMarkChanged(wrap, k);
+    }
+    const gm = host.querySelector('[data-virtual="gateMode"]');
+    if (gm) {
+      if (document.activeElement !== gm) gm.value = mGateMode(mCur("USER_GATE"));
+      mMarkChanged(gm.closest(".fld"), "USER_GATE");
+    }
+    for (const el of host.querySelectorAll('[data-pane="mind"] [data-live]'))
+      if (!el.disabled) el.checked = !!mLiveState[el.dataset.live];
+  }
+  function mMarkChanged(wrap, k) {
+    if (!wrap) return;
+    const changed = k in mDraft;
+    wrap.classList.toggle("changed", changed);
+    let was = wrap.querySelector(":scope > .was");
+    if (changed) {
+      if (!was) { was = document.createElement("span"); was.className = "was"; wrap.append(was); }
+      was.innerHTML = `was ${mEsc(mPretty(k, mBaseVal(k)))}<button data-revert="${mEsc(k)}">undo</button>`;
+    } else if (was) was.remove();
+  }
+
+  function mProviderErrors() {
+    const p = mCur("LLM") || (mSet.LLM && mSet.LLM.d) || "VLLM";
+    const box = [...host.querySelectorAll('[data-pane="mind"] [data-when]')].find((d) => d.dataset.when.split(",").includes(p));
+    return box ? [...box.querySelectorAll("[data-req]")].filter((i) => !String(mCur(i.dataset.key)).trim()).map((i) => M_LABEL[i.dataset.key] || i.dataset.key) : [];
+  }
+  function mRefreshProvider() {
+    const p = mCur("LLM") || (mSet.LLM && mSet.LLM.d) || "VLLM";
+    for (const d of host.querySelectorAll('[data-pane="mind"] [data-when]')) d.hidden = !d.dataset.when.split(",").includes(p);
+    const need = { OPENAI: "needed unless a custom endpoint is keyless", ANTHROPIC: "required", GEMINI: "required", VLLM: "optional", OLLAMA: "optional, for hosted Ollama" }[p];
+    const kn = host.querySelector("[data-keynote]");
+    if (kn) kn.textContent = need ? `API key (${p}_KEY or ${p}_API_KEY, ${need}) and any extra headers (${p}_HEADERS) stay in botd.properties — secret keys can't be edited from the app.` : "";
+    const perr = host.querySelector("[data-provider-err]");
+    const miss = mProviderErrors();
+    if (perr) perr.textContent = miss.length ? `Fill in ${miss.join(" and ")} before using this provider.` : "";
+    for (const i of host.querySelectorAll('[data-pane="mind"] [data-req]'))
+      i.closest(".fld").classList.toggle("bad", !i.closest("[hidden]") && !String(mCur(i.dataset.key)).trim());
+    const an = host.querySelector("[data-activity-note]");
+    if (an) an.textContent = !mLiveState.executive
+      ? "Background thinking is paused. You can still chat with your agent."
+      : (mLiveState.sensor ? "" : "The executive is on, but sensors are paused — no new events will be collected.");
+  }
+
+  // sidebar marks, footer count, field values - everything derived from
+  // the draft and the last poll.
+  function mindRefresh() {
+    const mx = host.querySelector('[data-pane="mind"] .mx');
+    if (!mx || !mindWired) return;
+    for (const pn of mx.querySelectorAll("[data-msec]")) pn.hidden = pn.dataset.msec !== mSection;
+    const ch = mChangesList();
+    const dirtySecs = new Set(ch.map((c) => c.sec));
+    for (const b of mx.querySelectorAll(".mx-nav")) {
+      b.setAttribute("aria-current", String(b.dataset.sec === mSection));
+      b.querySelector(".dirty").textContent = dirtySecs.has(b.dataset.sec) ? "•" : "";
+      const d = b.querySelector(".dot");
+      d.className = "dot " + (mDots[b.dataset.sec] || "");
+      d.hidden = !mDots[b.dataset.sec];
+      const tip = mDotTips[b.dataset.sec] || "";
+      if (tip) { d.title = tip; d.setAttribute("aria-label", tip); }
+      else { d.removeAttribute("title"); d.removeAttribute("aria-label"); }
+    }
+    mx.querySelector(".mx-dirty").textContent = ch.length ? `${ch.length} unsaved ${ch.length === 1 ? "change" : "changes"}` : "";
+    mBarSync(ch.length);
+    mBindValues(); mRefreshProvider(); renderPersonaState();
+    for (const el of mx.querySelectorAll(".cfg .ck")) el.classList.toggle("changed", el.dataset.k in mDraft);
   }
 
   async function loadMind() {
-    if (personaRows === null) { personaRows = []; loadPersona(true); }
-    if (!mindWired) { mindWired = true; wireMind(); }
+    if (!mindWired) { mindWired = true; mindBuild(); }
+    if (personaRows === null) { personaRows = []; personaLoaded = []; personaBaseStr = ""; loadPersona(true); }
     if (!mindTimer) mindTimer = setInterval(() => {
       const pane = host.querySelector('[data-pane="mind"]');
       if (pane && !pane.hidden) loadMind();
     }, 5000);
-    const kv = (n) => host.querySelector(`[data-kv="${n}"]`);
 
-    const [exR, snR, svR, trR, slR, hvR, cmR, gsR, pwR] = await Promise.all([
+    const [exR, snR, svR, trR, slR, hvR, cmR, gsR, pwR, mtR] = await Promise.all([
       invoke("agent", "executive", "status", {}),
       invoke("agent", "sensor", "status", {}),
       invoke("agent", "model", "service_status", {}),
@@ -1603,102 +2039,77 @@ async function init(host) {
       invoke("agent", "committer", "status", {}),
       invoke("agent", "model", "get_settings", {}),
       invoke("agent", "plan", "worker_status", {}),
+      invoke("agent", "model", "metrics", {}),
     ]);
     const ex = mEnv(exR) || {}, sn = mEnv(snR) || {}, sv = mEnv(svR) || {};
-    const tr = mEnv(trR) || {}, sl = mEnv(slR) || {};
-    const hv = mEnv(hvR) || {};
-    const cm = mEnv(cmR) || {};
-    // plan autonomy (kb.plan GATED plan-item autonomy): read the LIVE effective
-    // values off get_settings - PLAN_AUTONOMY arms the plan worker
+    const tr = mEnv(trR) || {}, sl = mEnv(slR) || {}, hv = mEnv(hvR) || {};
+    const cm = mEnv(cmR) || {}, gs = mEnv(gsR) || {}, pw = mEnv(pwR) || {};
+    const mt = mEnv(mtR);
+
+    // the draft's baselines: get_settings rows + the executive's live drive.
+    // A drafted key whose baseline caught up is no longer a change.
+    const newSet = {};
+    for (const s of gs.settings || []) newSet[s.key] = {
+      v: String(s.value ?? ""), d: String(s.default ?? ""), t: s.takes || "",
+      set: !!s.set, locked: !!s.locked,
+    };
+    if (gs.settings && gs.settings.length) mSet = newSet;
+    if (ex.drive != null) mDrive = String(ex.drive);
+    for (const k of Object.keys(mDraft)) if (mDraft[k] === mBaseVal(k)) delete mDraft[k];
+
+    // plan autonomy (kb.plan GATED plan-item autonomy): read the LIVE
+    // effective values off get_settings - PLAN_AUTONOMY arms the plan worker
     // (agent.plan.worker_start, its own thread, not the executive's drive);
     // MAX_PLAN_STEPS is the per-item convergence guard; PLAN_STEPS_PER_HOUR
     // an optional sliding-hour cap (unset/0 = unlimited).
-    const gs = mEnv(gsR) || {};
-    const gsVal = (k, dflt) => {
-      const row = (gs.settings || []).find((s) => s.key === k);
-      const v = row && String(row.value || "").trim();
-      return v || dflt;
-    };
-    const planAutonomyOn = ["on", "true", "1", "yes"].includes(gsVal("PLAN_AUTONOMY", "off").toLowerCase());
-    const maxPlanSteps = gsVal("MAX_PLAN_STEPS", "20");
-    const planPerHour = gsVal("PLAN_STEPS_PER_HOUR", "0");
-    const pw = mEnv(pwR) || {};
+    const planAutonomyOn = ["on", "true", "1", "yes"].includes(((mSet.PLAN_AUTONOMY && mSet.PLAN_AUTONOMY.v) || "off").trim().toLowerCase());
+    const maxPlanSteps = ((mSet.MAX_PLAN_STEPS && mSet.MAX_PLAN_STEPS.v) || "").trim() || "20";
+    mLiveState = { executive: !!ex.running, sensor: !!sn.running, plan: planAutonomyOn };
 
-    // the harvest - what the week grew (H6). Claims by domain, the
-    // banks, the garden's acts, the syspack gauge - and the owner's
-    // two queues: notions awaiting audit, wonderings to pick from.
+    const strip = (n) => host.querySelector(`[data-status="${n}"]`);
+
+    // conversation: what is saved and in use, from settings only. arm and
+    // armName sit at function scope: the sidebar dot tooltip names them too.
+    const arm = ((mSet.LLM && mSet.LLM.v) || "").trim() || (mSet.LLM && mSet.LLM.d) || "VLLM";
+    const armOpt = host.querySelector(`[data-provider] option[value="${arm}"]`);
+    const armName = armOpt ? armOpt.textContent : arm;
     {
-      const dom = Object.entries(hv.claims_by_domain || {})
-        .sort((a, b) => b[1] - a[1]).slice(0, 5)
-        .map(([k, v]) => `${k} ${v}`).join(" · ");
-      const actsTxt = Object.entries(hv.acts || {})
-        .map(([k, v]) => `${k} ${v}`).join(" · ") || "none yet";
-      const banksTxt = (hv.banks || [])
-        .map(b => `${b.name} ${b.rows}`).join(" · ") || "—";
-      const gauge = Object.entries(hv.context_by_purpose || {})
-        .map(([p, r]) => `${p} ${r.tokens_avg}`).join(" · ");
-      const venues = Object.entries(hv.messages_by_venue || {})
-        .map(([k, v]) => `${k} ${v}`).join(" · ");
-      kv("harvest").innerHTML =
-        mChip(`${hv.claims ?? 0} claims / ${hv.window_days ?? 7}d`, "ok") +
-        mChip(`${hv.notions_pending ?? 0} notions await audit`, (hv.notions_pending ?? 0) > 0 ? "warn" : "off") +
-        mKv([
-          ["by domain (top)", dom || "—"],
-          ["the garden's acts", actsTxt],
-          ["banks (rows)", banksTxt],
-          ["messages", `${hv.messages ?? 0} (${venues || "—"})`],
-          ["capture rows", hv.capture_rows ?? 0],
-          ["context tokens avg", gauge || "no calls yet", "", ],
-        ]);
-      const notes = (hv.wonderings || []).slice(-2)
-        .map(q => `? ${q}`).join("\n");
-      const noteEl = host.querySelector('[data-note="harvest"]');
-      if (noteEl) noteEl.textContent = notes;
+      const armModel = arm === "CLAUDECODE" ? (mBaseVal("CLAUDE_CODE_MODEL") || "CLI default")
+        : arm === "LOCAL" ? "released local version"
+        : arm === "REMOTE" ? (mBaseVal("LLM_REMOTE") || "—")
+        : arm === "CUSTOM" ? (mBaseVal("LLM_CTL") || "—")
+        : (mBaseVal(arm + "_MODEL") || "—");
+      const st = strip("conversation");
+      if (st) st.innerHTML = mChips(mChip("in use: " + armName, "ok")) +
+        mKv([[arm === "REMOTE" ? "peer" : arm === "CUSTOM" ? "command" : "model", armModel], ["provider key", "LLM=" + arm]]);
     }
 
-    // the loop
+    // background activity
     const ctx = ex.last_context || {};
-    // agent autocommit - which repos the LLM committer drives
+    const planChip = !planAutonomyOn ? mChip("plan autonomy off", "off")
+      : (pw.alive ? mChip(`plan worker ${pw.phase || "on"}`, "warn") : mChip("plan worker NOT RUNNING", "err"));
     {
-      const all = cm.all || [], en = cm.repos || [];
-      const enMap = {};
-      en.forEach((r) => { enMap[r.repo] = r; });
-      const sel = host.querySelector(".ag-commit-repo");
-      if (sel) {
-        const cur = sel.value;
-        sel.innerHTML = all.map((r) =>
-          `<option value="${mEsc(r.repo)}">${mEsc(r.repo)}${r.agent_commit ? " ●" : ""}${r.dev_autocommit ? " (dev)" : ""}</option>`).join("");
-        if (cur && all.some((r) => r.repo === cur)) sel.value = cur;
-      }
-      const chips = all.length
-        ? all.map((r) => {
-            const st = enMap[r.repo] ? enMap[r.repo].state
-              : (r.dev_autocommit ? "dev mechanical" : "off");
-            const cls = st === "active" ? "ok" : (st === "shadowed_by_dev_autocommit" ? "warn"
-              : (st === "refused_default_branch" ? "err" : "off"));
-            return mChip(`${r.repo}: ${st}`, cls);
-          }).join("")
-        : mChip("no dev-registered repos", "off");
-      kv("committer").innerHTML = chips + mKv([
-        ["agent-commit repos", String(cm.enabled ?? 0)],
-        ["how it works", "diff is the source of truth - one LLM message per store unit, fallback if the model is down"],
-      ]);
+      const st = strip("activity");
+      if (st) st.innerHTML = mChips(
+        mChip(ex.running ? `executive ${ex.phase || "on"}` : "executive stopped", ex.running ? "ok" : "off") +
+        mChip(sn.running ? "sensor on" : "sensor stopped", sn.running ? "ok" : "off") + planChip) +
+        mKv([
+          ["perceived", ex.perceived_total ?? "—"],
+          ["salience calls", ex.salience_calls ?? "—"],
+          ["escalations / audits", `${ex.escalations ?? 0} / ${ex.audits ?? 0}`],
+          ["disagreements", ex.disagreements ?? 0, (ex.disagreements ?? 0) > 0 ? "warn" : ""],
+          ["unparseable verdicts", ex.unparsed_verdicts ?? 0, (ex.unparsed_verdicts ?? 0) > 0 ? "warn" : ""],
+          ["drive (memory acts/hr)", ex.drive ?? "—"],
+          ["epistemic acts", ex.acts_total ?? "—"],
+          ["steer fast / deep", `${ex.fast_skips ?? 0} / ${ex.deep_orients ?? 0}`],
+          ["last verdict", ctx.salience != null
+            ? `${ctx.salience}${ctx.steer ? ` [${ctx.steer}]` : ""} — ${(ctx.salience_why || "").slice(0, 56)}`
+            : "none"],
+        ]);
     }
-
-    kv("loop").innerHTML =
-      mChip(ex.running ? `executive ${ex.phase || "on"}` : "executive stopped", ex.running ? "ok" : "off") +
-      mChip(sn.running ? "sensor on" : "sensor stopped", sn.running ? "ok" : "off") +
-      mChip(!planAutonomyOn ? "plan autonomy off"
-        : (pw.alive ? `plan worker ${pw.phase || "on"}` : "plan worker NOT RUNNING"),
-        !planAutonomyOn ? "off" : (pw.alive ? "warn" : "err")) +
-      mKv([
-        ["perceived", ex.perceived_total ?? "—"],
-        ["salience calls", ex.salience_calls ?? "—"],
-        ["escalations / audits", `${ex.escalations ?? 0} / ${ex.audits ?? 0}`],
-        ["disagreements", ex.disagreements ?? 0, (ex.disagreements ?? 0) > 0 ? "warn" : ""],
-        ["unparseable verdicts", ex.unparsed_verdicts ?? 0, (ex.unparsed_verdicts ?? 0) > 0 ? "warn" : ""],
-        ["drive (memory acts/hr)", ex.drive ?? "—"],
-        ["epistemic acts", ex.acts_total ?? "—"],
+    {
+      const st = strip("plan");
+      if (st) st.innerHTML = mChips(planChip) + mKv([
         ["plan worker", pw.phase === "stepping"
           ? `stepping: ${(pw.current || "").slice(0, 60)}`
           : pw.phase === "rate_limited" ? `rate limited until ${new Date(pw.resume_at).toLocaleTimeString()}`
@@ -1707,30 +2118,36 @@ async function init(host) {
         ["plan queue", `${pw.eligible ?? 0} ready (${(pw.coordinating || []).length} coordinating) · ${(pw.waiting_for_children || []).length} waiting for active children · ${(pw.parked || []).length} parked · ${(pw.awaiting_reapproval || []).length} need re-approval`,
           ((pw.parked || []).length + (pw.awaiting_reapproval || []).length) > 0 ? "warn" : ""],
         ["last plan step", pw.last ? `${pw.last.action} — ${(pw.last.claim || "").slice(0, 56)}` : "none"],
-        ["steer fast / deep", `${ex.fast_skips ?? 0} / ${ex.deep_orients ?? 0}`],
-        ["last verdict", ctx.salience != null
-          ? `${ctx.salience}${ctx.steer ? ` [${ctx.steer}]` : ""} — ${(ctx.salience_why || "").slice(0, 56)}`
-          : "none"],
-      ]);
-    host.querySelector('[data-act="exec-toggle"]').textContent = ex.running ? "stop executive" : "start executive";
-    host.querySelector('[data-act="sensor-toggle"]').textContent = sn.running ? "stop sensor" : "start sensor";
-    host.querySelector('[data-act="plan-toggle"]').textContent = planAutonomyOn ? "stop plan autonomy" : "start plan autonomy";
-    if (document.activeElement !== host.querySelector(".ag-plansteps"))
-      host.querySelector(".ag-plansteps").value = maxPlanSteps;
-    if (document.activeElement !== host.querySelector(".ag-planrate"))
-      host.querySelector(".ag-planrate").value = planPerHour;
+      ], "one");
+    }
 
-    // the judge
+    // automatic commits - which repos the LLM committer drives
+    {
+      const all = cm.all || [], en = cm.repos || [];
+      const enMap = {};
+      en.forEach((r) => { enMap[r.repo] = r; });
+      mRepos = all.map((r) => ({ repo: r.repo, agent_commit: !!r.agent_commit, dev_autocommit: !!r.dev_autocommit,
+        state: enMap[r.repo] ? enMap[r.repo].state : "" }));
+      mReposEnabled = cm.enabled ?? 0;
+      renderRepos();
+    }
+
+    // local learning: the resident service
     const mode = sv.mode || "down";
     const modeCls = mode.startsWith("nanochat") ? "ok" : (mode === "stub" ? "warn" : (mode === "down" ? "err" : "warn"));
-    kv("judge").innerHTML = mChip(mode, modeCls) + mKv([
-      ["checkpoint", sv.checkpoint || "—"],
-      ["live slot / pid", `${sv.live_slot || "—"} / ${sv.pid || "—"}`],
-      ["verdicts served", sv.scored ?? "—"],
-      ["pointer promotions", sv.promotions ?? "—"],
-      ["uptime", sv.uptime_s != null ? `${Math.floor(sv.uptime_s / 3600)}h ${Math.floor((sv.uptime_s % 3600) / 60)}m` : "—"],
-      ["load error", sv.boot_error || "none", sv.boot_error ? "err" : ""],
-    ]);
+    {
+      const st = strip("learning");
+      if (st) st.innerHTML = mChips(mChip(mode, modeCls)) +
+        (mode === "stub" ? `<div class="note warn" style="margin:0 0 8px">Stub mode is for testing the service. It is not a trained model — set a real checkpoint in <b>Advanced</b>.</div>` : "") +
+        mKv([
+          ["checkpoint", sv.checkpoint || "—"],
+          ["live slot / pid", `${sv.live_slot || "—"} / ${sv.pid || "—"}`],
+          ["verdicts served", sv.scored ?? "—"],
+          ["pointer promotions", sv.promotions ?? "—"],
+          ["uptime", sv.uptime_s != null ? `${Math.floor(sv.uptime_s / 3600)}h ${Math.floor((sv.uptime_s % 3600) / 60)}m` : "—"],
+          ["load error", sv.boot_error || "none", sv.boot_error ? "err" : ""],
+        ]);
+    }
 
     // the user-facing pointer (8a): the stricter lane's state
     const u = sv.user || {};
@@ -1741,306 +2158,273 @@ async function init(host) {
       ? `${u.soaking} · ${Math.floor((soak.since_s ?? 0) / 3600)}h ${Math.floor(((soak.since_s ?? 0) % 3600) / 60)}m · ${soak.verdicts ?? 0} verdicts`
       : "—";
     const ev = u.eval || {};
-    kv("userptr").innerHTML = mChip(uTxt, uCls) + mKv([
-      ["soaking on the fast lane", soakTxt],
-      ["ready candidate", u.ready ? `${u.ready} (evals attached)` : "none"],
-      ["last promotion eval", ev.agree != null || ev.std != null
-        ? `agree ${ev.agree ?? "—"} · std ${ev.std?.toFixed?.(4) ?? ev.std ?? "—"}` : "—"],
-      ["watchdog re-audit", ev.watch_agree != null ? `agree ${ev.watch_agree}` : "not yet"],
-      ["promotions / rollbacks", `${u.promotions ?? 0} / ${u.rollbacks ?? 0}`],
-      ["rollback target", u.last_good || "none"],
-    ]);
+    {
+      const st = host.querySelector("[data-userptr]");
+      if (st) st.innerHTML = mChips(mChip(uTxt, uCls)) + mKv([
+        ["soaking on the fast lane", soakTxt],
+        ["ready candidate", u.ready ? `${u.ready} (evals attached)` : "none"],
+        ["last promotion eval", ev.agree != null || ev.std != null
+          ? `agree ${ev.agree ?? "—"} · std ${ev.std?.toFixed?.(4) ?? ev.std ?? "—"}` : "—"],
+        ["watchdog re-audit", ev.watch_agree != null ? `agree ${ev.watch_agree}` : "not yet"],
+        ["promotions / rollbacks", `${u.promotions ?? 0} / ${u.rollbacks ?? 0}`],
+        ["rollback target", u.last_good || "none"],
+      ]);
+    }
     const upBtn = host.querySelector('[data-act="user-promote"]');
+    if (upBtn) upBtn.hidden = !u.ready;
     const urBtn = host.querySelector('[data-act="user-rollback"]');
-    upBtn.hidden = !u.ready;
-    urBtn.hidden = !u.last_good;
+    if (urBtn) urBtn.hidden = !u.last_good;
 
     // the personality adapter (8b)
     const p = sv.persona || {};
     const pa = p.adapter || {};
     const drift = (p.probe != null && p.baseline != null && p.baseline > 0)
       ? ((p.probe / p.baseline - 1) * 100) : null;
-    kv("persona").innerHTML = mKv([
-      ["persona corpus", p.corpus ? `${p.corpus} rows` : "none (persona/persona.jsonl)"],
-      ["adapter", p.deriving ? "deriving…"
-        : (p.adapter ? `on ${pa.derived_from} (rank ${pa.rank ?? "—"})` : "none")],
-      ["probe / baseline", p.probe != null
-        ? `${p.probe} / ${p.baseline ?? "—"}` + (drift != null ? ` (${drift >= 0 ? "+" : ""}${drift.toFixed(1)}%)` : "")
-        : "—", drift != null && drift > 10 ? "warn" : ""],
-      ["re-derivations", p.rederivations ?? 0],
-      ["last derivation", p.last_result
-        ? `${p.last_result.verdict} · persona ${p.last_result.heldout_base ?? "—"} → ${p.last_result.heldout_adapted ?? "—"} · ${p.last_result.seconds ?? "—"}s`
-        : "never"],
-    ]);
-    host.querySelector('[data-act="rederive"]').hidden = !(u.serving && p.corpus >= 5 && !p.deriving);
+    {
+      const st = strip("personality");
+      if (st) st.innerHTML = mKv([
+        ["persona corpus", p.corpus ? `${p.corpus} rows` : "none (persona/persona.jsonl)"],
+        ["adapter", p.deriving ? "deriving…"
+          : (p.adapter ? `on ${pa.derived_from} (rank ${pa.rank ?? "—"})` : "none")],
+        ["probe / baseline", p.probe != null
+          ? `${p.probe} / ${p.baseline ?? "—"}` + (drift != null ? ` (${drift >= 0 ? "+" : ""}${drift.toFixed(1)}%)` : "")
+          : "—", drift != null && drift > 10 ? "warn" : ""],
+        ["re-derivations", p.rederivations ?? 0],
+        ["last derivation", p.last_result
+          ? `${p.last_result.verdict} · persona ${p.last_result.heldout_base ?? "—"} → ${p.last_result.heldout_adapted ?? "—"} · ${p.last_result.seconds ?? "—"}s`
+          : "never"],
+      ]);
+    }
+    const rdBtn = host.querySelector('[data-act="rederive"]');
+    if (rdBtn) rdBtn.hidden = !(u.serving && p.corpus >= 5 && !p.deriving);
 
-    // the flywheel
+    // continuous training (the flywheel)
     const t = sv.trainer || {};
-    kv("flywheel").innerHTML =
-      mChip(t.active ? "training" : "idle", t.active ? "ok" : "off") + mKv([
+    {
+      const g = t.last_gate;
+      const gateLine = `<div class="gateline">` + (!g ? "no gate yet" :
+        `last gate @${g.step}: <b class="${g.verdict === "promote" ? "ok" : "warn"}">${mEsc(g.verdict)}</b>` +
+        ` · standard cand ${g.cand_std?.toFixed?.(4) ?? "—"} vs live ${g.live_std?.toFixed?.(4) ?? "—"}` +
+        (g.cand_agree != null
+          ? ` · AGREEMENT cand ${g.cand_agree?.toFixed?.(3)} vs live ${g.live_agree?.toFixed?.(3) ?? "—"} (${g.pairs ?? 0} held-out pairs)`
+          : ` · curriculum-loss cand ${g.cand_fresh?.toFixed?.(4) ?? "—"} vs live ${g.live_fresh?.toFixed?.(4) ?? "—"}`)) + `</div>`;
+      const st = host.querySelector("[data-flywheel]");
+      if (st) st.innerHTML = mChips(mChip(t.active ? "training" : "idle", t.active ? "ok" : "off")) + mKv([
         ["steps", t.steps ?? 0],
         ["loss ema", t.loss_ema ?? "—"],
         ["replay reservoir", t.replay_size ?? 0],
         ["fresh pending", t.fresh_pending ?? 0],
         ["gates / promotions / resets", `${t.gates ?? 0} / ${t.promotions ?? 0} / ${t.resets ?? 0}`],
         ["mix", t.mix ? Object.entries(t.mix).map(([k2, v2]) => `${k2} ${v2}`).join(" · ") : "—"],
-      ]);
-    const g = t.last_gate;
-    host.querySelector("[data-gate]").innerHTML = !g ? "no gate yet" :
-      `last gate @${g.step}: <b class="${g.verdict === "promote" ? "ok" : "warn"}">${mEsc(g.verdict)}</b>` +
-      ` · standard cand ${g.cand_std?.toFixed?.(4) ?? "—"} vs live ${g.live_std?.toFixed?.(4) ?? "—"}` +
-      (g.cand_agree != null
-        ? ` · AGREEMENT cand ${g.cand_agree?.toFixed?.(3)} vs live ${g.live_agree?.toFixed?.(3) ?? "—"} (${g.pairs ?? 0} held-out pairs)`
-        : ` · curriculum-loss cand ${g.cand_fresh?.toFixed?.(4) ?? "—"} vs live ${g.live_fresh?.toFixed?.(4) ?? "—"}`);
-
-    // the forge (base training) - card appears only when relevant
-    const forge = host.querySelector('[data-card="forge"]');
-    const hasForge = tr.running || tr.done || (tr.log && tr.log.length);
-    forge.hidden = !hasForge;
-    if (hasForge) {
-      kv("forge").innerHTML =
-        mChip(tr.running ? "training running" : (tr.done ? "train_done" : "stopped"),
-              tr.running ? "ok" : (tr.done ? "ok" : "warn")) +
-        mKv([["pid", tr.pid || "—"]]);
-      host.querySelector("[data-trainlog]").textContent = (tr.log || []).join("\n");
+      ]) + gateLine;
     }
 
-    // statistics from the audit trail
-    const rows = sl.rows || [];
-    const dis = rows.filter((r2) => r2.disagree).length;
-    const gap = rows.length ? rows.reduce((a2, r2) => a2 + Math.abs((r2.local ?? 0) - (r2.frontier ?? 0)), 0) / rows.length : null;
-    kv("stats").innerHTML = mKv([
-      ["audit rows (total)", sl.total ?? 0],
-      ["recent disagreement rate", rows.length ? `${dis}/${rows.length}` : "—", dis > rows.length / 2 ? "warn" : ""],
-      ["recent |local − frontier|", gap != null ? gap.toFixed(3) : "—"],
-      ["band escalations dropped", ex.esc_dropped ?? 0],
-      ["newest row", rows.length ? `${(rows[rows.length - 1].input || "").slice(0, 50)} → local ${rows[rows.length - 1].local} / frontier ${rows[rows.length - 1].frontier}` : "—"],
-    ]);
+    // base training (the forge) - block appears only when a run exists
+    {
+      const forge = host.querySelector("[data-forge]");
+      const hasForge = tr.running || tr.done || (tr.log && tr.log.length);
+      if (forge) forge.hidden = !hasForge;
+      const body = host.querySelector("[data-forge-body]");
+      if (body && hasForge) body.innerHTML =
+        mChips(mChip(tr.running ? "training running" : (tr.done ? "train_done" : "stopped"),
+          tr.running ? "ok" : (tr.done ? "ok" : "warn"))) +
+        mKv([["pid", tr.pid || "—"]]) +
+        `<pre class="trainlog">${mEsc((tr.log || []).join("\n"))}</pre>`;
+    }
 
-    // trends from the metrics journal
-    const mtR = await invoke("agent", "model", "metrics", {});
-    const mt = mEnv(mtR);
-    if (mt && mt.status === "ok") {
-      const spark = host.querySelector("[data-spark]");
-      const pts = (mt.loss || []).map((p2) => p2.loss);
-      if (pts.length > 1) {
-        const lo = Math.min(...pts), hi = Math.max(...pts), rng = (hi - lo) || 1;
-        const path = pts.map((v2, i2) =>
-          `${(i2 / (pts.length - 1) * 100).toFixed(1)},${(26 - (v2 - lo) / rng * 24).toFixed(1)}`).join(" ");
-        spark.innerHTML = `<polyline points="${path}" fill="none" stroke="currentColor" stroke-width="1.2"/>`;
-        spark.parentElement.querySelector(".lbl").textContent =
-          `trainer loss ${pts[pts.length - 1].toFixed(3)} (${pts.length} samples)`;
+    // insights: the harvest + the salience audit trail (the agent's own
+    // files, so they render whatever the service state)
+    {
+      const dom = Object.entries(hv.claims_by_domain || {})
+        .sort((a, b) => b[1] - a[1]).slice(0, 5)
+        .map(([k, v]) => `${k} ${v}`).join(" · ");
+      const actsTxt = Object.entries(hv.acts || {})
+        .map(([k, v]) => `${k} ${v}`).join(" · ") || "none yet";
+      const banksTxt = (hv.banks || [])
+        .map(b => `${b.name} ${b.rows}`).join(" · ") || "—";
+      const gauge = Object.entries(hv.context_by_purpose || {})
+        .map(([p2, r2]) => `${p2} ${r2.tokens_avg}`).join(" · ");
+      const venues = Object.entries(hv.messages_by_venue || {})
+        .map(([k, v]) => `${k} ${v}`).join(" · ");
+      const notes = (hv.wonderings || []).slice(-2).map(q => `? ${q}`).join("\n");
+      const st = strip("harvest");
+      if (st) st.innerHTML = mChips(
+        mChip(`${hv.claims ?? 0} claims / ${hv.window_days ?? 7}d`, "ok") +
+        mChip(`${hv.notions_pending ?? 0} notions await audit`, (hv.notions_pending ?? 0) > 0 ? "warn" : "off")) +
+        mKv([
+          ["by domain (top)", dom || "—"],
+          ["the garden's acts", actsTxt],
+          ["banks (rows)", banksTxt],
+          ["messages", `${hv.messages ?? 0} (${venues || "—"})`],
+          ["capture rows", hv.capture_rows ?? 0],
+          ["context tokens avg", gauge || "no calls yet"],
+        ]) +
+        (notes ? `<div class="res"><div class="msg">${mEsc(notes)}</div></div>` : "");
+    }
+    {
+      const rows = sl.rows || [];
+      const dis = rows.filter((r2) => r2.disagree).length;
+      const gap = rows.length ? rows.reduce((a2, r2) => a2 + Math.abs((r2.local ?? 0) - (r2.frontier ?? 0)), 0) / rows.length : null;
+      let html = mKv([
+        ["audit rows (total)", sl.total ?? 0],
+        ["recent disagreement rate", rows.length ? `${dis}/${rows.length}` : "—", dis > rows.length / 2 ? "warn" : ""],
+        ["recent |local − frontier|", gap != null ? gap.toFixed(3) : "—"],
+        ["band escalations dropped", ex.esc_dropped ?? 0],
+        ["newest row", rows.length ? `${(rows[rows.length - 1].input || "").slice(0, 50)} → local ${rows[rows.length - 1].local} / frontier ${rows[rows.length - 1].frontier}` : "—"],
+      ]);
+      if (mt && mt.status === "ok") {
+        const pts = (mt.loss || []).map((p2) => p2.loss);
+        let sparkHtml = `<span class="lbl">trainer loss</span><svg class="spark" viewBox="0 0 100 34" preserveAspectRatio="none"></svg>`;
+        if (pts.length > 1) {
+          const lo = Math.min(...pts), hi = Math.max(...pts), rng = (hi - lo) || 1;
+          const path = pts.map((v2, i2) =>
+            `${(i2 / (pts.length - 1) * 100).toFixed(1)},${(32 - (v2 - lo) / rng * 28).toFixed(1)}`).join(" ");
+          sparkHtml = `<span class="lbl">trainer loss ${pts[pts.length - 1].toFixed(3)} (${pts.length} samples)</span>` +
+            `<svg class="spark" viewBox="0 0 100 34" preserveAspectRatio="none"><polyline points="${path}" fill="none" stroke="currentColor" stroke-width="1.2"/></svg>`;
+        }
+        const hist = mt.verdict_hist || [];
+        const hmax = Math.max(1, ...hist);
+        const histHtml = `<span class="lbl">served verdicts (0 → 1)</span><div class="hist">` +
+          hist.map((n2, i2) => `<span style="height:${Math.max(2, n2 / hmax * 34)}px" title="${(i2 / 10).toFixed(1)}–${((i2 + 1) / 10).toFixed(1)}: ${n2}"></span>`).join("") + `</div>`;
+        const gateHtml = `<span class="lbl">gates</span><div class="gatebar">` +
+          (mt.gate_total ? `${mt.gate_pass}/${mt.gate_total} promoted<span class="marks">` +
+            (mt.gates || []).slice(-12).map((g2) => g2.verdict === "promote" ? "▲" : "·").join("") + `</span>` : "no gates yet") + `</div>`;
+        html += `<div class="trends"><div class="trend">${sparkHtml}</div><div class="trend">${histHtml}</div><div class="trend">${gateHtml}</div></div>`;
+        // perception rate from the verdict journal's span, frontier spend
+        // from the executive's counters, per-sensor rows as reported
+        const hrs = (mt.span_ms || 0) / 3600000;
+        const sc = ex.sensor_counts || {};
+        html += mKv([
+          ["perception rate", hrs > 0.01 ? `${(mt.verdict_total / hrs).toFixed(1)}/hr` : "—"],
+          ["frontier calls (esc + audit)", `${(ex.escalations ?? 0) + (ex.audits ?? 0)}` +
+            (hrs > 0.01 ? ` · ${(((ex.escalations ?? 0) + (ex.audits ?? 0)) / hrs).toFixed(1)}/hr` : "")],
+          ...Object.entries(sc).map(([n2, r2]) =>
+            [`sensor ${n2}`, `${r2.count ?? 0} perceived · ${r2.fast ?? 0} fast · ${r2.deep ?? 0} deep`]),
+        ]);
+      }
+      const st = strip("stats");
+      if (st) st.innerHTML = html;
+    }
+
+    // sidebar status dots (spec §2), each with a tooltip saying what it means
+    mDots = {
+      conversation: "ok",
+      activity: !ex.running ? "off" : ((planAutonomyOn && !pw.alive) ? "err" : "ok"),
+      learning: mode.startsWith("nanochat") ? "ok" : (mode === "stub" ? "warn" : "err"),
+      personality: (mode !== "down" && mode !== "stub") ? "ok" : "off",
+      insights: "", advanced: "",
+    };
+    mDotTips = {
+      conversation: "Chat provider: " + armName,
+      activity: !ex.running ? "Executive stopped"
+        : (planAutonomyOn && !pw.alive) ? "Plan autonomy is on, but the plan worker isn't running"
+        : "Executive running",
+      learning: mode.startsWith("nanochat") ? "Model service running"
+        : mode === "stub" ? "Model service in stub mode — not a trained model"
+        : "Model service is down",
+      personality: (mode !== "down" && mode !== "stub") ? "Personality adapter available"
+        : "No adapter while the service is down or in stub mode",
+    };
+
+    renderCfg();
+    mindRefresh();
+  }
+
+  // ── draft → Review → Apply (spec §5). One entry per changed key plus
+  // the persona corpus; each change runs as its own existing command, in
+  // review order with the persona last; failures stay in the draft. ────
+  function mChangesList() {
+    const out = Object.keys(mDraft).map((k) => ({
+      k, label: M_LABEL[k] || k,
+      from: mPretty(k, mBaseVal(k)), to: mPretty(k, mDraft[k]),
+      when: M_TAKES(k), cmd: mCmdOf(k), sec: mSectionOf(k),
+    }));
+    if (personaDirtyNow() || (pSeed && pAdopt)) {
+      const nb = personaBaseStr ? personaBaseStr.split("\n").length : 0;
+      const nd = personaLines(personaRows).lines.length;
+      out.push({ k: "@persona", label: "Personality examples",
+        from: pSeed ? "default seed" : `${nb} rows`,
+        to: personaDirtyNow() ? `${nd} rows` + (nb === nd ? " (edited)" : "") : `${nd} rows (adopt)`,
+        when: "the service's next gate tick", cmd: "agent.model.persona_write (whole corpus, atomic)", sec: "personality" });
+    }
+    return out;
+  }
+  function mErrors() {
+    const e = [];
+    const isInt = (v) => /^\d+$/.test(String(v).trim());
+    if ("@drive" in mDraft && !isInt(mDraft["@drive"])) e.push("drive must be a number ≥ 0");
+    if ("MAX_PLAN_STEPS" in mDraft && mDraft.MAX_PLAN_STEPS !== "" && !(isInt(mDraft.MAX_PLAN_STEPS) && Number(mDraft.MAX_PLAN_STEPS) >= 1)) e.push("max steps must be a number ≥ 1");
+    if ("PLAN_STEPS_PER_HOUR" in mDraft && mDraft.PLAN_STEPS_PER_HOUR !== "" && !isInt(mDraft.PLAN_STEPS_PER_HOUR)) e.push("plan steps/hr must be a number ≥ 0 (0 = unlimited)");
+    for (const k of Object.keys(mDraft)) if (/[\r\n]/.test(mDraft[k])) e.push(`${M_LABEL[k] || k}: value must be a single line (set_setting rejects newlines)`);
+    const miss = mProviderErrors();
+    if (miss.length) e.push(`The chat provider needs ${miss.join(" and ")}.`);
+    if (personaBadNow()) e.push("a raw row is not valid JSON — fix it before saving");
+    return e;
+  }
+  function mShowReview() {
+    const rev = host.querySelector(".mx-review");
+    if (!rev) return;
+    const ch = mChangesList(), errs = mErrors();
+    rev.innerHTML = `<h3>Review your changes</h3><p>Check what changes and when it takes effect. Nothing is saved until you apply.</p>` +
+      (errs.length ? `<div class="note err">${errs.map(mEsc).join("<br>")}</div>` : "") +
+      ch.map((c) => `<div class="chg"><strong>${mEsc(c.label)}</strong><span class="k">${mEsc(c.cmd)}</span>` +
+        `<div class="vals"><span>${mEsc(c.from)}</span><span aria-hidden="true">→</span><b>${mEsc(c.to)}</b></div>` +
+        `<small>Takes effect: ${mEsc(c.when)} · <a href="#" data-goto="${c.sec}" style="color:var(--text-dim)">edit</a></small></div>`).join("") +
+      `<div class="btnrow" style="margin-top:20px"><button data-act="back">Keep editing</button>` +
+      `<button class="primary" data-act="apply" ${errs.length ? "disabled" : ""}>Apply ${ch.length} ${ch.length === 1 ? "change" : "changes"}</button></div>`;
+    host.querySelector(".mx-panes").hidden = true;
+    rev.hidden = false;
+    mBarSync(ch.length);
+  }
+  function mBack() {
+    const rev = host.querySelector(".mx-review");
+    if (rev) rev.hidden = true;
+    const panes = host.querySelector(".mx-panes");
+    if (panes) panes.hidden = false;
+  }
+  async function mApply() {
+    const ch = mChangesList();
+    const out = [];
+    for (const c of ch) {
+      let ok = false, msg = "";
+      if (c.k === "@persona") {
+        const pl = personaLines(personaRows);
+        if (pl.bad) { msg = "a raw row is not valid JSON — fix it before saving"; }
+        else {
+          const r = mEnv(await invoke("agent", "model", "persona_write", { content: pl.lines.join("\n") }));
+          ok = !!(r && r.status === "ok");
+          msg = ok ? `saved ${r.rows} rows (${r.heldout} held out for the probe)` : "save failed: " + ((r && r.msg) || "no reply");
+        }
+      } else if (c.k === "@drive") {
+        const n = parseInt(mDraft[c.k], 10);
+        const r = mEnv(await invoke("agent", "executive", "set_drive", { acts_per_hour: n }));
+        ok = !!(r && r.status === "ok");
+        msg = ok ? `drive set to ${n}/hr` : "set_drive failed";
+        if (ok) { mDrive = String(n); delete mDraft[c.k]; }
       } else {
-        spark.innerHTML = "";
+        const v = mDraft[c.k];
+        const r = mEnv(await invoke("agent", "model", "set_setting", { key: c.k, value: v }));
+        ok = !!(r && r.status === "ok");
+        if (c.k === "MAX_PLAN_STEPS") msg = ok ? (v ? `max plan steps set to ${v}/item` : "max plan steps back to the default (20/item)") : "set_setting failed";
+        else if (c.k === "PLAN_STEPS_PER_HOUR") msg = ok ? (v ? `plan worker capped at ${v} steps/hr` : "plan worker hourly cap removed (unlimited)") : "set_setting failed";
+        else msg = ok ? `${c.k} ${(r && r.action) || "updated"} — ${r && r.action === "removed" ? "reverted to default" : "saved"}` : "save failed: " + ((r && r.msg) || "no reply");
+        if (ok) {
+          if (mSet[c.k]) { mSet[c.k].v = v; mSet[c.k].set = v !== ""; }
+          else mSet[c.k] = { v, d: "", t: "", set: v !== "", locked: false };
+          delete mDraft[c.k];
+        }
       }
-      const histEl = host.querySelector("[data-hist]");
-      const hist = mt.verdict_hist || [];
-      const hmax = Math.max(1, ...hist);
-      histEl.innerHTML = hist.map((n2, i2) =>
-        `<span class="ag-hbar" title="${(i2 / 10).toFixed(1)}–${((i2 + 1) / 10).toFixed(1)}: ${n2}"` +
-        ` style="height:${Math.max(2, n2 / hmax * 26)}px"></span>`).join("");
-      histEl.dataset.total = mt.verdict_total || 0;
-      const gb = host.querySelector("[data-gatebar]");
-      gb.textContent = mt.gate_total
-        ? `${mt.gate_pass}/${mt.gate_total} promoted · ` +
-          (mt.gates || []).slice(-12).map((g2) => g2.verdict === "promote" ? "▲" : "·").join("")
-        : "no gates yet";
-      // the last two stubs, real: perception rate from the verdict
-      // journal's span, frontier spend from the executive's counters,
-      // and per-sensor rows keyed by whatever sensors have reported
-      const hrs = (mt.span_ms || 0) / 3600000;
-      const sc = ex.sensor_counts || {};
-      kv("sensors").innerHTML = mKv([
-        ["perception rate", hrs > 0.01 ? `${(mt.verdict_total / hrs).toFixed(1)}/hr` : "—"],
-        ["frontier calls (esc + audit)", `${(ex.escalations ?? 0) + (ex.audits ?? 0)}` +
-          (hrs > 0.01 ? ` · ${(((ex.escalations ?? 0) + (ex.audits ?? 0)) / hrs).toFixed(1)}/hr` : "")],
-        ...Object.entries(sc).map(([n2, r2]) =>
-          [`sensor ${n2}`, `${r2.count ?? 0} perceived · ${r2.fast ?? 0} fast · ${r2.deep ?? 0} deep`]),
-      ]);
+      out.push({ c, ok, msg });
     }
-
-    // configuration
-    const cfR = await invoke("agent", "model", "get_settings", {});
-    const cf = mEnv(cfR);
-    const conf = host.querySelector("[data-conf]");
-    if (cf && cf.status === "ok" && !conf.dataset.editing) {
-      conf.innerHTML = (cf.settings || []).map((s2) =>
-        `<span class="ag-conf-row" data-key="${mEsc(s2.key)}">` +
-        `<span class="ag-conf-k lbl${s2.set ? " setk" : ""}" title="${s2.set ? "explicitly set" : "default"}">${mEsc(s2.key)}</span>` +
-        (s2.locked
-          ? `<span class="ag-conf-v lbl">${mEsc(s2.value || "(file-only)")}</span>`
-          : `<input class="ag-conf-v" value="${mEsc(s2.value)}" placeholder="${mEsc(s2.default)}">` +
-            `<button class="ag-conf-save">set</button>`) +
-        `<span class="ag-conf-t lbl">${mEsc(s2.takes || "")}</span></span>`).join("");
-      for (const row of conf.querySelectorAll(".ag-conf-row")) {
-        const inp = row.querySelector("input");
-        if (!inp) continue;
-        inp.addEventListener("focus", () => { conf.dataset.editing = "1"; });
-        inp.addEventListener("blur", () => { setTimeout(() => { delete conf.dataset.editing; }, 200); });
-        row.querySelector(".ag-conf-save").addEventListener("click", async () => {
-          const r2 = await invoke("agent", "model", "set_setting",
-            { key: row.dataset.key, value: inp.value });
-          const env2 = mEnv(r2);
-          mindNote("loop", env2 && env2.status === "ok"
-            ? `${row.dataset.key} ${env2.action} — ${env2.action === "removed" ? "reverted to default" : "saved"}`
-            : `save failed: ${env2 ? env2.msg : "no reply"}`, !(env2 && env2.status === "ok"));
-          delete conf.dataset.editing;
-          loadMind();
-        });
-      }
-    }
-  }
-
-  function mindNote(card, text, isErr) {
-    const el = host.querySelector(`[data-note="${card}"]`);
-    if (!el) return;
-    el.textContent = text;
-    el.classList.toggle("err", !!isErr);
-  }
-
-  function wireMind() {
-    const act = (n) => host.querySelector(`[data-act="${n}"]`);
-    act("exec-toggle").addEventListener("click", async () => {
-      const ex = mEnv(await invoke("agent", "executive", "status", {}));
-      const cmd = ex && ex.running ? "stop" : "start";
-      const r = mEnv(await invoke("agent", "executive", cmd, {}));
-      mindNote("loop", r && r.status === "ok" ? `executive ${cmd} ok` : `executive ${cmd} failed`, !(r && r.status === "ok"));
-      loadMind();
-    });
-    act("sensor-toggle").addEventListener("click", async () => {
-      const sn = mEnv(await invoke("agent", "sensor", "status", {}));
-      const cmd = sn && sn.running ? "stop" : "start";
-      const r = mEnv(await invoke("agent", "sensor", cmd, {}));
-      mindNote("loop", r && r.status === "ok" ? `sensor ${cmd} ok` : `sensor ${cmd} failed`, !(r && r.status === "ok"));
-      loadMind();
-    });
-    act("set-drive").addEventListener("click", async () => {
-      const n = parseInt(host.querySelector(".ag-drive").value, 10);
-      if (isNaN(n) || n < 0) { mindNote("loop", "drive must be a number ≥ 0", true); return; }
-      const r = mEnv(await invoke("agent", "executive", "set_drive", { acts_per_hour: n }));
-      mindNote("loop", r && r.status === "ok" ? `drive set to ${n}/hr` : "set_drive failed", !(r && r.status === "ok"));
-      loadMind();
-    });
-    act("plan-toggle").addEventListener("click", async () => {
-      const gs = mEnv(await invoke("agent", "model", "get_settings", {}));
-      const row = ((gs && gs.settings) || []).find((s) => s.key === "PLAN_AUTONOMY");
-      const cur = row ? String(row.value || "").trim().toLowerCase() : "off";
-      const on = ["on", "true", "1", "yes"].includes(cur);
-      // armed -> disarm (set off); disarmed -> arm (set on). set_setting updates
-      // the LIVE globals + persists botd.properties.
-      const next = on ? "off" : "on";
-      const r = mEnv(await invoke("agent", "model", "set_setting", { key: "PLAN_AUTONOMY", value: next }));
-      // The plan worker follows PLAN_AUTONOMY live; arming only has to make
-      // sure its thread exists (the worker_boot timer normally starts it).
-      if (next === "on" && r && r.status === "ok") {
-        const ws = mEnv(await invoke("agent", "plan", "worker_status", {}));
-        if (!ws || !ws.alive) await invoke("agent", "plan", "worker_start", {});
-      }
-      mindNote("loop", r && r.status === "ok" ? `plan autonomy ${next}` : "set_setting failed", !(r && r.status === "ok"));
-      loadMind();
-    });
-    act("set-plansteps").addEventListener("click", async () => {
-      const n = parseInt(host.querySelector(".ag-plansteps").value, 10);
-      if (isNaN(n) || n < 1) { mindNote("loop", "max steps must be a number ≥ 1", true); return; }
-      const r = mEnv(await invoke("agent", "model", "set_setting", { key: "MAX_PLAN_STEPS", value: String(n) }));
-      mindNote("loop", r && r.status === "ok" ? `max plan steps set to ${n}/item` : "set_setting failed", !(r && r.status === "ok"));
-      loadMind();
-    });
-    act("set-planrate").addEventListener("click", async () => {
-      const n = parseInt(host.querySelector(".ag-planrate").value, 10);
-      if (isNaN(n) || n < 0) { mindNote("loop", "plan steps/hr must be a number ≥ 0 (0 = unlimited)", true); return; }
-      // 0 removes the key: unlimited is the default, not a stored value.
-      const r = mEnv(await invoke("agent", "model", "set_setting", { key: "PLAN_STEPS_PER_HOUR", value: n > 0 ? String(n) : "" }));
-      mindNote("loop", r && r.status === "ok"
-        ? (n > 0 ? `plan worker capped at ${n} steps/hr` : "plan worker hourly cap removed (unlimited)")
-        : "set_setting failed", !(r && r.status === "ok"));
-      loadMind();
-    });
-    act("commit-toggle").addEventListener("click", async () => {
-      const sel = host.querySelector(".ag-commit-repo");
-      const repo = sel && sel.value;
-      if (!repo) { mindNote("committer", "pick a repo first", true); return; }
-      const cm = mEnv(await invoke("agent", "committer", "status", {}));
-      const cur = (cm && (cm.all || []).find((r) => r.repo === repo)) || {};
-      const turnOn = !cur.agent_commit;
-      const r = mEnv(await invoke("agent", "committer", "set_enabled", { repo, enabled: turnOn }));
-      let msg = r && r.status === "ok" ? `${repo} agent-commit ${turnOn ? "on" : "off"}` : "set_enabled failed";
-      let err = !(r && r.status === "ok");
-      // turning ON a repo dev still mechanically drives: hand it to the agent
-      if (!err && turnOn && cur.dev_autocommit) {
-        const d = mEnv(await invoke("dev", "git", "set_autocommit", { name: repo, autocommit: false }));
-        msg += d && d.status === "ok" ? " · dev autocommit off (agent now drives it)" : " · WARN: dev autocommit still on - shadowed";
-        if (!(d && d.status === "ok")) err = true;
-      }
-      mindNote("committer", msg, err);
-      loadMind();
-    });
-    act("commit-sweep").addEventListener("click", async (ev) => {
-      ev.currentTarget.disabled = true;
-      mindNote("committer", "sweep running - grouping units, composing messages…");
-      const r = mEnv(await invoke("agent", "committer", "sweep", {}));
-      ev.currentTarget.disabled = false;
-      const ok = r && r.status === "ok";
-      const msg = ok
-        ? `swept ${r.swept ?? 0} · committed ${r.units_committed ?? 0} units (${r.commits ?? 0} commits) · pushed ${r.pushed ?? 0}`
-        : (r && r.msg) || "sweep failed";
-      mindNote("committer", msg, !ok);
-      loadMind();
-    });
-    act("bootstrap").addEventListener("click", async (ev) => {
-      ev.currentTarget.disabled = true;
-      mindNote("judge", "bootstrap running — installs and training can take a while…");
-      const r = mEnv(await invoke("agent", "model", "bootstrap", {}));
-      ev.currentTarget.disabled = false;
-      mindNote("judge", r ? JSON.stringify(r, null, 1) : "bootstrap: no reply", !(r && r.status === "ok"));
-      loadMind();
-    });
-    act("promote").addEventListener("click", async () => {
-      const r = mEnv(await invoke("agent", "model", "promote_pointer", {}));
-      mindNote("judge", r ? JSON.stringify(r) : "promote: no reply", !(r && r.status === "ok"));
-      loadMind();
-    });
-    act("user-promote").addEventListener("click", async () => {
-      const r = mEnv(await invoke("agent", "model", "user_promote", {}));
-      mindNote("judge", r ? JSON.stringify(r) : "user promote: no reply", !(r && r.status === "ok"));
-      loadMind();
-    });
-    act("persona-add").addEventListener("click", () => {
-      (personaRows = personaRows || []).push({ user: "", assistant: "" });
-      personaDirty = true;
-      renderPersona();
-    });
-    act("persona-save").addEventListener("click", savePersona);
-    act("persona-reload").addEventListener("click", () => loadPersona(true));
-    act("rederive").addEventListener("click", async (ev) => {
-      ev.currentTarget.disabled = true;
-      mindNote("judge", "deriving the personality adapter — a LoRA training run; this can take a few minutes…");
-      const r = mEnv(await invoke("agent", "model", "persona_rederive", {}));
-      ev.currentTarget.disabled = false;
-      mindNote("judge", r ? JSON.stringify(r, null, 1) : "re-derive: no reply", !(r && r.status === "ok"));
-      loadMind();
-    });
-    act("user-rollback").addEventListener("click", async () => {
-      const r = mEnv(await invoke("agent", "model", "user_rollback", {}));
-      mindNote("judge", r ? JSON.stringify(r) : "user rollback: no reply", !(r && r.status === "ok"));
-      loadMind();
-    });
-    act("release").addEventListener("click", async () => {
-      const r = mEnv(await invoke("agent", "model", "service_stop", {}));
-      mindNote("judge", r && r.status === "ok"
-        ? "GPU released - the judge is down by request; resume with bootstrap (it reloads the newest ring checkpoint)"
-        : `release: ${r ? r.msg : "no reply"}`, !(r && r.status === "ok"));
-      loadMind();
-    });
-    act("export").addEventListener("click", async () => {
-      const ts = new Date().toISOString().replace(/[-:T]/g, "").slice(0, 14);
-      const r = mEnv(await invoke("agent", "model", "curriculum_export",
-        { path: `runtime/agent/model/ingest/batch-${ts}.jsonl` }));
-      mindNote("flywheel", r && r.status === "ok"
-        ? `exported ${r.total} samples (${r.salience_pairs} pairs, ${r.claims} claims, ${r.curation_traces} traces) — the trainer drains ingest within seconds`
-        : `export failed: ${r ? r.msg : "no reply"}`, !(r && r.status === "ok"));
-      loadMind();
-    });
+    const good = out.filter((o) => o.ok).length;
+    const rev = host.querySelector(".mx-review");
+    rev.innerHTML = `<h3>${good === out.length ? "All changes applied" : `Applied ${good} of ${out.length} changes`}</h3>` +
+      `<p>${good === out.length ? "Each one takes effect as listed." : "What failed is still in your draft, so you can fix it and try again."}</p>` +
+      out.map((o) => `<div class="chg"><strong>${o.ok ? '<span style="color:#6c9">✓</span>' : '<span style="color:#c66">✗</span>'} ${mEsc(o.c.label)}</strong><span class="k">${mEsc(o.c.cmd)}</span>` +
+        `<div class="vals" style="${o.ok ? "" : "color:#c66"}">${mEsc(o.msg)}</div>${o.ok ? `<small>Takes effect: ${mEsc(o.c.when)}</small>` : ""}</div>`).join("") +
+      `<div class="btnrow" style="margin-top:20px"><button class="primary" data-act="back">Done</button></div>`;
+    if (out.some((o) => o.c.k === "@persona" && o.ok)) await loadPersona(true);
+    loadMind();
   }
 
   function note(el, text, isErr) {
