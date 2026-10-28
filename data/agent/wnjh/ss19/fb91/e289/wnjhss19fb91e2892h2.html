@@ -111,116 +111,303 @@
     </section>
 
     <section class="ag-pane" data-pane="mind" hidden>
-      <div class="ag-mind-grid">
-        <div class="ag-card" data-card="committer">
-          <p class="ag-card-t lbl">agent autocommit — LLM-written commit messages</p>
-          <div class="ag-kv" data-kv="committer"></div>
-          <span class="ag-btnrow">
-            <select class="ag-commit-repo" title="a dev-registered repo to agent-commit"></select>
-            <button class="ag-mind-btn" data-act="commit-toggle"
-              title="toggle agent-commit for the selected repo - on a shadowed repo this also turns dev's mechanical autocommit OFF so the agent drives it">toggle</button>
-            <button class="ag-mind-btn" data-act="commit-sweep"
-              title="run the agent-committer's sweep now - group dirty store units, compose a message each, commit, push">sweep now</button>
-          </span>
-          <pre class="ag-mind-note lbl" data-note="committer"></pre>
-        </div>
-        <div class="ag-card" data-card="loop">
-          <p class="ag-card-t lbl">the loop — executive + sensor</p>
-          <div class="ag-kv" data-kv="loop"></div>
-          <span class="ag-btnrow">
-            <button class="ag-mind-btn" data-act="exec-toggle">executive…</button>
-            <button class="ag-mind-btn" data-act="sensor-toggle">sensor…</button>
-            <label class="lbl" title="executive drive: idle memory-upkeep acts per hour (reverify, connect, wonder, distill). Plan items do not use it - they have their own worker.">acts/hr <input class="ag-drive" type="number" min="0" value="4"></label>
-            <button class="ag-mind-btn" data-act="set-drive">set</button>
-          </span>
-          <span class="ag-btnrow">
-            <button class="ag-mind-btn" data-act="plan-toggle"
-              title="toggle PLAN_AUTONOMY (persists across restarts) - when armed the plan worker steps accepted / in-progress kb.plan items back to back on its own thread, and goes quiet (no LLM calls) when none are eligible">plan autonomy…</button>
-            <label class="lbl">max steps/item <input class="ag-plansteps" type="number" min="1" value="20"></label>
-            <button class="ag-mind-btn" data-act="set-plansteps"
-              title="set MAX_PLAN_STEPS - the convergence guard: how many autonomous steps one accepted plan item may take before it needs human re-approval">set</button>
-            <label class="lbl">plan steps/hr <input class="ag-planrate" type="number" min="0" value="0" title="0 = unlimited"></label>
-            <button class="ag-mind-btn" data-act="set-planrate"
-              title="set PLAN_STEPS_PER_HOUR - a sliding-hour cap on the plan worker's reasoning turns; 0 = unlimited (the default)">set</button>
-          </span>
-          <pre class="ag-mind-note lbl" data-note="loop"></pre>
-        </div>
-        <div class="ag-card" data-card="judge">
-          <p class="ag-card-t lbl">the judge — resident model service</p>
-          <div class="ag-kv" data-kv="judge"></div>
-          <span class="ag-btnrow">
-            <button class="ag-mind-btn" data-act="bootstrap"
-              title="idempotent oneshot: install env if configured, train if the checkpoint dir is empty, write scripts, launch/converge the service">bootstrap</button>
-            <button class="ag-mind-btn" data-act="promote"
-              title="load the newest ring checkpoint into the inactive slot and swap the live pointer">promote pointer</button>
-            <button class="ag-mind-btn" data-act="release"
-              title="stop the service and free ALL of the agent's GPU memory; ring checkpoints, replay, and metrics survive - resume with bootstrap (loads the newest ring checkpoint). set SALIENCE=off too if you want it to stay off across executive restarts">release GPU</button>
-          </span>
-          <p class="ag-card-t lbl">the user-facing pointer — stricter lane (8a)</p>
-          <div class="ag-kv" data-kv="userptr"></div>
-          <span class="ag-btnrow">
-            <button class="ag-mind-btn" data-act="user-promote" hidden
-              title="advance the user-facing pointer onto the gate's ready candidate - the deliberate approval the manual mode waits for">promote user pointer</button>
-            <button class="ag-mind-btn" data-act="user-rollback" hidden
-              title="revert the user-facing pointer to last_good (one step; the watchdog does this automatically on agreement decay)">roll back</button>
-            <button class="ag-mind-btn" data-act="rederive" hidden
-              title="re-derive the personality adapter from persona/persona.jsonl against the user pointer's current base - blocks through the LoRA run; the derivation gate can reject it (serving stays untouched). the probe triggers this automatically when the skin slips">re-derive persona</button>
-          </span>
-          <div class="ag-kv" data-kv="persona"></div>
-          <pre class="ag-mind-note lbl" data-note="judge"></pre>
-        </div>
-        <div class="ag-card" data-card="flywheel">
-          <p class="ag-card-t lbl">the flywheel — continuous training</p>
-          <div class="ag-kv" data-kv="flywheel"></div>
-          <div class="ag-gate lbl" data-gate></div>
-          <span class="ag-btnrow">
-            <button class="ag-mind-btn" data-act="export"
-              title="write the accumulated feedstock (salience pairs, claims, curation traces) as a JSONL batch into the trainer's ingest directory">export curriculum → ingest</button>
-          </span>
-          <pre class="ag-mind-note lbl" data-note="flywheel"></pre>
-        </div>
-        <div class="ag-card" data-card="forge" hidden>
-          <p class="ag-card-t lbl">the forge — base training</p>
-          <div class="ag-kv" data-kv="forge"></div>
-          <pre class="ag-trainlog" data-trainlog></pre>
-        </div>
-        <div class="ag-card" data-card="harvest">
-          <p class="ag-card-t lbl">the harvest — what the week grew</p>
-          <div class="ag-kv" data-kv="harvest"></div>
-          <pre class="ag-mind-note lbl" data-note="harvest"></pre>
-        </div>
-        <div class="ag-card" data-card="stats">
-          <p class="ag-card-t lbl">statistics — the salience audit trail</p>
-          <div class="ag-kv" data-kv="stats"></div>
-          <div class="ag-trends">
-            <div class="ag-trend"><p class="lbl">trainer loss</p><svg class="ag-spark" data-spark viewBox="0 0 100 28" preserveAspectRatio="none"></svg></div>
-            <div class="ag-trend"><p class="lbl">served verdicts (0 → 1)</p><div class="ag-hist" data-hist></div></div>
-            <div class="ag-trend"><p class="lbl">gates</p><div class="ag-gatebar lbl" data-gatebar>—</div></div>
+      <div class="mx">
+        <div class="mx-heading">
+          <div>
+            <h2>Mind</h2>
+            <p>Choose how your agent responds, works, and learns. Live status refreshes every 5 seconds.</p>
           </div>
-          <div class="ag-kv" data-kv="sensors"></div>
+          <label class="mx-keys">Show config keys
+            <span class="tg"><input type="checkbox" class="mx-showkeys" aria-label="Show config keys"><span></span></span>
+          </label>
         </div>
-        <div class="ag-card" data-card="config">
-          <p class="ag-card-t lbl">configuration — runtime/agent/botd.properties</p>
-          <p class="lbl">live keys (SALIENCE, the LLM arm) apply immediately; each row says when the rest take effect. blank a value to revert to its default. secret keys stay file-only.</p>
-          <div class="ag-conf" data-conf></div>
+        <div class="mx-work">
+          <nav class="mx-side" aria-label="Mind sections"></nav>
+          <div class="mx-content">
+            <div class="mx-panes"></div>
+            <section class="mx-review" hidden></section>
+          </div>
         </div>
-        <div class="ag-card" data-card="persona-editor">
-          <p class="ag-card-t lbl">the persona — how the local model speaks</p>
-          <p class="lbl">one exchange per row; every 5th row is held out for the probe and
-            never trained on. saving takes effect at the service's next gate tick — and a
-            big rewrite can slip the probe and trigger re-derivation on its own.</p>
-          <p class="lbl ag-persona-state" data-persona-state></p>
-          <div class="ag-persona" data-persona></div>
-          <span class="ag-btnrow">
-            <button class="ag-mind-btn" data-act="persona-add">add exchange</button>
-            <button class="ag-mind-btn" data-act="persona-save"
-              title="validate and write the whole corpus (atomic); a bad row rejects the write with its line number">save persona</button>
-            <button class="ag-mind-btn" data-act="persona-reload"
-              title="discard unsaved edits and reload from disk (or the default seed when nothing is saved)">reload</button>
+        <footer class="mx-foot">
+          <span><span class="state mx-dirty">No pending changes</span> <span class="toast mx-toast" hidden></span></span>
+          <span class="btnrow">
+            <button class="mx-discard" disabled>Discard</button>
+            <button class="mx-reviewbtn primary" disabled>Review changes</button>
           </span>
-          <pre class="ag-mind-note lbl" data-note="persona"></pre>
-        </div>
+        </footer>
       </div>
+
+      <template data-mt="conversation">
+        <div class="mx-split"><div>
+          <div class="mx-status" data-status="conversation"></div>
+
+          <label class="fld"><span>Chat provider <span class="k">LLM</span></span>
+            <select data-key="LLM" data-provider>
+              <option value="CLAUDECODE">Claude Code (CLI)</option>
+              <option value="ANTHROPIC">Anthropic API</option>
+              <option value="OPENAI">OpenAI (or compatible)</option>
+              <option value="GEMINI">Gemini</option>
+              <option value="VLLM">vLLM server</option>
+              <option value="OLLAMA">Ollama</option>
+              <option value="LOCAL">Trained local model</option>
+              <option value="REMOTE">Another Newbound peer</option>
+              <option value="CUSTOM">Custom command</option>
+            </select>
+            <small>Answers you in chat and handles the agent's other frontier-model calls.</small>
+          </label>
+
+          <div data-when="VLLM">
+            <label class="fld"><span>Server address <span class="k">VLLM_URL</span></span><input class="mono" data-key="VLLM_URL" data-req placeholder="http://localhost:8000/v1/chat/completions"><small>The chat-completions endpoint of your server.</small></label>
+            <label class="fld"><span>Model name <span class="k">VLLM_MODEL</span></span><input data-key="VLLM_MODEL" data-req placeholder="the model your server serves"></label>
+          </div>
+          <div data-when="OPENAI">
+            <label class="fld"><span>Model <span class="k">OPENAI_MODEL</span></span><input data-key="OPENAI_MODEL" data-req placeholder="e.g. gpt-5"></label>
+            <label class="fld"><span>Custom endpoint (optional) <span class="k">OPENAI_URL</span></span><input class="mono" data-key="OPENAI_URL" placeholder="blank = api.openai.com"><small>For OpenAI-compatible servers. A custom endpoint may not need a key.</small></label>
+          </div>
+          <div data-when="ANTHROPIC">
+            <label class="fld"><span>Model <span class="k">ANTHROPIC_MODEL</span></span><input data-key="ANTHROPIC_MODEL" data-req placeholder="e.g. claude-opus-5-5"></label>
+            <label class="fld"><span>Endpoint (optional) <span class="k">ANTHROPIC_URL</span></span><input class="mono" data-key="ANTHROPIC_URL" placeholder="https://api.anthropic.com/v1/messages"></label>
+          </div>
+          <div data-when="GEMINI">
+            <label class="fld"><span>Model <span class="k">GEMINI_MODEL</span></span><input data-key="GEMINI_MODEL" data-req placeholder="e.g. gemini-2.5-pro"></label>
+            <label class="fld"><span>Endpoint (optional) <span class="k">GEMINI_URL</span></span><input class="mono" data-key="GEMINI_URL" placeholder="blank = Google's default"></label>
+          </div>
+          <div data-when="OLLAMA">
+            <label class="fld"><span>Server address <span class="k">OLLAMA_URL</span></span><input class="mono" data-key="OLLAMA_URL" placeholder="http://127.0.0.1:11434/api/chat"></label>
+            <label class="fld"><span>Model <span class="k">OLLAMA_MODEL</span></span><input data-key="OLLAMA_MODEL" data-req placeholder="e.g. qwen3:32b"></label>
+          </div>
+          <div data-when="CLAUDECODE">
+            <label class="fld"><span>Model <span class="k">CLAUDE_CODE_MODEL</span></span><input data-key="CLAUDE_CODE_MODEL" placeholder="blank = the CLI's default"><small>Uses the installed Claude Code CLI with its own tools and permissions.</small></label>
+            <details class="more"><summary>Claude Code options</summary>
+              <div class="row2">
+                <label class="fld"><span>Permission mode <span class="k">CLAUDE_CODE_PERMISSION_MODE</span></span>
+                  <select data-key="CLAUDE_CODE_PERMISSION_MODE"><option value="">CLI default</option><option>default</option><option>acceptEdits</option><option>plan</option><option>bypassPermissions</option></select></label>
+                <label class="fld"><span>System prompt <span class="k">CLAUDE_CODE_SYSTEM_MODE</span></span>
+                  <select data-key="CLAUDE_CODE_SYSTEM_MODE"><option value="replace">Replace the CLI's prompt</option><option value="append">Append to the CLI's prompt</option></select></label>
+                <label class="fld"><span>Timeout, seconds <span class="k">CLAUDE_CODE_TIMEOUT</span></span><input data-key="CLAUDE_CODE_TIMEOUT" type="number" min="1"></label>
+                <label class="fld"><span>Idle timeout, seconds <span class="k">CLAUDE_CODE_IDLE_TIMEOUT</span></span><input data-key="CLAUDE_CODE_IDLE_TIMEOUT" type="number" min="1"></label>
+              </div>
+              <label class="fld"><span>Allowed tools <span class="k">CLAUDE_CODE_TOOLS</span></span><input data-key="CLAUDE_CODE_TOOLS" placeholder="blank = CLI default"></label>
+              <label class="fld"><span>MCP servers (JSON, one line) <span class="k">CLAUDE_CODE_MCP</span></span><textarea class="mono" rows="3" data-key="CLAUDE_CODE_MCP"></textarea></label>
+              <div class="row2">
+                <label class="fld"><span>Working folder <span class="k">CLAUDE_CODE_CWD</span></span><input class="mono" data-key="CLAUDE_CODE_CWD"></label>
+                <label class="fld"><span>CLI path <span class="k">CLAUDE_CODE_BIN</span></span><input class="mono" data-key="CLAUDE_CODE_BIN"></label>
+              </div>
+            </details>
+          </div>
+          <div data-when="LOCAL"><div class="note warn">Answers from the version released to chat under <b>Local learning → Release to chat</b>. Text only: the local model can't use tools, so chat becomes plain answers. The service refuses until a version has been released.</div></div>
+          <div data-when="REMOTE">
+            <label class="fld"><span>Peer <span class="k">LLM_REMOTE</span></span><input class="mono" data-key="LLM_REMOTE" data-req placeholder="the peer's id"><small>That peer answers with its own provider setting.</small></label>
+            <div class="row2">
+              <label class="fld"><span>Remote command id (optional) <span class="k">LLM_REMOTE_ID</span></span><input class="mono" data-key="LLM_REMOTE_ID" placeholder="blank = same as this peer"></label>
+              <label class="fld"><span>Split large requests <span class="k">LLM_REMOTE_SPLIT</span></span><select data-key="LLM_REMOTE_SPLIT"><option value="">off</option><option value="on">on</option></select></label>
+            </div>
+          </div>
+          <div data-when="CUSTOM">
+            <label class="fld"><span>Command <span class="k">LLM_CTL</span></span><input class="mono" data-key="LLM_CTL" data-req placeholder="lib:ctl:cmd"><small>Any command taking (messages, tools) or (prompt, system_prompt).</small></label>
+          </div>
+          <div class="note" data-keynote></div>
+          <div class="note err" data-provider-err></div>
+          <div class="timing">Changes apply to the next model call.</div>
+        </div>
+        <aside class="mx-explain">
+          <span class="lbl">a useful distinction</span>
+          <h4>Chat and learning are separate.</h4>
+          <p>You can use an external chat model while a local service learns in the background.</p>
+          <p>Changing this provider does not start training or change your local checkpoint.</p>
+          <hr>
+          <p>What your agent knows and how it is instructed still live in <b>Memory</b> and <b>Prompts</b>.</p>
+        </aside></div>
+      </template>
+
+      <template data-mt="activity">
+        <div class="mx-split"><div>
+          <div class="mx-status" data-status="activity"></div>
+
+          <div class="sw"><div><strong>Observe background events</strong><span class="now">applies now</span><p>Let sensors collect events for the agent to consider.</p><span class="k">agent.sensor.start / stop</span></div>
+            <span class="tg"><input type="checkbox" data-live="sensor" aria-label="Observe background events"><span></span></span></div>
+          <div class="sw"><div><strong>Think in the background</strong><span class="now">applies now</span><p>Let the executive weigh events and do its own memory upkeep.</p><span class="k">agent.executive.start / stop</span></div>
+            <span class="tg"><input type="checkbox" data-live="executive" aria-label="Think in the background"><span></span></span></div>
+          <label class="fld"><span>Self-initiated activity <span class="k">agent.executive.set_drive</span></span>
+            <span class="inline"><input type="number" min="0" step="1" data-key="@drive"> memory acts per hour</span>
+            <small>Idle memory upkeep: reverify, connect, wonder, distill. Plan items don't use it; they have their own worker below.</small></label>
+          <div class="note" data-activity-note></div>
+          <div class="res" data-res="loop"></div>
+
+          <div class="mx-block">
+            <span class="lbl">plan items</span>
+            <div class="mx-status" data-status="plan"></div>
+            <div class="sw"><div><strong>Work on accepted plan items by itself</strong><span class="now">applies now</span><p>The plan worker steps accepted and in-progress items back to back on its own thread, and goes quiet (no model calls) when none are ready. Stays on across restarts.</p><span class="k">PLAN_AUTONOMY · agent.plan.worker_start</span></div>
+              <span class="tg"><input type="checkbox" data-live="plan" aria-label="Plan autonomy"><span></span></span></div>
+            <div class="row2">
+              <label class="fld"><span>Steps per item before re-approval <span class="k">MAX_PLAN_STEPS</span></span><input type="number" min="1" data-key="MAX_PLAN_STEPS"><small>The convergence guard: after this many steps an item waits for you.</small></label>
+              <label class="fld"><span>Plan steps per hour <span class="k">PLAN_STEPS_PER_HOUR</span></span><input type="number" min="0" data-key="PLAN_STEPS_PER_HOUR" placeholder="0"><small>A sliding-hour cap on the worker's reasoning turns. 0 = no cap (the default).</small></label>
+            </div>
+            <div class="res" data-res="plan"></div>
+          </div>
+
+          <div class="mx-block">
+            <span class="lbl">automatic commits — model-written commit messages</span>
+            <p class="para">The diff is the source of truth: one model-written message per changed store unit, then commit and push. If the model is down, a fallback message is used. Turning a repo on here turns dev's mechanical autocommit off for it, so the agent drives it.</p>
+            <div data-repos></div>
+            <div class="btnrow" style="margin-top:12px">
+              <button data-act="sweep" title="run the agent-committer's sweep now - group dirty store units, compose a message each, commit, push">Commit now</button>
+              <span class="lbl" data-repocount></span>
+            </div>
+            <div class="res" data-res="committer"></div>
+          </div>
+        </div>
+        <aside class="mx-explain">
+          <span class="lbl">what this means</span>
+          <h4>You control the initiative.</h4>
+          <p>Observation and thinking are independent. You can collect events while keeping the executive paused.</p>
+          <p>Background activity can make model calls. Its rate is not a spending limit or a tool permission setting.</p>
+          <hr>
+          <p>Switches marked <b>applies now</b> start or stop something immediately. Rates and limits wait in your draft until you review them.</p>
+        </aside></div>
+      </template>
+
+      <template data-mt="learning">
+        <div class="mx-split"><div>
+          <div class="mx-status" data-status="learning"></div>
+
+          <div class="sw"><div><strong>Score what matters locally</strong><p>Use the resident model to score incoming events for importance.</p><span class="k">SALIENCE</span></div>
+            <span class="tg"><input type="checkbox" data-key="SALIENCE" data-on="on" data-off="off" aria-label="Score what matters locally"><span></span></span></div>
+          <div class="sw"><div><strong>Train the resident model</strong><p>Let the service's training loop run while it is up.</p><span class="k">MODEL_TRAIN</span></div>
+            <span class="tg"><input type="checkbox" data-key="MODEL_TRAIN" data-on="on" data-off="off" aria-label="Train the resident model"><span></span></span></div>
+          <label class="fld"><span>Release learned updates to local chat <span class="k">USER_GATE · mode</span></span>
+            <select data-virtual="gateMode"><option value="manual">After evaluation, ask me to approve</option><option value="auto">After evaluation, release automatically</option></select>
+            <small>Only affects the trained local chat model. An external provider is separate. The gate's other numbers are in Advanced.</small></label>
+          <div class="timing">Scoring applies immediately. Training and release policy apply after the service restarts.</div>
+
+          <div class="mx-block">
+            <span class="lbl">service</span>
+            <div class="btnrow">
+              <button data-act="bootstrap" title="idempotent oneshot: install env if configured, train if the checkpoint dir is empty, write scripts, launch/converge the service">Start / repair service</button>
+              <button data-act="promote" title="load the newest ring checkpoint into the inactive slot and swap the live pointer">Load newest checkpoint</button>
+              <button data-act="release" title="stop the service and free ALL of the agent's GPU memory; ring checkpoints, replay, and metrics survive - resume with bootstrap (loads the newest ring checkpoint). set SALIENCE=off too if you want it to stay off across executive restarts">Release GPU</button>
+            </div>
+            <p class="para" style="margin-top:8px">Release GPU keeps checkpoints, replay and metrics; Start brings it back on the newest checkpoint. Turn scoring off too if it should stay off across executive restarts.</p>
+            <div class="res" data-res="judge"></div>
+          </div>
+
+          <div class="mx-block" data-forge hidden>
+            <span class="lbl">base training</span>
+            <div data-forge-body></div>
+          </div>
+
+          <div class="mx-block">
+            <span class="lbl">release to chat — the user-facing version</span>
+            <div data-userptr></div>
+            <div class="btnrow" style="margin-top:10px">
+              <button data-act="user-promote" hidden title="advance the user-facing pointer onto the gate's ready candidate - the deliberate approval the manual mode waits for">Approve update</button>
+              <button data-act="user-rollback" hidden title="revert the user-facing pointer to last_good (one step; the watchdog does this automatically on agreement decay)">Roll back</button>
+            </div>
+          </div>
+
+          <div class="mx-block">
+            <span class="lbl">continuous training</span>
+            <div data-flywheel></div>
+            <div class="btnrow" style="margin-top:12px"><button data-act="export" title="write the accumulated feedstock (salience pairs, claims, curation traces) as a JSONL batch into the trainer's ingest directory">Send new material to training</button></div>
+            <div class="res" data-res="flywheel"></div>
+          </div>
+        </div>
+        <aside class="mx-explain">
+          <span class="lbl">two different updates</span>
+          <h4>Learning isn't a release.</h4>
+          <p>A model can keep training without changing the version that answers you.</p>
+          <p>The local chat version has its own evaluation and release gate.</p>
+          <hr>
+          <p>Training charts and the salience audit trail live in <b>Insights</b>; they read the agent's own logs, so they stay visible when the service is down.</p>
+        </aside></div>
+      </template>
+
+      <template data-mt="personality">
+        <div class="mx-split"><div>
+          <div class="mx-status" data-status="personality"></div>
+          <div class="note">Applies to the local personality adapter. To guide an external chat provider, use the <b>Prompts</b> tab.</div>
+          <p class="para">One exchange per row. Every 5th row is held out for the check and never trained on. Saved examples are picked up at the service's next gate tick, and a big rewrite can slip the check and trigger re-derivation on its own.</p>
+          <div class="pstate" data-pstate></div>
+          <div class="persona-list" data-persona></div>
+          <div class="btnrow" style="margin-top:6px">
+            <button data-act="persona-add">+ Add exchange</button>
+            <button data-act="persona-reload" title="discard unsaved edits and reload from disk (or the default seed when nothing is saved)">Reload from disk</button>
+            <span style="flex:1"></span>
+            <button data-act="rederive" hidden title="re-derive the personality adapter from persona/persona.jsonl against the user pointer's current base - blocks through the LoRA run; the derivation gate can reject it (serving stays untouched). the probe triggers this automatically when the skin slips">Re-derive personality now</button>
+          </div>
+          <div class="res" data-res="persona"></div>
+        </div>
+        <aside class="mx-explain">
+          <span class="lbl">show, then refine</span>
+          <h4>Examples teach a voice.</h4>
+          <p>Use realistic exchanges to demonstrate tone, structure, and level of detail.</p>
+          <p>Re-deriving runs a short training pass against the version released to chat. Its own gate can reject the result; chat keeps working either way.</p>
+          <hr>
+          <p>Edits join your draft and are saved together with your other changes. Empty rows are skipped; a bad raw row blocks saving.</p>
+        </aside></div>
+      </template>
+
+      <template data-mt="insights">
+        <div class="mx-split"><div>
+          <span class="lbl" style="display:block;margin-bottom:8px">the harvest — what the week grew</span>
+          <div class="mx-status" data-status="harvest"></div>
+          <span class="lbl" style="display:block;margin:4px 0 8px">statistics — the salience audit trail</span>
+          <div class="mx-status" data-status="stats"></div>
+        </div>
+        <aside class="mx-explain">
+          <span class="lbl">read-only</span>
+          <h4>What the agent is learning.</h4>
+          <p>The harvest counts the week's new memory claims, the executive's upkeep acts, and the questions it is wondering about.</p>
+          <p>Notions waiting for audit are reviewed in <b>Memory</b>.</p>
+          <hr>
+          <p>Statistics compare the local judge's scores with the frontier model's. Rising disagreement is the signal to look closer.</p>
+        </aside></div>
+      </template>
+
+      <template data-mt="advanced">
+        <div class="mx-split"><div>
+          <div class="row2">
+            <label class="fld"><span>Resident model checkpoint <span class="k">MODEL_CHECKPOINT</span></span><input class="mono" data-key="MODEL_CHECKPOINT"><small>"stub" for service testing, or a checkpoint path.</small></label>
+            <label class="fld"><span>Local service port <span class="k">MODEL_SERVICE_PORT</span></span><input type="number" min="1" max="65535" data-key="MODEL_SERVICE_PORT"></label>
+          </div>
+          <div class="timing">Both apply after the service restarts.</div>
+
+          <details class="more" style="margin-top:14px"><summary>Training parameters</summary>
+            <div class="row2">
+              <label class="fld"><span>Learning rate <span class="k">MODEL_TRAIN_LR</span></span><input class="mono" data-key="MODEL_TRAIN_LR"></label>
+              <label class="fld"><span>Training interval <span class="k">MODEL_TRAIN_INTERVAL</span></span><input class="mono" data-key="MODEL_TRAIN_INTERVAL"></label>
+            </div>
+            <label class="fld"><span>Training mix <span class="k">MODEL_MIX</span></span><input class="mono" data-key="MODEL_MIX"></label>
+            <label class="fld"><span>Evaluation gate <span class="k">MODEL_GATE</span></span><input class="mono" data-key="MODEL_GATE"></label>
+          </details>
+          <details class="more"><summary>Release gate &amp; personality adapter</summary>
+            <label class="fld"><span>Release gate <span class="k">USER_GATE</span></span><input class="mono" data-key="USER_GATE"></label>
+            <label class="fld"><span>Personality adapter (LoRA) <span class="k">USER_LORA</span></span><input class="mono" data-key="USER_LORA"></label>
+          </details>
+          <details class="more"><summary>Salience tuning</summary>
+            <label class="fld"><span>Steer by salience <span class="k">SALIENCE_STEER</span></span><select data-key="SALIENCE_STEER"><option>on</option><option>off</option></select></label>
+            <label class="fld"><span>Bands <span class="k">SALIENCE_BANDS</span></span><input class="mono" data-key="SALIENCE_BANDS"></label>
+          </details>
+          <details class="more"><summary>Base training (nanochat)</summary>
+            <label class="fld"><span>Training arguments <span class="k">NANOCHAT_TRAIN_ARGS</span></span><input class="mono" data-key="NANOCHAT_TRAIN_ARGS"></label>
+            <label class="fld"><span>Repository <span class="k">NANOCHAT_REPO</span></span><input class="mono" data-key="NANOCHAT_REPO"></label>
+            <label class="fld"><span>Distribution <span class="k">NANOCHAT_DIST</span></span><input class="mono" data-key="NANOCHAT_DIST"></label>
+          </details>
+          <details class="more" open><summary>All settings — runtime/agent/botd.properties</summary>
+            <p class="para">Live keys (scoring, the chat provider) apply immediately; each row says when the rest take effect. Blank a value to revert to its default. Secret keys stay file-only. A bright key is explicitly set; a dim one is using its default.</p>
+            <input class="cfg-filter mx-cfgfilter" placeholder="filter keys…" aria-label="Filter settings">
+            <div class="cfg"></div>
+          </details>
+        </div>
+        <aside class="mx-explain">
+          <span class="lbl">expert controls</span>
+          <h4>Details stay accessible.</h4>
+          <p>Everything the friendly sections set is also here as its raw key, plus every other key in the file.</p>
+          <p>Each row shows its effective value, its default, and when a change takes effect.</p>
+          <hr>
+          <p>Secrets remain masked and file-managed, as the settings API requires.</p>
+        </aside></div>
+      </template>
     </section>
     <section class="ag-pane" data-pane="plan" hidden>
       <div class="data-control" data-control="agent:plan" style="flex:1;min-height:0;display:flex;flex-direction:column;"></div>
