@@ -327,7 +327,7 @@
           <div class="mx-status" data-status="personality"></div>
           <div class="note">Applies to the local personality adapter. To guide an external chat provider, use the <b>Prompts</b> tab.</div>
           <p class="para">One exchange per row. Every 5th row is held out for the check and never trained on. Saved examples are picked up at the service's next gate tick, and a big rewrite can slip the check and trigger re-derivation on its own.</p>
-          <div class="pstate" data-pstate></div>
+          <div class="pstate"><span data-pstate></span><button data-padopt data-act="persona-adopt" hidden title="adopt the shipped default seed unchanged — joins your draft and is saved by Apply (agent.model.persona_write)">Use this seed</button></div>
           <div class="persona-list" data-persona></div>
           <div class="btnrow" style="margin-top:6px">
             <button data-act="persona-add">+ Add exchange</button>

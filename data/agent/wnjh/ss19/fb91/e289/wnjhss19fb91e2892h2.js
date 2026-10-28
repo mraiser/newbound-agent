@@ -1582,7 +1582,7 @@ async function init(host) {
   let personaRows = null;
   let personaLoaded = null;       // deep clone of the last load (Discard target)
   let personaBaseStr = "";        // normalized serialization of the last load
-  let pSeed = false, pInvalid = 0, pReadErr = "";
+  let pSeed = false, pInvalid = 0, pReadErr = "", pAdopt = false; // pAdopt: "Use this seed" marked the unedited default seed as a draft change
   const pClone = (x) => JSON.parse(JSON.stringify(x || []));
   const personaLines = (rows) => {
     const lines = []; let bad = false;
@@ -1659,9 +1659,14 @@ async function init(host) {
       ? "showing the DEFAULT SEED — nothing saved yet; edit to taste, then save to adopt it"
       : `${(personaRows || []).length} rows ${personaDirtyNow() ? "· edited (unsaved)" : "on disk"}`
         + (pInvalid ? ` · ${pInvalid} unparseable lines skipped` : "");
+    // "Use this seed": only while the unedited default seed is showing; a
+    // pending adopt hides it (the draft now carries the change — Discard
+    // or Reload from disk brings it back).
+    const adopt = host.querySelector("[data-padopt]");
+    if (adopt) adopt.hidden = !(pSeed && !pReadErr && !personaDirtyNow() && !pAdopt);
   }
   async function loadPersona(force) {
-    if (personaDirtyNow() && !force) return;
+    if ((personaDirtyNow() || pAdopt) && !force) return;
     const r = mEnv(await invoke("agent", "model", "persona_read", {}));
     if (!r || r.status !== "ok") {
       pReadErr = (r && r.msg) || "no reply";
@@ -1670,6 +1675,7 @@ async function init(host) {
     }
     pReadErr = "";
     pSeed = !!r.seed;
+    pAdopt = false; // a fresh load (Reload from disk, the post-Apply reload) clears a pending adopt
     pInvalid = r.invalid || 0;
     personaRows = r.rows || [];
     personaLoaded = pClone(personaRows);
@@ -1813,6 +1819,7 @@ async function init(host) {
       }
       if (t.classList.contains("mx-discard")) {
         mDraft = {};
+        pAdopt = false;
         personaRows = pClone(personaLoaded);
         renderPersona(); mBack(); mToast(""); mindRefresh(); return;
       }
@@ -1825,6 +1832,7 @@ async function init(host) {
         (personaRows = personaRows || []).push({ user: "", assistant: "" });
         renderPersona(); mindRefresh(); return;
       }
+      if (act === "persona-adopt") { pAdopt = true; mToast(""); mindRefresh(); return; }
       if (act === "persona-reload") { loadPersona(true); return; }
       if (act === "sweep") {
         t.disabled = true;
@@ -2308,11 +2316,12 @@ async function init(host) {
       from: mPretty(k, mBaseVal(k)), to: mPretty(k, mDraft[k]),
       when: M_TAKES(k), cmd: mCmdOf(k), sec: mSectionOf(k),
     }));
-    if (personaDirtyNow()) {
+    if (personaDirtyNow() || (pSeed && pAdopt)) {
       const nb = personaBaseStr ? personaBaseStr.split("\n").length : 0;
       const nd = personaLines(personaRows).lines.length;
       out.push({ k: "@persona", label: "Personality examples",
-        from: `${nb} rows`, to: `${nd} rows` + (nb === nd ? " (edited)" : ""),
+        from: pSeed ? "default seed" : `${nb} rows`,
+        to: personaDirtyNow() ? `${nd} rows` + (nb === nd ? " (edited)" : "") : `${nd} rows (adopt)`,
         when: "the service's next gate tick", cmd: "agent.model.persona_write (whole corpus, atomic)", sec: "personality" });
     }
     return out;
