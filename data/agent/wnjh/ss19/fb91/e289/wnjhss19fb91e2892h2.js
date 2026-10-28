@@ -1547,6 +1547,7 @@ async function init(host) {
   let mRepos = [];
   let mReposEnabled = 0;
   let mDots = {};
+  let mDotTips = {};             // sec -> the dot's tooltip (title + aria-label)
   let mShowKeys = lsGet("ag-mind-showkeys") === "1";
   const mBaseVal = (k) => k === "@drive" ? String(mDrive ?? "") : (mSet[k] ? String(mSet[k].v ?? "") : "");
   const mCur = (k) => (k in mDraft ? mDraft[k] : mBaseVal(k));
@@ -1694,11 +1695,20 @@ async function init(host) {
     el.innerHTML = `<div class="msg">${mEsc(msg)}</div>` +
       (raw ? `<details><summary>full reply</summary><pre>${mEsc(JSON.stringify(raw, null, 1))}</pre></details>` : "");
   }
-  function mToast(txt) {
-    const el = host.querySelector(".mx-toast");
-    if (!el) return;
-    el.textContent = txt || "";
-    el.hidden = !txt;
+  // the unsaved-changes bar: hidden (and inert) until something is drafted,
+  // then slides up over the pane bottom; hidden again while the Review or
+  // result screen is open — the result screen is the confirmation, and after
+  // Done it returns only if changes are still pending (a failed change kept
+  // in the draft). Instant "applies now" switches never touch the draft, so
+  // they never show it.
+  function mBarSync(count) {
+    const mx = host.querySelector('[data-pane="mind"] .mx');
+    if (!mx) return;
+    const bar = mx.querySelector(".mx-foot");
+    const on = count > 0 && mx.querySelector(".mx-review").hidden;
+    bar.classList.toggle("show", on);
+    bar.inert = !on;
+    mx.querySelector(".mx-content").classList.toggle("padbar", on);
   }
 
   // ── building the workspace: sidebar + panes from the section templates,
@@ -1745,10 +1755,10 @@ async function init(host) {
         mSetDraft(k, v);
         if (k === "LLM" && v === "CLAUDECODE" && mBaseVal("LLM_CTL") !== "agent:llm:claude_code") mSetDraft("LLM_CTL", "agent:llm:claude_code");
         if (k === "LLM" && v !== "CLAUDECODE" && v !== "CUSTOM") delete mDraft["LLM_CTL"];
-        mToast(""); mBack(); mindRefresh();
+        mBack(); mindRefresh();
       } else if (el.dataset.virtual === "gateMode") {
         mSetDraft("USER_GATE", mWithGateMode(mCur("USER_GATE"), el.value));
-        mToast(""); mBack(); mindRefresh();
+        mBack(); mindRefresh();
       }
     });
 
@@ -1821,7 +1831,7 @@ async function init(host) {
         mDraft = {};
         pAdopt = false;
         personaRows = pClone(personaLoaded);
-        renderPersona(); mBack(); mToast(""); mindRefresh(); return;
+        renderPersona(); mBack(); mindRefresh(); return;
       }
       if (t.classList.contains("mx-reviewbtn")) { mShowReview(); return; }
       const act = t.dataset.act;
@@ -1832,7 +1842,7 @@ async function init(host) {
         (personaRows = personaRows || []).push({ user: "", assistant: "" });
         renderPersona(); mindRefresh(); return;
       }
-      if (act === "persona-adopt") { pAdopt = true; mToast(""); mindRefresh(); return; }
+      if (act === "persona-adopt") { pAdopt = true; mindRefresh(); return; }
       if (act === "persona-reload") { loadPersona(true); return; }
       if (act === "sweep") {
         t.disabled = true;
@@ -2001,11 +2011,12 @@ async function init(host) {
       const d = b.querySelector(".dot");
       d.className = "dot " + (mDots[b.dataset.sec] || "");
       d.hidden = !mDots[b.dataset.sec];
+      const tip = mDotTips[b.dataset.sec] || "";
+      if (tip) { d.title = tip; d.setAttribute("aria-label", tip); }
+      else { d.removeAttribute("title"); d.removeAttribute("aria-label"); }
     }
-    const dirtyEl = mx.querySelector(".mx-dirty");
-    dirtyEl.textContent = ch.length ? `${ch.length} pending ${ch.length === 1 ? "change" : "changes"}` : "No pending changes";
-    dirtyEl.classList.toggle("dirty", !!ch.length);
-    mx.querySelector(".mx-discard").disabled = mx.querySelector(".mx-reviewbtn").disabled = !ch.length;
+    mx.querySelector(".mx-dirty").textContent = ch.length ? `${ch.length} unsaved ${ch.length === 1 ? "change" : "changes"}` : "";
+    mBarSync(ch.length);
     mBindValues(); mRefreshProvider(); renderPersonaState();
     for (const el of mx.querySelectorAll(".cfg .ck")) el.classList.toggle("changed", el.dataset.k in mDraft);
   }
@@ -2057,11 +2068,12 @@ async function init(host) {
 
     const strip = (n) => host.querySelector(`[data-status="${n}"]`);
 
-    // conversation: what is saved and in use, from settings only
+    // conversation: what is saved and in use, from settings only. arm and
+    // armName sit at function scope: the sidebar dot tooltip names them too.
+    const arm = ((mSet.LLM && mSet.LLM.v) || "").trim() || (mSet.LLM && mSet.LLM.d) || "VLLM";
+    const armOpt = host.querySelector(`[data-provider] option[value="${arm}"]`);
+    const armName = armOpt ? armOpt.textContent : arm;
     {
-      const arm = ((mSet.LLM && mSet.LLM.v) || "").trim() || (mSet.LLM && mSet.LLM.d) || "VLLM";
-      const o = host.querySelector(`[data-provider] option[value="${arm}"]`);
-      const armName = o ? o.textContent : arm;
       const armModel = arm === "CLAUDECODE" ? (mBaseVal("CLAUDE_CODE_MODEL") || "CLI default")
         : arm === "LOCAL" ? "released local version"
         : arm === "REMOTE" ? (mBaseVal("LLM_REMOTE") || "—")
@@ -2294,13 +2306,24 @@ async function init(host) {
       if (st) st.innerHTML = html;
     }
 
-    // sidebar status dots (spec §2)
+    // sidebar status dots (spec §2), each with a tooltip saying what it means
     mDots = {
       conversation: "ok",
       activity: !ex.running ? "off" : ((planAutonomyOn && !pw.alive) ? "err" : "ok"),
       learning: mode.startsWith("nanochat") ? "ok" : (mode === "stub" ? "warn" : "err"),
       personality: (mode !== "down" && mode !== "stub") ? "ok" : "off",
       insights: "", advanced: "",
+    };
+    mDotTips = {
+      conversation: "Chat provider: " + armName,
+      activity: !ex.running ? "Executive stopped"
+        : (planAutonomyOn && !pw.alive) ? "Plan autonomy is on, but the plan worker isn't running"
+        : "Executive running",
+      learning: mode.startsWith("nanochat") ? "Model service running"
+        : mode === "stub" ? "Model service in stub mode — not a trained model"
+        : "Model service is down",
+      personality: (mode !== "down" && mode !== "stub") ? "Personality adapter available"
+        : "No adapter while the service is down or in stub mode",
     };
 
     renderCfg();
@@ -2351,6 +2374,7 @@ async function init(host) {
       `<button class="primary" data-act="apply" ${errs.length ? "disabled" : ""}>Apply ${ch.length} ${ch.length === 1 ? "change" : "changes"}</button></div>`;
     host.querySelector(".mx-panes").hidden = true;
     rev.hidden = false;
+    mBarSync(ch.length);
   }
   function mBack() {
     const rev = host.querySelector(".mx-review");
@@ -2399,7 +2423,6 @@ async function init(host) {
       out.map((o) => `<div class="chg"><strong>${o.ok ? '<span style="color:#6c9">✓</span>' : '<span style="color:#c66">✗</span>'} ${mEsc(o.c.label)}</strong><span class="k">${mEsc(o.c.cmd)}</span>` +
         `<div class="vals" style="${o.ok ? "" : "color:#c66"}">${mEsc(o.msg)}</div>${o.ok ? `<small>Takes effect: ${mEsc(o.c.when)}</small>` : ""}</div>`).join("") +
       `<div class="btnrow" style="margin-top:20px"><button class="primary" data-act="back">Done</button></div>`;
-    mToast(good ? `Applied ${good} ${good === 1 ? "change" : "changes"}` : "");
     if (out.some((o) => o.c.k === "@persona" && o.ok)) await loadPersona(true);
     loadMind();
   }
