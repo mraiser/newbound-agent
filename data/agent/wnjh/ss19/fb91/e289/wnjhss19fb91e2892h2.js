@@ -202,9 +202,107 @@ async function init(host) {
   // it RUNS, so an extra queued save is harmless; .then(f, f) keeps the chain
   // moving whether the previous save landed or failed.
   let saveChain = Promise.resolve();
+  // ── Fix 3 + Fix 4: surface the save state, recover in-tab, keep a backup ──
+  // persist() now notices any non-ok outcome (an HTTP error, a non-JSON body,
+  // UNAUTHORIZED, or a rejected promise) instead of swallowing it, so a reply
+  // can no longer be lost to a dead session without the user seeing it.
+  let saveFailed = false;      // the last save did not land
+  let lastSaveMsg = "";        // its message — the error banner / Retry use it
+  let ownerName = null;        // the signed-in user this chat belongs to
+  let bannerRecheck = null;    // 30 s recheck timer, alive only while the banner shows
+  // "signed in" = current_user carries a non-empty groups array; an expired or
+  // anonymous session returns a bare user with none (security.current_user).
+  const signedIn = (u) => !!(u && Array.isArray(u.groups) && u.groups.length);
+  // Browser backup (Fix 4). The page's lsGet/lsSet/lsDel are declared below the
+  // on-load restore point, so use equivalent try/catch accessors; never let a
+  // full or disabled localStorage break the chat.
+  const bkKey = (uname) => "agent.chat.unsaved." + (uname || "anonymous");
+  function writeBackup(uname) {
+    try {
+      if (!messages.length) return;
+      localStorage.setItem(bkKey(uname), JSON.stringify({
+        sessId, customTitle, time: Date.now(),
+        messages, transcript: transcript.filter((c) => c.kind !== "busy") }));
+    } catch (e) {}
+  }
+  function readBackup(uname) {
+    try { const raw = localStorage.getItem(bkKey(uname)); return raw ? JSON.parse(raw) : null; }
+    catch (e) { return null; }
+  }
+  function dropBackup(uname) { try { localStorage.removeItem(bkKey(uname)); } catch (e) {} }
+  // a DOM-only note (not pushed into transcript, so it is never persisted and
+  // never reappears on the next load) — used for the "Restored…" message.
+  function transientNote(text) {
+    thread.appendChild(cellEl({ kind: "note", text, time: Date.now() }));
+    thread.scrollTop = thread.scrollHeight;
+  }
+  function showSaveBanner(msg) {
+    saveFailed = true;
+    const chatMain = host.querySelector(".ag-chat-main");
+    const unauth = /^UNAUTHORIZED/i.test(String(msg || ""));
+    let el = chatMain.querySelector(".ag-savebanner");
+    if (!el) {
+      el = document.createElement("div");
+      el.className = "ag-savebanner";
+      el.style.cssText = "display:flex;gap:10px;align-items:center;flex-wrap:wrap;" +
+        "margin:6px 8px;padding:8px 12px;border:1px solid #5a2a2e;border-radius:6px;" +
+        "background:#2a1416;color:#e7a3a3;font-size:13px;line-height:1.4;";
+      chatMain.insertBefore(el, chatMain.firstChild);
+    }
+    el.style.borderColor = "#5a2a2e"; el.style.background = "#2a1416"; el.style.color = "#e7a3a3";
+    el.replaceChildren();
+    const span = document.createElement("span");
+    span.style.flex = "1";
+    span.textContent = unauth
+      ? "Not saved: you've been signed out."
+      : ("Not saved: " + String(msg || "save failed") + ".");
+    el.appendChild(span);
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.textContent = unauth ? "Sign in again" : "Retry";
+    btn.style.cssText = "cursor:pointer;background:#5a2a2e;color:#ffd7d7;border:0;" +
+      "border-radius:4px;padding:4px 10px;font:inherit;";
+    btn.addEventListener("click", () => { if (unauth) window.open("/app/login.html", "_blank"); else recoverSave(); });
+    el.appendChild(btn);
+    if (!bannerRecheck) bannerRecheck = setInterval(() => { if (saveFailed) recoverSave(); }, 30000);
+  }
+  function clearSaveBanner(flashSaved) {
+    saveFailed = false;
+    if (bannerRecheck) { clearInterval(bannerRecheck); bannerRecheck = null; }
+    const chatMain = host.querySelector(".ag-chat-main");
+    const el = chatMain.querySelector(".ag-savebanner");
+    if (!el) return;
+    if (flashSaved) {
+      el.replaceChildren();
+      el.style.borderColor = "#2e5a34"; el.style.background = "#142a16"; el.style.color = "#a3e7a9";
+      const s = document.createElement("span"); s.textContent = "Saved"; el.appendChild(s);
+      setTimeout(() => el.remove(), 2000);
+    } else { el.remove(); }
+  }
+  // recover in-tab: the cookie session (HTTP, where the cookie wins) may be a
+  // revived or same-user session the page session is not; adopt it into the
+  // page's sessionid when it differs and is the same user, then retry.
+  async function recoverSave() {
+    let cookieUser = null;
+    try {
+      const res = await fetch("../security/current_user", { credentials: "same-origin" });
+      const h = await res.json();
+      cookieUser = (h && h.status === "ok") ? (h.data ?? null) : null;
+    } catch (e) {}
+    const ck = (typeof window.getCookie === "function") ? window.getCookie("sessionid") : null;
+    if (ck && ck !== window.sessionid && signedIn(cookieUser) &&
+        (!ownerName || userName(cookieUser) === ownerName)) {
+      window.sessionid = ck;
+    }
+    persist();
+  }
+  // retry on refocus / revisibility, and every 30 s while the banner shows
+  document.addEventListener("visibilitychange", () => { if (!document.hidden && saveFailed) recoverSave(); });
+  window.addEventListener("focus", () => { if (saveFailed) recoverSave(); });
   const doPersist = async () => {
     if (!messages.length) return;   // empty sessions are never saved
     const me2 = (await userP()) ?? {};
+    const hadId = !!sessId;   // did this chat already have an id before this save?
     // Any-typed params are NOT optional over HTTP: a null id reaches app.write
     // as the literal string "null" (cast_params coerces it), collapsing every
     // session onto one record. Mint a real server-side id up front instead.
@@ -247,8 +345,23 @@ async function init(host) {
     }
     if (w && w.status === "ok" && w.id) {
       sessId = w.id;
+      ownerName = userName(me2);
       // keep the sidebar (index) in step with the store (truth)
       await invokeP("agent", "chat", "session_touch", { id: sessId });
+      // the store now holds this chat: drop its browser backup. Delete only a
+      // backup that is this chat's — a matching id, or a null-id backup once an
+      // id was just minted for it (hadId false).
+      const bk = readBackup(userName(me2));
+      if (bk && (bk.sessId === sessId || (bk.sessId == null && !hadId))) dropBackup(userName(me2));
+      const wasFailed = saveFailed;
+      saveFailed = false; lastSaveMsg = "";
+      clearSaveBanner(wasFailed);   // flash "Saved" only if a failure banner was up
+    } else {
+      // Fix 3: surface the failure. Fix 4: keep a browser backup that survives
+      // a reload. An UNAUTHORIZED message means the page's session has died.
+      lastSaveMsg = (w && w.msg) ? String(w.msg) : "save failed";
+      writeBackup(userName(me2));
+      showSaveBanner(lastSaveMsg);
     }
     await renderSessions();
   };
@@ -739,9 +852,39 @@ async function init(host) {
     persist();
     return entry;
   }
-  { const r = await invokeP("agent", "chat", "session_index", { op: "list", id: "", arg: "" });
+  // Fix 4: on load, a browser backup that is newer than the store copy (or has
+  // no store copy) wins — open and save it; otherwise open the most recent
+  // stored session. A stale backup is dropped silently.
+  { const me = await userP();
+    const uname = userName(me ?? {});
+    const bk = readBackup(uname);
+    const r = await invokeP("agent", "chat", "session_index", { op: "list", id: "", arg: "" });
     const ix = (r.status === "ok" && r.data && r.data.list) ? r.data.list : [];
-    ix.length ? await openSession(ix[0].id) : await renderSessions(); }
+    let restored = false;
+    if (bk && Array.isArray(bk.messages) && bk.messages.length) {
+      let storeTime = -1;
+      if (bk.sessId) {
+        const so = await invokeP("agent", "chat", "session_open", { id: bk.sessId });
+        const sd = (so && so.status === "ok" && so.data && so.data.data) ? so.data.data : null;
+        if (sd) storeTime = Number(sd.time) || 0;
+      }
+      if (!bk.sessId || Number(bk.time) > storeTime) {
+        sessId = bk.sessId || null;
+        customTitle = bk.customTitle || null;
+        resetPad();
+        messages = bk.messages;
+        transcript = (Array.isArray(bk.transcript) ? bk.transcript : []).filter((c) => c.kind !== "busy");
+        thread.replaceChildren();
+        for (const entry of transcript) thread.appendChild(cellEl(entry));
+        transientNote("Restored a chat that hadn't been saved.");
+        restored = true;
+        await renderSessions();
+        persist();   // save it (mints an id if none); backup is dropped on success, or the banner shows while signed out
+      } else {
+        dropBackup(uname);   // the store copy is newer — the backup is stale
+      }
+    }
+    if (!restored) { ix.length ? await openSession(ix[0].id) : await renderSessions(); } }
 
   // new session — the current one stays in the sidebar; nothing is lost.
   host.querySelector(".ag-newsession").addEventListener("click", newSession);
@@ -1058,6 +1201,15 @@ async function init(host) {
     let message = input.value.trim();
     const typed = message;  // before the [ATTACHED FILES] block — copy uses this
     if ((!message && !attachments.length) || sendBtn.disabled) return;
+    // Fix 3: never start a turn on a dead session — the reply would be lost
+    // silently. Keep the typed text, show the banner, and try to self-heal.
+    const me0 = await userP();
+    if (saveFailed || !signedIn(me0)) {
+      showSaveBanner(signedIn(me0) ? (lastSaveMsg || "save failed") : "UNAUTHORIZED: write");
+      recoverSave();
+      return;
+    }
+    ownerName = userName(me0);
     input.value = "";
     sendBtn.disabled = true;
     let images = [];
@@ -1114,6 +1266,7 @@ async function init(host) {
       // or sign-out during the turn can no longer lose the whole session.
       // Not awaited — the turn never waits on a save; the reply's own save
       // queues behind this one on the save chain.
+      writeBackup(ownerName);   // Fix 4: a browser backup, just before the turn
       persist();
       const text = await agent.chatTurn({
         messages, tools, execTool, venue: "chat", entity: userName((await userP()) ?? {}),
