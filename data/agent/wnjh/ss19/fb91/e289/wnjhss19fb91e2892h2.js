@@ -294,6 +294,13 @@ async function init(host) {
         (!ownerName || userName(cookieUser) === ownerName)) {
       window.sessionid = ck;
     }
+    // an empty chat has nothing to save, so persist() returns at once and can
+    // never clear the banner: once signed in again, clear it here (no "Saved"
+    // flash — nothing was saved). Otherwise keep the banner and the recheck.
+    if (!messages.length) {
+      if (signedIn((await userP()) ?? null)) clearSaveBanner(false);
+      return;
+    }
     persist();
   }
   // retry on refocus / revisibility, and every 30 s while the banner shows
@@ -351,8 +358,8 @@ async function init(host) {
       // the store now holds this chat: drop its browser backup. Delete only a
       // backup that is this chat's — a matching id, or a null-id backup once an
       // id was just minted for it (hadId false).
-      const bk = readBackup(userName(me2));
-      if (bk && (bk.sessId === sessId || (bk.sessId == null && !hadId))) dropBackup(userName(me2));
+      const bk = readBackup(ownerName || userName(me2));
+      if (bk && (bk.sessId === sessId || (bk.sessId == null && !hadId))) dropBackup(ownerName || userName(me2));
       const wasFailed = saveFailed;
       saveFailed = false; lastSaveMsg = "";
       clearSaveBanner(wasFailed);   // flash "Saved" only if a failure banner was up
@@ -360,7 +367,11 @@ async function init(host) {
       // Fix 3: surface the failure. Fix 4: keep a browser backup that survives
       // a reload. An UNAUTHORIZED message means the page's session has died.
       lastSaveMsg = (w && w.msg) ? String(w.msg) : "save failed";
-      writeBackup(userName(me2));
+      // key the backup on the chat's OWNER (the user from the last good send
+      // or save): exactly when a save fails on a dead session, me2 is a bare
+      // "anonymous" user, and a backup keyed on it would be invisible to the
+      // on-load restore after the real user signs back in.
+      writeBackup(ownerName || userName(me2));
       showSaveBanner(lastSaveMsg);
     }
     await renderSessions();
@@ -388,6 +399,7 @@ async function init(host) {
   function newSession() {
     sessId = null;
     customTitle = null;
+    clearSaveBanner(false);   // the banner belonged to the previous chat; its backup, if any, stays
     resetPad();
     messages = [];
     transcript = [];
@@ -1201,17 +1213,20 @@ async function init(host) {
     let message = input.value.trim();
     const typed = message;  // before the [ATTACHED FILES] block — copy uses this
     if ((!message && !attachments.length) || sendBtn.disabled) return;
+    // disable BEFORE any await: a double Enter / double click would otherwise
+    // pass the disabled check twice while userP() is pending and start two turns.
+    sendBtn.disabled = true;
     // Fix 3: never start a turn on a dead session — the reply would be lost
     // silently. Keep the typed text, show the banner, and try to self-heal.
     const me0 = await userP();
     if (saveFailed || !signedIn(me0)) {
       showSaveBanner(signedIn(me0) ? (lastSaveMsg || "save failed") : "UNAUTHORIZED: write");
       recoverSave();
+      sendBtn.disabled = false;
       return;
     }
     ownerName = userName(me0);
     input.value = "";
-    sendBtn.disabled = true;
     let images = [];
     if (attachments.length) {
       const batch = attachments.splice(0);
