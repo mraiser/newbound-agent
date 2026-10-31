@@ -436,7 +436,8 @@ async function init(host) {
   });
   async function renderSessions() {
     const r = await invokeP("agent", "chat", "session_index", { op: "list", id: "", arg: "" });
-    const ix = (r.status === "ok" && r.data && r.data.list) ? r.data.list : [];
+    if (!r || r.status !== "ok") return; // refused (signed out) — keep the rows we have
+    const ix = (r.data && r.data.list) ? r.data.list : [];
     sessListEl.replaceChildren();
     for (const s of ix) {
       const row = document.createElement("div");
