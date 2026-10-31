@@ -196,7 +196,13 @@ async function init(host) {
   }
   let sessId = null;        // minted server-side on the first save
   let customTitle = null;   // the user's rename, if any — always wins over sessTitle
-  const persist = async () => {
+  // Saves are SERIALIZED on one chain: the pre-turn save, the reply's save,
+  // and a rename can no longer overlap (overlapping saves could double-mint
+  // ids or interleave writes). Each queued run writes the state current when
+  // it RUNS, so an extra queued save is harmless; .then(f, f) keeps the chain
+  // moving whether the previous save landed or failed.
+  let saveChain = Promise.resolve();
+  const doPersist = async () => {
     if (!messages.length) return;   // empty sessions are never saved
     const me2 = (await userP()) ?? {};
     // Any-typed params are NOT optional over HTTP: a null id reaches app.write
@@ -207,18 +213,38 @@ async function init(host) {
       const newId = idr && idr.status === "ok" ? (idr.data ?? idr.msg) : null;
       if (newId) sessId = String(newId);
     }
-    const res = await fetch("../app/write", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        lib: "runtime", id: sessId, readers: [], writers: [],
-        data: {
-          username: userName(me2), title: customTitle || sessTitle(messages),
-          ...(customTitle ? { custom_title: customTitle } : {}),
-          time: Date.now(),
-          messages, transcript } }),
-    });
-    const w = await res.json();
+    // busy cells ("thinking…") are UI state, not history: a saved one becomes
+    // a permanent thinking spinner when the reply's save never lands.
+    const data = {
+      username: userName(me2), title: customTitle || sessTitle(messages),
+      ...(customTitle ? { custom_title: customTitle } : {}),
+      time: Date.now(),
+      messages, transcript: transcript.filter((c) => c.kind !== "busy") };
+    const rec = { lib: "runtime", id: sessId, readers: [], writers: [], data };
+    // The save rides the WEBSOCKET: each frame carries the page's own
+    // sessionid, so it survives the cookie dying mid-turn (idle expiry, or
+    // another localhost instance clobbering the shared cookie — on HTTP the
+    // cookie always wins and the ?sessionid= param is ignored). Proven on the
+    // scratch rig: a 5 MB session (an 8.8 MB frame) saves and reads back
+    // intact. fetch(cookie) stays as the fallback when the socket is down or
+    // a frame kills it (pending calls then answer "Websocket error/closed").
+    let w = null;
+    if (window.SOCK) {
+      w = await invokeP("app", "app", "write", { ...rec, nn_sessionid: null });
+    }
+    if (!w || w.status !== "ok") {
+      try {
+        const res = await fetch("../app/write", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(rec),
+        });
+        const h = await res.json();
+        if (!w || (h && h.status === "ok")) w = h;
+      } catch (e) {
+        if (!w) w = { status: "err", msg: String((e && e.message) || e) };
+      }
+    }
     if (w && w.status === "ok" && w.id) {
       sessId = w.id;
       // keep the sidebar (index) in step with the store (truth)
@@ -226,6 +252,7 @@ async function init(host) {
     }
     await renderSessions();
   };
+  const persist = () => (saveChain = saveChain.then(doPersist, doPersist));
   async function openSession(id) {
     const r = await invokeP("agent", "chat", "session_open", { id });
     const rec = (r.status === "ok" && r.data && r.data.data) ? r.data.data : null;
@@ -233,6 +260,12 @@ async function init(host) {
     resetPad();
     messages = (rec && Array.isArray(rec.messages)) ? rec.messages : [];
     transcript = (rec && Array.isArray(rec.transcript)) ? rec.transcript : [];
+    // records saved before the busy-cell filter may carry a "thinking…" cell:
+    // drop them. One in the LAST slot means that reply never reached the
+    // store — say so (durably) instead of showing a spinner forever.
+    const lostReply = transcript.length > 0 && transcript[transcript.length - 1].kind === "busy";
+    transcript = transcript.filter((c) => c.kind !== "busy");
+    if (lostReply) transcript.push({ kind: "note", text: "This reply wasn't saved.", time: Date.now() });
     customTitle = (rec && typeof rec.custom_title === "string" && rec.custom_title.trim()) ? rec.custom_title : null;
     thread.replaceChildren();
     for (const entry of transcript) thread.appendChild(cellEl(entry));
@@ -1003,6 +1036,20 @@ async function init(host) {
   }
 
   // ── ask ──────────────────────────────────────────────────────────────
+  // ── keep the sign-in alive while a turn runs ──────────────────────────
+  // The session sweep drops a session 15–30 min after its last REQUEST, and
+  // a long turn is one silent command — the reply's save then answered
+  // UNAUTHORIZED. Any authenticated request on either transport refreshes
+  // expiry, so ping cheaply while a turn is in flight. NO pings while idle:
+  // idle sign-out is a security feature and stays.
+  let kaTimer = null;
+  const stopKeepalive = () => { if (kaTimer) { clearInterval(kaTimer); kaTimer = null; } };
+  const startKeepalive = () => {
+    stopKeepalive();
+    // QA override, read when the turn starts: a huge value turns pings off.
+    const ms = Number(window.__agKeepaliveMs) || 60000;
+    kaTimer = setInterval(() => jsonP("../security/current_user", null), ms);
+  };
   const form = host.querySelector(".ag-ask");
   const input = host.querySelector(".ag-input");
   const sendBtn = host.querySelector(".ag-send");
@@ -1033,6 +1080,7 @@ async function init(host) {
     pushCell({ kind: "user", text: message, typed });
     const busy = pushCell({ kind: "busy", text: "thinking…" });
     const busyEl = thread.lastElementChild;
+    startKeepalive();
     try {
       const core = await agent.corePrompt();
       const catalog = await ensureCatalog();
@@ -1062,6 +1110,11 @@ async function init(host) {
       } else {
         messages.push(userMsg);
       }
+      // the chat exists in the store from its FIRST message: a reload, crash,
+      // or sign-out during the turn can no longer lose the whole session.
+      // Not awaited — the turn never waits on a save; the reply's own save
+      // queues behind this one on the save chain.
+      persist();
       const text = await agent.chatTurn({
         messages, tools, execTool, venue: "chat", entity: userName((await userP()) ?? {}),
         onRound: () => { busyEl.querySelector(".ag-cell-body").textContent = "agent is using tools…"; },
@@ -1085,6 +1138,8 @@ async function init(host) {
           "runtime/agent/botd.properties, and restart.";
       }
       pushCell({ kind: "agent", error: true, text });
+    } finally {
+      stopKeepalive();
     }
     sendBtn.disabled = false;
     input.focus();
