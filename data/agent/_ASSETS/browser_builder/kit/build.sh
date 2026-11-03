@@ -103,6 +103,7 @@ if [[ -z "${MACH_PYTHON}" ]]; then
               /nix/store/*-python3-3.11*/bin/python3.11 \
               /nix/store/*-python3-3.10*/bin/python3.10 \
               /nix/store/*-python3-3.9*/bin/python3.9 \
+              "${HOME}/.local/bin/python3.11" "${HOME}/.local/bin/python3.10" \
               python3.11 python3.10 python3.9; do
         _r="$(command -v "$_c" 2>/dev/null || true)"; [[ -n "$_r" ]] || continue
         # Ask the interpreter ITSELF: native arch AND version <= 3.11 AND working
@@ -125,6 +126,14 @@ if [[ -z "${MACH_PYTHON}" ]]; then
         exit 1
     fi
 fi
+# Canonicalize to the real interpreter: uv-managed pythons expose an
+# UNVERSIONED symlink dir (cpython-3.11-...) beside the real VERSIONED dir
+# (cpython-3.11.15-...); via the symlink, mach's site.py computes sysconfig
+# platlib (unversioned) relative to data (versioned) and dies 'not in the
+# subpath'. readlink -f resolves to the versioned binary whose sysconfig
+# paths agree; a non-symlink python resolves to itself.
+_canon="$(readlink -f "${MACH_PYTHON}" 2>/dev/null || true)"
+[[ -n "${_canon}" && -x "${_canon}" ]] && MACH_PYTHON="${_canon}"
 MACH_PATH_DIR="$(dirname "${MACH_PYTHON}")"
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -336,11 +345,11 @@ provision_rust() {
     mkdir -p "${shim}"
     # Candidate sources: whatever is on PATH first, then native store globs.
     local rustc_bin="" cargo_bin="" rustdoc_bin="" c
-    for c in $(command -v rustc 2>/dev/null) /nix/store/*rustc-wrapper*/bin/rustc /nix/store/*rustc-1.*/bin/rustc; do
+    for c in ${HOME}/.rustup/toolchains/*/bin/rustc $(command -v rustc 2>/dev/null) /nix/store/*rustc-wrapper*/bin/rustc /nix/store/*rustc-1.*/bin/rustc; do
         [[ -x "$c" ]] || continue
         if env -i "$c" --version >/dev/null 2>&1; then rustc_bin="$c"; break; fi
     done
-    for c in $(command -v cargo 2>/dev/null) /nix/store/*cargo-1.*/bin/cargo; do
+    for c in ${HOME}/.rustup/toolchains/*/bin/cargo $(command -v cargo 2>/dev/null) /nix/store/*cargo-1.*/bin/cargo; do
         [[ -x "$c" ]] || continue
         # reject the Nix system-path indirection (broken outside the profile)
         case "$(readlink -f "$c" 2>/dev/null)" in *system-path*) continue;; esac
@@ -392,6 +401,8 @@ provision_hosttools() {
 }
 
 provision_cbindgen() {
+    local _oldpath="${PATH}"
+    local PATH="${MOZBUILD}/.rustbin:${_oldpath}"
     local dest="${MOZBUILD}/cbindgen/cbindgen"
     if [[ -x "${dest}" ]] && "${dest}" --version 2>/dev/null | grep -q "${CBINDGEN_VERSION}"; then
         log "cbindgen ${CBINDGEN_VERSION} already present: ${dest}"

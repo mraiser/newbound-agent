@@ -83,6 +83,12 @@ let display = prop("BROWSER_DISPLAY", "");
 if std::fs::create_dir_all(&dir).is_err() {
     return errobj(&format!("cannot create channel dir {}", dir));
 }
+// Noobscape runs in its OWN profile under the channel dir, never the
+// user's default Firefox profile — a 128esr opening a profile last used
+// by a newer Firefox shows a blocking downgrade dialog and hangs before
+// any content process ever starts. firefox also hangs on a -profile path
+// that does not exist yet, so ensure it (an empty dir is a fresh profile).
+let _ = std::fs::create_dir_all(format!("{}/profile", dir));
 let _ = std::fs::remove_file(format!("{}/inject.out", dir));
 // Noobscape v2 bind channel: clear any prior latch and record the launch
 // URL so the mechanism binds to the ONE tab that loads exactly this url.
@@ -96,8 +102,8 @@ let disp = if display.is_empty() { String::new() } else { format!("DISPLAY='{}' 
 // Assignments must precede `exec` (a builtin): `exec VAR=1 cmd` makes
 // bash try to execute the file "VAR=1" and die with 127.
 let line = format!(
-    "{}MOZ_DISABLE_JEMALLOC=1 MOZ_DISABLE_CONTENT_SANDBOX=1 LIBGL_ALWAYS_SOFTWARE=1 exec '{}' {} '{}'",
-    disp, bin, headless, url
+    "{}NOOBSCAPE_DIR='{}' MOZ_DISABLE_JEMALLOC=1 MOZ_DISABLE_CONTENT_SANDBOX=1 LIBGL_ALWAYS_SOFTWARE=1 exec '{}' {} --no-remote -profile '{}/profile' '{}'",
+    disp, dir, bin, headless, dir, url
 );
 
 let mut cmd = Command::new("bash");
