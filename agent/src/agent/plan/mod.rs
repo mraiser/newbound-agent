@@ -1,5 +1,6 @@
 // This file is auto-generated and managed by the flowlang build script.
 use flowlang::rustcmd::Transform;
+pub mod add_subtask;
 pub mod test_run_control_contract;
 pub mod run_state;
 pub mod run_control;
@@ -43,4 +44,5 @@ pub fn cmdinit(cmds: &mut Vec<(String, Transform, String)>) {
     cmds.push(("syhhtm1a172795455j611".to_string(), run_control::execute, "".to_string()));
     cmds.push(("qyjgkh1a1727aa651z616".to_string(), run_state::execute, "".to_string()));
     cmds.push(("wpiwht1a17287e0f5n647".to_string(), test_run_control_contract::execute, "".to_string()));
+    cmds.push(("qizorr1a1acc07097r3fb".to_string(), add_subtask::execute, "".to_string()));
 }

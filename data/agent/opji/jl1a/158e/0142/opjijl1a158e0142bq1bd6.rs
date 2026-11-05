@@ -301,6 +301,74 @@ if let Ok(na) = e.try_get_array("notes") {
     }
 }
 out.put_int("notes_new", notes_new_count);
+// (D) SUBTASKS (owner, 2026-11): "a task in progress should be able to create
+// sub-tasks and set them in-progress without waiting for the human." Before
+// this, nothing in the step prompt mentioned decomposition (the rule lived
+// only in a code comment), so every child on the board was hand-filed and
+// phased items ground on as one flat item until MAX_PLAN_STEPS. A non-parent
+// item is now told it may split itself via agent.plan.add_subtask (children
+// born accepted - this item's acceptance authorizes them - or proposed to
+// queue). After 3 turns without completing it must decide explicitly.
+// (E) CHILD CONTEXT: a child used to see only its own claim/detail - never
+// the parent's goal or its siblings - so integration rested entirely on the
+// parent's turns. A child now sees its parent's GOAL + full DETAIL and each
+// sibling's live state; its scope stays its own.
+{
+    let norm = |s: String| -> String {
+        let t = s.trim().to_string();
+        let l = t.to_lowercase();
+        if l == "null" || l == "undefined" || l == "none" { String::new() } else { t }
+    };
+    let lc_of = |c: &DataObject| -> String {
+        let ct = c.try_get_string("tags").unwrap_or_default().to_lowercase();
+        let cts: Vec<String> = ct.split(',').map(|t| t.trim().to_string()).collect();
+        ["proposed","accepted","in-progress","blocked","completed","done","abandoned"]
+            .iter().find(|l| cts.iter().any(|t| t == **l)).map(|s| s.to_string())
+            .unwrap_or_else(|| "none".to_string())
+    };
+    let my_parent = norm(e.try_get_string("parent").unwrap_or_default());
+    if !my_parent.is_empty() {
+        let mut pfound: Option<DataObject> = None;
+        for i in 0..arr.len() {
+            if let Ok(c) = arr.try_get_object(i) {
+                if c.try_get_string("claim").unwrap_or_default() == my_parent { pfound = Some(c); break; }
+            }
+        }
+        if let Some(p) = pfound {
+            prompt.push_str("\nPARENT CONTEXT (read-only): this item is ONE subtask of the parent below. Your scope is ONLY this item's GOAL and DETAIL - do not do sibling work; the parent coordinates and verifies the integrated whole.\n");
+            prompt.push_str(&format!("PARENT GOAL: {}\n", my_parent));
+            let pd = p.try_get_string("detail").unwrap_or_default();
+            if !pd.trim().is_empty() { prompt.push_str(&format!("PARENT DETAIL:\n{}\n", pd)); }
+            let mut sibs: Vec<String> = Vec::new();
+            for i in 0..arr.len() {
+                if i as i64 == idx { continue; }
+                if let Ok(c) = arr.try_get_object(i) {
+                    if norm(c.try_get_string("parent").unwrap_or_default()) != my_parent { continue; }
+                    let slc = lc_of(&c);
+                    if slc == "abandoned" { continue; }
+                    let latest = c.try_get_object("latest").ok()
+                        .and_then(|l| l.try_get_string("note").ok()).unwrap_or_default()
+                        .chars().take(240).collect::<String>().replace('\n', " ");
+                    sibs.push(format!("- [{}] {}{}", slc, c.try_get_string("claim").unwrap_or_default(),
+                        if latest.is_empty() { String::new() } else { format!(" | latest: {}", latest) }));
+                }
+            }
+            if !sibs.is_empty() {
+                prompt.push_str("SIBLINGS (live board state, board order):\n");
+                prompt.push_str(&sibs.join("\n"));
+                prompt.push_str("\n");
+            }
+        } else {
+            prompt.push_str(&format!("\nNOTE: this item names parent '{}' but no plan entry has that exact claim - treat it as a standalone item.\n", my_parent));
+        }
+    }
+    if !is_parent {
+        prompt.push_str("\nSUBTASKS: you may DECOMPOSE this item instead of grinding on it as one unit. Do it when the remaining work spans several separately verifiable phases, or is too big to finish and verify in a turn or two; do NOT decompose work you can finish and verify this turn. File each phase with agent.plan.add_subtask {parent: the GOAL line above verbatim, claim, detail, lifecycle} - one call per subtask, in dependency order. Each claim must be unique and self-contained; each detail must state that subtask's own scope and the concrete check that verifies it. lifecycle `accepted` makes a subtask runnable immediately with NO human wait - this item's acceptance authorizes its subtasks. Use `proposed` for a subtask that must wait for an earlier sibling, and promote it yourself on a later turn with agent.plan.move_item (base from agent.plan.board_hash). After filing, end with STATUS: IN_PROGRESS: the worker runs accepted subtasks before this item, which then becomes their coordinator and may close only after every subtask is completed and you have verified the integrated result.\n");
+        if prior >= 3 {
+            prompt.push_str(&format!("\nThis item has already taken {} turns without completing. Before doing more implementation, decide explicitly whether to decompose the remaining work into subtasks; if you continue as one unit, say why in one line.\n", prior));
+        }
+    }
+}
 // (A2) THE COORDINATION TURN: a parent sees the full LIVE state of its
 // children and a modified mandate. Board order = authored dependency order;
 // the parent's own detail may narrow or override it. One active child at a
@@ -332,7 +400,8 @@ if is_parent {
     prompt.push_str("\nTHIS IS A PARENT COORDINATION TICKET. Your job THIS TURN is to coordinate its children, not to implement the whole goal yourself:\n");
     prompt.push_str("1. Re-read the CHILDREN board below and your PRIOR STEPS; evaluate progress and dependencies.\n");
     prompt.push_str("2. Choose the next child to advance (board order is the authored dependency order unless the DETAIL says otherwise; ONE active child at a time is the default - explicitly independent siblings only as the DETAIL permits).\n");
-    prompt.push_str("3. Act through agent.plan.move_item with a FRESH base from agent.plan.board (never force a stale write): move the chosen child proposed -> accepted (a coordinator acceptance of its OWN child; the item's full detail is the authorization). Corrections or addenda to a child's text belong in a note (agent.plan.add_note) - do NOT rewrite its claim or detail.\n");
+    prompt.push_str("3. Act through agent.plan.move_item with a FRESH base from agent.plan.board_hash (the hash alone - agent.plan.board returns the whole multi-megabyte board with its hash LAST, where a clipped tool result loses it; never force a stale write): move the chosen child proposed -> accepted (a coordinator acceptance of its OWN child; the item's full detail is the authorization). Corrections or addenda to a child's text belong in a note (agent.plan.add_note) - do NOT rewrite its claim or detail.\n");
+    prompt.push_str("   If the plan is missing a phase, or a finished child showed that more work is needed, file it yourself with agent.plan.add_subtask {parent: the GOAL line above verbatim, claim, detail, lifecycle} - `accepted` to run it next, `proposed` to queue it behind an earlier sibling. No human acceptance is needed for subtasks of this item.\n");
     prompt.push_str("4. A BLOCKED child may be moved back to accepted ONLY with a concrete, written remedy - your final answer must state the blocker and exactly how the remedy resolves it, and an add_note carrying that remedy is required so the next step sees it. Without a remedy, leave it blocked.\n");
     prompt.push_str("5. Then YIELD: end with STATUS: IN_PROGRESS and a concise status update (which child you promoted and why). The worker now runs an accepted/in-progress child BEFORE another parent turn; do not spend a turn merely confirming that an active child still needs implementation. DONE is only for a later turn, after every child is completed/done AND you have verified their evidence and the integrated outcome - a DONE while any child is unfinished is REJECTED.\n");
     prompt.push_str("6. If every unfinished child is blocked and you have no reasonable remedy for any of them, end with STATUS: BLOCKED naming the actual blocker(s) - this moves the parent itself to the blocked column (no retry loop).\n");
@@ -632,7 +701,24 @@ entry_log.put_string("home", "agent.llm.tool_loop");
 entry_log.put_boolean("ok", ok_step);
 entry_log.put_string("result", &result_json);
 entry_log.put_string("checkpoint", &handoff_checkpoint);
-entry_log.put_object("checkpoint_v2", structured_checkpoint.clone());
+// COMPACT HISTORY (2026-11): the FULL structured checkpoint lives once, on the
+// entry's `checkpoint` (the continuity source step_item reads). Copying it
+// into every step_log entry (~45 KB each - observations, evidence, changes,
+// including whole tool descriptions) grew kb.plan into a multi-megabyte
+// record that every start/active/final write rewrites. Nothing reads the
+// per-step copy (continuity_context reads result/checkpoint/home/ok/run_id),
+// so keep a compact reference; full run detail stays in activity_history.
+{
+    let mut cv = DataObject::new();
+    cv.put_int("version", structured_checkpoint.try_get_int("version").unwrap_or(2));
+    cv.put_boolean("compact", true);
+    for k in ["run_id", "status", "next", "verified", "blockers", "last_action"] {
+        if let Ok(v) = structured_checkpoint.try_get_string(k) {
+            cv.put_string(k, &v.chars().take(2000).collect::<String>());
+        }
+    }
+    entry_log.put_object("checkpoint_v2", cv);
+}
 entry_log.put_string("run_id", &actual_run_id);
 entry_log.put_string("previous_run_id", &previous_run_id);
 entry_log.put_boolean("recovered", recovered_run);

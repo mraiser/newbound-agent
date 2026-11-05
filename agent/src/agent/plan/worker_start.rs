@@ -400,7 +400,7 @@ fn run(gen: i64) {
                 Ok(Err(_)) => ("step_failed".to_string(), "step_item raised an exception".to_string(), -1),
                 Err(_) => ("step_failed".to_string(), "step_item panicked".to_string(), -1),
             };
-            let turn = matches!(action.as_str(), "stepped" | "completed" | "blocked" | "step_failed" | "paused" | "stopped" | "journal_recovery_required");
+            let turn = matches!(action.as_str(), "stepped" | "completed" | "premature_done" | "blocked" | "step_failed" | "paused" | "stopped" | "journal_recovery_required");
             if turn {
                 turns.push(now);
                 w.put_int("turns_total", w.try_get_int("turns_total").unwrap_or(0) + 1);
@@ -423,7 +423,12 @@ fn run(gen: i64) {
                     parked.insert(claim.clone(), Park { fp: fp_now(&claim), until: 0,
                         reason: format!("{} - explicit resume/review required", action) });
                 }
-                "stepped" | "completed" => { fails.remove(&claim); }
+                // premature_done (2026-11): a parent's DONE rejected while
+                // children are unfinished is an ordinary in-progress step, as
+                // step_item documents - it used to fall through to `other`
+                // and park the parent until a human edit, stranding proposed
+                // children it had just filed.
+                "stepped" | "completed" | "premature_done" => { fails.remove(&claim); }
                 "step_failed" => {
                     let n = { let c = fails.entry(claim.clone()).or_insert(0); *c += 1; *c };
                     let backoff = (300_000i64 << (n - 1).min(4)).min(3_600_000);
