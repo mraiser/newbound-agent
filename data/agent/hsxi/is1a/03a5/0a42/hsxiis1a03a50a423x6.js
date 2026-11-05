@@ -959,7 +959,7 @@ me.ready = function () {
           ME.querySelector('.pl-control-note').textContent = (r && r.msg) || action + ' failed';
           return;
         }
-        ME.querySelector('.pl-control-note').textContent = action === 'resume' ? 'Resumed; waiting for the new run’s first activity.' : 'Requested. The current boundary will finish; no new model round will start after it is observed.';
+        ME.querySelector('.pl-control-note').textContent = action === 'resume' ? (r.action === 'queued' ? 'Resume queued; the plan worker starts this item’s next turn shortly.' : 'Resumed; waiting for the new run’s first activity.') : 'Requested. The current boundary will finish; no new model round will start after it is observed.';
         if (action === 'resume') ME.querySelector('.pl-resume-note').value = '';
         activityCursor = 0; activityState.events = []; activityRunId = '';
         load(); probeActivity();

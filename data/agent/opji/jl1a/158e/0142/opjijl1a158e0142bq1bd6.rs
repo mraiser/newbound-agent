@@ -69,6 +69,25 @@ fn max_plan_steps() -> i64 {
 }
 let mut out = DataObject::new();
 let api = crate::api::new();
+// ONE STEP AT A TIME (2026-11): every caller - plan worker, run_control
+// resume, a manual or agent call - passes through here, so this is where
+// concurrent turns are refused. The lock (agent.plan.step_lock) lives in
+// shared globals so it survives dylib hot-swaps; the guard releases on any
+// return or unwind. A refused call writes NOTHING and spends no turn.
+let _step_guard = match crate::agent::plan::step_lock::acquire(
+    &claim, if nn_sessionid.is_empty() { "worker/internal" } else { "session" }) {
+    Ok(g) => g,
+    Err(h) => {
+        let hc = h.try_get_string("claim").unwrap_or_default();
+        out.put_string("status", "err");
+        out.put_string("action", "busy");
+        out.put_string("msg", &format!("another plan step is already running ('{}') - only one plan step runs at a time; this one was not started", hc.chars().take(80).collect::<String>()));
+        out.put_string("busy_claim", &hc);
+        out.put_string("busy_run_id", &h.try_get_string("run_id").unwrap_or_default());
+        out.put_int("busy_since", h.try_get_int("since").unwrap_or(0));
+        return out;
+    }
+};
 let r = api.dev.code.read_control_facet("kb".to_string(), "plan".to_string(), "memory".to_string());
 if !r.try_get_boolean("exists").unwrap_or(false) {
     out.put_string("status", "err");
@@ -211,6 +230,14 @@ if handoff_received.is_empty() || !journaled_run.is_empty() {
             if r.try_get_string("claim").unwrap_or_default() != claim { continue; }
             let rid = r.try_get_string("run_id").unwrap_or_default();
             if rid == journaled_run { continue; }
+            // Never adopt a LIVE run (2026-11): recovery is for a dead turn
+            // (crash, panic, failed final write). A run still active with a
+            // recent event is another turn in flight - adopting its handoff
+            // is how two concurrent turns ping-ponged one item.
+            let run_live = r.try_get_boolean("active").unwrap_or(false)
+                && r.try_get_int("ended").unwrap_or(0) == 0
+                && flowlang::flowlang::system::time::time() - r.try_get_int("last_event_at").unwrap_or(0) < 120_000;
+            if run_live { continue; }
             // Already-journaled history is older context, not a newer recovery
             // source. A different run may represent an interrupted write.
             if e.try_get_array("step_log").ok().map(|a| {
@@ -474,6 +501,7 @@ if was_accepted || e.has("active_run") {
 // claims it by exact prompt; no tool_loop signature or other caller changes.
 let now = flowlang::flowlang::system::time::time();
 let run_id = format!("plan-{}-{}", now, flowlang::flowlang::system::unique_session_id::unique_session_id());
+_step_guard.set_run(&run_id);
 // Durable active pointer: if this turn dies before its final journal write,
 // the item still identifies the saved run and the checkpoint it inherited.
 let mut active_pointer_saved = false;
