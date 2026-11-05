@@ -246,6 +246,21 @@ snapshot up. One known cost: git checkout across branches whose frozen
 kb states differ refuses while the live brain has drifted — use a
 worktree for cross-branch work in this repo.
 
+*The freeze ended 2026-10-20 (`bdc31ba`, "Untrack data/kb").* That commit
+removed the frozen files from tracking, and pulling it did exactly what
+the paragraph above warned: git deleted `data/kb` on every clone that
+pulled it, taking the live brain with it. Only domains created after the
+freeze (new files, never tracked) survived. Doctrine and workflow came
+back from the primer, but the frozen snapshot also carried `camera`,
+`nebula`, `frontend` and `m2026-07`, which the primer never had; on
+2026-11-05 they were recovered from `bdc31ba^` and added to the primer,
+so the primer is now the only snapshot and a full one. The deletion
+can't recur: nothing under `data/kb` is tracked any more. A clone that
+lost its brain gets it back with `agent-archivist-bootstrap
+path:docs/kb-seed.json` (setup.sh step 9). A clone that has *not* yet
+pulled past `bdc31ba` should copy `data/kb` aside first, because its
+local deposits since the freeze live only in those files.
+
 ### Track B — the executive and the contract
 
 **B1 — Perception contract doc** (`docs/perception-contract.md`, shipped
