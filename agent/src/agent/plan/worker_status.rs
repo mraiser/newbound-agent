@@ -64,6 +64,19 @@ let mut o = match g.try_get_object("AGENT_PLAN_WORKER") {
 let phase = o.try_get_string("phase").unwrap_or_default();
 let beat = o.try_get_int("beat").unwrap_or(0);
 o.put_boolean("alive", phase == "stepping" || (beat > 0 && now - beat < 20_000));
+// step_holder (2026-11): who holds the one-plan-step lock right now (any
+// caller: worker, resume, manual) - empty object when no step is running.
+{
+    let h = crate::agent::plan::step_lock::holder();
+    let mut s = DataObject::new();
+    if h.has("token") {
+        for k in ["claim", "caller", "run_id"] {
+            if let Ok(v) = h.try_get_string(k) { s.put_string(k, &v); }
+        }
+        s.put_int("since", h.try_get_int("since").unwrap_or(0));
+    }
+    o.put_object("step_holder", s);
+}
 o.put_boolean("plan_autonomy", rprop("PLAN_AUTONOMY").map(|v| {
     let v = v.to_lowercase();
     v == "on" || v == "true" || v == "1" || v == "yes"
