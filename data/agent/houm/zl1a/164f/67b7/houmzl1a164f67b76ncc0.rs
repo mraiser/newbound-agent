@@ -103,6 +103,10 @@ fn fingerprint(e: &DataObject) -> String {
         e.try_get_string("parent").unwrap_or_default(),
         e.try_get_array("step_log").map(|a| a.len()).unwrap_or(0),
         e.try_get_array("notes").map(|a| a.len()).unwrap_or(0))
+        // resume receipt (2026-11): run_control's queued resume stamps
+        // `resume.time`, which un-parks an item parked on `paused`.
+        + &format!("\u{1f}{}", e.try_get_object("resume").ok()
+            .and_then(|r| r.try_get_int("time").ok()).unwrap_or(0))
 }
 // A human note the agent has NOT been shown yet: unseen (no seen_at) and newer
 // than the start of the last step (step_log entries carry the turn-start time).
@@ -310,6 +314,19 @@ fn run(gen: i64) {
             quiet_hash.clear();
             let claim = cands[0].2.clone();
             w.put_string("next", &claim);
+            // ONE STEP AT A TIME (2026-11): a superseded worker thread must
+            // not start a step (worker_start bumps gen; the old thread used to
+            // notice only at the top of its next loop), and nobody steps
+            // while another caller - a resume, a manual call - holds the plan
+            // step lock. step_item refuses with `busy` regardless; this just
+            // avoids the round trip and shows who holds it.
+            if state().try_get_int("gen").unwrap_or(0) != gen { return 0; }
+            let holder = crate::agent::plan::step_lock::holder();
+            if holder.has("token") {
+                w.put_string("phase", &format!("waiting: another plan step is running ({})",
+                    holder.try_get_string("claim").unwrap_or_default().chars().take(80).collect::<String>()));
+                return 2;
+            }
             if w.try_get_boolean("in_step").unwrap_or(false) && w.try_get_int("in_step_gen").unwrap_or(0) != gen {
                 w.put_string("phase", "waiting for the previous worker's step");
                 return 2;
@@ -367,6 +384,9 @@ fn run(gen: i64) {
                 // and park the parent until a human edit, stranding proposed
                 // children it had just filed.
                 "stepped" | "completed" | "premature_done" => { fails.remove(&claim); }
+                // busy: another caller held the plan step lock - not a turn,
+                // not a park; retry shortly (see the return below the match).
+                "busy" => {}
                 "step_failed" => {
                     let n = { let c = fails.entry(claim.clone()).or_insert(0); *c += 1; *c };
                     let backoff = (300_000i64 << (n - 1).min(4)).min(3_600_000);
@@ -383,6 +403,10 @@ fn run(gen: i64) {
                 }
             }
             w.put_string("current", "");
+            if action == "busy" {
+                w.put_string("phase", "waiting: another plan step is running");
+                return 3;
+            }
             0
         }));
         let secs = match pass {

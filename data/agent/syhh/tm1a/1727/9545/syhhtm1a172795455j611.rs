@@ -93,6 +93,47 @@ if action=="resume" {
         let nr=api.agent.plan.add_note(resume_claim.clone(),format!("Resume guidance from the previous run:\n{}",resume_note),sid_for_note(&nn_sessionid));
         if nr.try_get_string("status").unwrap_or_default()!="ok" {let mut o=DataObject::new();o.put_string("status","err");o.put_string("msg","could not carry pause guidance into the resumed turn");return o;}
     }
+    // HAND OFF TO THE WORKER (2026-11): when plan autonomy is armed and the
+    // worker is alive, resume does NOT run the turn on this request thread -
+    // that turn was invisible to the worker, which kept stepping (often the
+    // same item, un-parked by the resume note) and two runs alternated. Clear
+    // the hold (done above), stamp a `resume` receipt (it changes the
+    // worker's park fingerprint, un-parking the item), and return at once;
+    // the worker steps it through the normal gate. With autonomy off the
+    // turn runs here as before - step_item's plan step lock now refuses any
+    // overlap with `busy`.
+    let ws = api.agent.plan.worker_status();
+    if ws.try_get_boolean("plan_autonomy").unwrap_or(false) && ws.try_get_boolean("alive").unwrap_or(false) {
+        let cap = ws.try_get_int("max_steps").unwrap_or(20);
+        let b2 = api.agent.plan.board();
+        let arr = b2.get_array("entries");
+        for i in 0..arr.len() {
+            let mut e = match arr.try_get_object(i) { Ok(e) => e, Err(_) => continue };
+            if e.try_get_string("claim").unwrap_or_default() != resume_claim { continue; }
+            let steps = e.try_get_array("step_log").map(|a| a.len() as i64).unwrap_or(0);
+            if steps >= cap {
+                let mut o = DataObject::new(); o.put_string("status", "err"); o.put_string("action", "needs_reapproval");
+                o.put_string("msg", "convergence guard: this item has used its MAX_PLAN_STEPS - re-accept it (move to accepted) to authorize more turns");
+                return o;
+            }
+            let mut receipt = DataObject::new(); receipt.put_string("run_id", &resume_rid); receipt.put_string("note", &resume_note);
+            receipt.put_int("time", flowlang::flowlang::system::time::time()); receipt.put_string("state", "queued");
+            e.put_object("resume", receipt);
+            let w = api.dev.code.patch_control_facet("kb".to_string(), "plan".to_string(), "memory".to_string(), "".to_string(),
+                arr.to_string(), b2.get_string("hash"), "plan resume queued for the plan worker".to_string(), "plan-board".to_string(), nn_sessionid.clone());
+            let wok = w.try_get_boolean("ok").unwrap_or(false) || w.try_get_string("status").map(|s| s == "ok").unwrap_or(false);
+            let mut o = DataObject::new();
+            if !wok {
+                o.put_string("status", "err");
+                o.put_string("msg", "the hold was cleared but the resume receipt could not be written (the board changed) - press resume again");
+                return o;
+            }
+            o.put_string("status", "ok"); o.put_string("action", "queued"); o.put_string("claim", &resume_claim);
+            o.put_string("msg", "Resume queued: the plan worker runs this item's next turn through the normal gate (one plan step at a time).");
+            return o;
+        }
+        let mut o = DataObject::new(); o.put_string("status", "err"); o.put_string("msg", "plan item vanished from the board"); return o;
+    }
     let h=api.agent.plan.board_hash().get_string("hash");
     let sid=nn_sessionid.clone();
     let r=api.agent.plan.step_item(claim,h,nn_sessionid);
