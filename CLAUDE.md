@@ -21,8 +21,8 @@ a `mraiser/newbound` checkout via symlinks. The full process is
   `scratch/`, or `runtime/` is ever committed (skeleton excepted,
   already handled by overlay.sh's skip-worktree).
 - **The brain is instance-owned: nothing under `data/kb/` is ever
-  committed** (docs/one-memory-cycle.md A4 — tracked files are frozen,
-  overlay.sh skip-worktrees them, .gitignore hides the rest). Memory
+  committed** (docs/one-memory-cycle.md A4 — data/kb is untracked and
+  .gitignore hides all of it). Memory
   reaches git only through the two curated channels: the subject
   libraries' shipped manuals (`agent-archivist-promote`) and the primer
   (`docs/kb-seed.json`, refreshed only by a deliberate
@@ -43,8 +43,8 @@ a `mraiser/newbound` checkout via symlinks. The full process is
    (docs/one-memory-cycle.md). The brain (`kb`) carries doctrine
    (`kb.doctrine`) and the working process (`kb.workflow`); every
    library's controls carry their own manuals as memory facets, listed
-   lib.ctl in the memory index. On a fresh clone the brain starts from
-   the frozen snapshot — top it up with
+   lib.ctl in the memory index. On a fresh clone the brain is empty
+   until it is filled from the primer with
    `agent-archivist-bootstrap path:docs/kb-seed.json` (idempotent;
    setup.sh does this when it can).
 4. Work from the starter command subset; discover the rest with
