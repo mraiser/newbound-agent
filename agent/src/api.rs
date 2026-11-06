@@ -960,6 +960,21 @@ pub mod agent {
             ::flowlang::rustcmd::RustCmd::new("wpiwht1a17287e0f5n647").execute(d).expect("Rust command execution failed").get_object("a")
         }
 
+        pub fn add_subtask(parent: String, claim: String, detail: String, lifecycle: String, nn_sessionid: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("parent", &parent);
+            d.put_string("claim", &claim);
+            d.put_string("detail", &detail);
+            d.put_string("lifecycle", &lifecycle);
+            d.put_string("nn_sessionid", &nn_sessionid);
+            ::flowlang::rustcmd::RustCmd::new("qizorr1a1acc07097r3fb").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn step_lock() -> DataObject {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("trzxxv1a1ad30b084u58c").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
     }
     pub mod browser {
         use ::ndata::dataobject::DataObject;
@@ -8828,6 +8843,14 @@ impl old_agent_plan {
     #[deprecated(note = "use api::agent::plan::test_run_control_contract instead")]
     pub fn test_run_control_contract(&self) -> DataObject {
         self::agent::plan::test_run_control_contract()
+    }
+    #[deprecated(note = "use api::agent::plan::add_subtask instead")]
+    pub fn add_subtask(&self, parent: String, claim: String, detail: String, lifecycle: String, nn_sessionid: String) -> DataObject {
+        self::agent::plan::add_subtask(parent, claim, detail, lifecycle, nn_sessionid)
+    }
+    #[deprecated(note = "use api::agent::plan::step_lock instead")]
+    pub fn step_lock(&self) -> DataObject {
+        self::agent::plan::step_lock()
     }
 }
 impl old_agent_browser {
