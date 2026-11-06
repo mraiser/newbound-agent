@@ -2922,6 +2922,80 @@ pub mod dudeapi {
     }
 }
 
+pub mod files {
+    pub mod files {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+        pub fn list_dir(path: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("path", &path);
+            ::flowlang::rustcmd::RustCmd::new("ortlrv1a1acf70b79i47").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn propfind(path: String, href_prefix: String, depth: String, request_xml: String) -> String {
+            let mut d = DataObject::new();
+            d.put_string("path", &path);
+            d.put_string("href_prefix", &href_prefix);
+            d.put_string("depth", &depth);
+            d.put_string("request_xml", &request_xml);
+            ::flowlang::rustcmd::RustCmd::new("lkrnty1a1ad082598jc4").execute(d).expect("Rust command execution failed").get_string("a")
+        }
+
+        pub fn get_file(path: String) -> String {
+            let mut d = DataObject::new();
+            d.put_string("path", &path);
+            ::flowlang::rustcmd::RustCmd::new("xoxynz1a1ad08644cwc7").execute(d).expect("Rust command execution failed").get_string("a")
+        }
+
+        pub fn make_collection(path: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("path", &path);
+            ::flowlang::rustcmd::RustCmd::new("mxzpit1a1ad1915b1v1ac").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn delete_path(path: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("path", &path);
+            ::flowlang::rustcmd::RustCmd::new("mlkrim1a1ad195821n1af").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn put_file(path: String, content: Data) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("path", &path);
+            d.set_property("content", content);
+            ::flowlang::rustcmd::RustCmd::new("hhyigz1a1ad1c6753s1d7").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn dav(nn_method: String, nn_path: String, nn_headers: DataObject, nn_body: Data) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("nn_method", &nn_method);
+            d.put_string("nn_path", &nn_path);
+            d.put_object("nn_headers", nn_headers);
+            d.set_property("nn_body", nn_body);
+            ::flowlang::rustcmd::RustCmd::new("lsknnh1a1ae3844ebuc9").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn resolve_path(path: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("path", &path);
+            ::flowlang::rustcmd::RustCmd::new("znqlyo1a1ae6442f0g14").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn dav_tree(operation: String, source: String, destination: String, overwrite: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("operation", &operation);
+            d.put_string("source", &source);
+            d.put_string("destination", &destination);
+            d.put_string("overwrite", &overwrite);
+            ::flowlang::rustcmd::RustCmd::new("uzhykj1a1b0eade9fg63f").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+    }
+}
+
 pub mod fillmore {
     pub mod fillmore {
         use ::ndata::dataobject::DataObject;
@@ -7486,6 +7560,7 @@ pub struct old_dev_flowtoken {}
 pub struct old_dev_flowstep {}
 pub struct old_dev_flowdebug {}
 pub struct old_dudeapi_dudeapi {}
+pub struct old_files_files {}
 pub struct old_fillmore_fillmore {}
 pub struct old_fillmore_queue {}
 pub struct old_fillmore_jobs {}
@@ -7759,6 +7834,9 @@ pub struct old_dev {
 pub struct old_dudeapi {
     pub dudeapi: old_dudeapi_dudeapi,
 }
+pub struct old_files {
+    pub files: old_files_files,
+}
 pub struct old_fillmore {
     pub fillmore: old_fillmore_fillmore,
     pub queue: old_fillmore_queue,
@@ -7985,6 +8063,7 @@ pub struct api {
     pub camera: old_camera,
     pub dev: old_dev,
     pub dudeapi: old_dudeapi,
+    pub files: old_files,
     pub fillmore: old_fillmore,
     pub flowfixtures: old_flowfixtures,
     pub genmore: old_genmore,
@@ -8101,6 +8180,9 @@ pub const fn new() -> api {
         },
         dudeapi: old_dudeapi {
             dudeapi: old_dudeapi_dudeapi {},
+        },
+        files: old_files {
+            files: old_files_files {},
         },
         fillmore: old_fillmore {
             fillmore: old_fillmore_fillmore {},
@@ -9673,6 +9755,44 @@ impl old_dudeapi_dudeapi {
     #[deprecated(note = "use api::dudeapi::dudeapi::delete_lora instead")]
     pub fn delete_lora(&self, character_id: String, lora_id: String, nn_session: DataObject) -> bool {
         self::dudeapi::dudeapi::delete_lora(character_id, lora_id, nn_session)
+    }
+}
+impl old_files_files {
+    #[deprecated(note = "use api::files::files::list_dir instead")]
+    pub fn list_dir(&self, path: String) -> DataObject {
+        self::files::files::list_dir(path)
+    }
+    #[deprecated(note = "use api::files::files::propfind instead")]
+    pub fn propfind(&self, path: String, href_prefix: String, depth: String, request_xml: String) -> String {
+        self::files::files::propfind(path, href_prefix, depth, request_xml)
+    }
+    #[deprecated(note = "use api::files::files::get_file instead")]
+    pub fn get_file(&self, path: String) -> String {
+        self::files::files::get_file(path)
+    }
+    #[deprecated(note = "use api::files::files::make_collection instead")]
+    pub fn make_collection(&self, path: String) -> DataObject {
+        self::files::files::make_collection(path)
+    }
+    #[deprecated(note = "use api::files::files::delete_path instead")]
+    pub fn delete_path(&self, path: String) -> DataObject {
+        self::files::files::delete_path(path)
+    }
+    #[deprecated(note = "use api::files::files::put_file instead")]
+    pub fn put_file(&self, path: String, content: Data) -> DataObject {
+        self::files::files::put_file(path, content)
+    }
+    #[deprecated(note = "use api::files::files::dav instead")]
+    pub fn dav(&self, nn_method: String, nn_path: String, nn_headers: DataObject, nn_body: Data) -> DataObject {
+        self::files::files::dav(nn_method, nn_path, nn_headers, nn_body)
+    }
+    #[deprecated(note = "use api::files::files::resolve_path instead")]
+    pub fn resolve_path(&self, path: String) -> DataObject {
+        self::files::files::resolve_path(path)
+    }
+    #[deprecated(note = "use api::files::files::dav_tree instead")]
+    pub fn dav_tree(&self, operation: String, source: String, destination: String, overwrite: String) -> DataObject {
+        self::files::files::dav_tree(operation, source, destination, overwrite)
     }
 }
 impl old_fillmore_fillmore {
