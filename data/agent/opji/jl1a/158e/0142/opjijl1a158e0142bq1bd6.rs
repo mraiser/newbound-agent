@@ -518,8 +518,18 @@ let mut active_pointer_saved = false;
             active.put_int("started", now); active.put_string("state", "starting");
             active.put_string("previous_run_id", &previous_run_id);
             active.put_boolean("recovered", recovered_run);
-            if prefer_structured { active.put_object("inherited", inherited_structured.clone()); }
-            else if !handoff_received.is_empty() { active.put_string("inherited_text", &handoff_received); }
+            // A run pointer is provenance, not another full checkpoint copy.
+            // The item's bounded checkpoint remains authoritative; carrying an
+            // inherited object here recursively multiplied board/journal size.
+            if prefer_structured {
+                let mut inherited_ref = DataObject::new();
+                inherited_ref.put_string("run_id", &inherited_structured.try_get_string("run_id").unwrap_or_default());
+                inherited_ref.put_int("time", inherited_checkpoint_time);
+                inherited_ref.put_string("source", "kb.plan.checkpoint");
+                active.put_object("inherited_ref", inherited_ref);
+            } else if !handoff_received.is_empty() {
+                active.put_string("inherited_text", &handoff_received.chars().take(8000).collect::<String>());
+            }
             item.put_object("active_run", active);
             let aw = api.dev.code.patch_control_facet("kb".to_string(), "plan".to_string(), "memory".to_string(),
                 "".to_string(), a0.to_string(), h0, "plan run started; durable active pointer".to_string(), "executive".to_string(), nn_sessionid.clone());
