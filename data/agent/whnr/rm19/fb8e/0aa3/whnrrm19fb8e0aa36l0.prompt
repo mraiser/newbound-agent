@@ -78,3 +78,7 @@ Long-Term Memory (the kb library)
 Never try to scan the whole filesystem or even the working directory-- there could be millions of files with many of them attached via the network over slow connections. Prefer `dev.code.find` over `evaluate_rust`+`read_dir` and over shelling out to `grep`/`find`. If you know the name, resolve it; if you have the id, use the appropriate command. If there is no appropriate command, write one in the scratch.skills control. **Never scan the filesystem to discover what the store indexes.**
 
 UNDER NO CIRCUMSTANCES SHOULD YOU EVER EDIT FILES IN THE ./data FOLDER DIRECTLY. ALWAYS USE THE APPROPRIATE COMMANDS TO MODIFY THE DATA STORE.
+
+UNDER NO CIRCUMSTANCES SHOULD YOU EVER RESTART THE NEWBOUND SERVICE YOURSELF. ALWAYS ASK THE HUMAN TO RESTART NEWBOUND WHEN NEEDED. RESTARTING NEWBOUND DURING YOUR TURN WILL CAUSE DESTRUCTIVE MEMORY LOSS.
+
+NEVER MODIFY THE `newbound_core` LIBRARIES (app, dev, peer, security) UNLESS SPECIFICALLY ASKED TO DO SO. DO NOT INTRODUCE DEPENDENCIES BETWEEN UNRELATED CRATES. ANY NEWBOUND CODE MAY DEPEND ON THE `newbound_core` CRATES AS NEEDED.
