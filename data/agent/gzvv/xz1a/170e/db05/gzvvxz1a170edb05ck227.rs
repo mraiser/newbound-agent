@@ -36,7 +36,7 @@ for w in work.objects() {
     let tool = w.try_get_string("tool").unwrap_or_default();
     let target = w.try_get_string("target").unwrap_or_default();
     let ok = w.try_get_boolean("ok").unwrap_or(false);
-    let result = bounded(&w.try_get_string("result").unwrap_or_default(), 1800);
+    let result = bounded(&w.try_get_string("result").unwrap_or_default(), 700);
     let mut observation = DataObject::new();
     observation.put_string("tool", &tool); observation.put_string("target", &target);
     observation.put_boolean("ok", ok); observation.put_string("result", &result);
@@ -76,11 +76,11 @@ out.put_int("version", 2); out.put_int("time", time());
 out.put_string("kind", &kind); out.put_string("status", &status);
 out.put_boolean("complete", status == "DONE");
 out.put_string("reason", &bounded(&input.try_get_string("reason").unwrap_or_default(), 1000));
-out.put_string("guidance", &bounded(&input.try_get_string("guidance").unwrap_or_default(), 8000));
+out.put_string("guidance", &bounded(&input.try_get_string("guidance").unwrap_or_default(), 2000));
 out.put_string("summary", &summary); out.put_string("next", &bounded(&next, 2000));
 out.put_string("blockers", &blockers); out.put_string("verified", &verified);
 out.put_string("verification_pending", &verification_pending);
-out.put_string("last_action", &last_action); out.put_string("last_result", &last_result);
+out.put_string("last_action", &last_action); out.put_string("last_result", &bounded(&last_result, 1200));
 out.put_array("observations", observations); out.put_array("changes", changes); out.put_array("evidence", evidence);
 out.put_string("run_id", &input.try_get_string("run_id").unwrap_or_default());
 out.put_string("previous_run_id", &input.try_get_string("previous_run_id").unwrap_or_default());
@@ -102,4 +102,4 @@ if out.get_array("changes").len() > 0 {
     }
 }
 out.put_string("text", &bounded(&text, 8000));
-out
+crate::agent::plan::compact_checkpoint::compact_checkpoint(out)

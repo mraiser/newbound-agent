@@ -768,7 +768,7 @@ log.push_object(entry_log);
 e.put_array("step_log", log);
 // Durable compact continuity facet. Runtime activity may roll off; the
 // checkpoint and its provenance remain with the item and its journal.
-e.put_object("checkpoint", structured_checkpoint.clone());
+e.put_object("checkpoint", crate::agent::plan::compact_checkpoint::compact_checkpoint(structured_checkpoint.clone()));
 let mut last_run = DataObject::new(); last_run.put_string("run_id", &actual_run_id);
 last_run.put_string("previous_run_id", &previous_run_id); last_run.put_int("time", now);
 last_run.put_string("outcome", &tl_status); last_run.put_boolean("recovered", recovered_run);
