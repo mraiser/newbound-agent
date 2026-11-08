@@ -144,18 +144,26 @@ for i in 0..checked.len() {
     if format!("{}|{}", e.try_get_string("claim").unwrap_or_default(), e.try_get_string("tags").unwrap_or_default()) != original_lifecycles.get_string(i) { return fail("claim/lifecycle changed during compaction"); }
     if e.try_get_array("step_log").map(|a| a.len() as i64).unwrap_or(0) != original_steps.get_int(i) { return fail("step count changed during compaction"); }
 }
-let journal_bytes = match fs::read(&journal_path) { Ok(b) => b, Err(e) => return fail(&format!("read journal: {}", e)) };
-let (patches, was_malformed, consumed) = match recover_patches(&journal_bytes) { Ok(v) => v, Err(e) => return fail(&format!("journal recovery: {}", e)) };
+let sharded_index = format!("{}_jp_index", ctlid);
+let sharded = store.exists("kb", &sharded_index);
+let journal_bytes = if sharded { Vec::new() } else { match fs::read(&journal_path) { Ok(b) => b, Err(e) => return fail(&format!("read legacy journal: {}", e)) } };
+let (patches, was_malformed, consumed) = if sharded {
+    (DataArray::new(), false, 0usize)
+} else { match recover_patches(&journal_bytes) { Ok(v) => v, Err(e) => return fail(&format!("journal recovery: {}", e)) } };
 let mut journal = DataObject::new(); journal.put_string("id", &jid); journal.put_string("username", "system");
 journal.put_array("readers", DataArray::new()); journal.put_array("writers", DataArray::new());
 journal.put_int("time", time());
 let mut jd = DataObject::new(); jd.put_array("list", patches.clone()); journal.put_object("data", jd);
-let journal_text = journal.to_string();
+let journal_text = if sharded { "per-entry journal; no monolithic replacement".to_string() } else { journal.to_string() };
 let mut out = DataObject::new(); out.put_string("status", "ok"); out.put_string("action", if apply { "apply" } else { "dry-run" });
 out.put_string("base", &hash); out.put_int("entries", entries.len() as i64);
 out.put_int("board_bytes_before", memory.len() as i64); out.put_int("board_bytes_after", after_text.len() as i64);
 out.put_int("journal_bytes_before", journal_bytes.len() as i64); out.put_int("journal_bytes_after", journal_text.len() as i64);
-out.put_int("recovered_patches", patches.len() as i64); out.put_boolean("journal_was_malformed", was_malformed);
+out.put_boolean("sharded_journal", sharded);
+out.put_int("recovered_patches", if sharded {
+    crate::api::new().dev.code.list_control_patches("kb".to_string(), "plan".to_string(), 0).get_array("patches").len() as i64
+} else { patches.len() as i64 });
+out.put_boolean("journal_was_malformed", was_malformed);
 out.put_int("journal_prefix_bytes", consumed as i64); out.put_int("discarded_incomplete_bytes", journal_bytes.len().saturating_sub(consumed) as i64);
 if !apply { out.put_string("msg", "Dry run only. Apply preserves raw evidence and atomically replaces the live board attachment and journal."); return out; }
 let worker = DataStore::globals().try_get_object("AGENT_PLAN_WORKER").ok();
@@ -166,26 +174,33 @@ let _repair_guard = match crate::agent::plan::step_lock::acquire("kb.plan storag
 };
 let recovery_dir = store.root.parent().unwrap().join("runtime").join("agent").join("plan-recovery").join(format!("{}", time()));
 fs::create_dir_all(&recovery_dir).map_err(|e| e.to_string()).unwrap_or(());
-let raw_journal = recovery_dir.join("plan.journal.corrupt.bin");
-atomic_write(&raw_journal, &journal_bytes).unwrap_or_else(|e| eprintln!("plan recovery backup failed: {}", e));
-if !raw_journal.exists() || fs::metadata(&raw_journal).map(|m| m.len()).unwrap_or(0) != journal_bytes.len() as u64 { return fail("raw journal backup failed; live files untouched"); }
+let raw_journal = recovery_dir.join(if sharded { "plan.journal.sharded.txt" } else { "plan.journal.corrupt.bin" });
+let raw_journal_data = if sharded {
+    crate::api::new().dev.code.list_control_patches("kb".to_string(), "plan".to_string(), 0).get_array("patches").to_string().into_bytes()
+} else { journal_bytes.clone() };
+atomic_write(&raw_journal, &raw_journal_data).unwrap_or_else(|e| eprintln!("plan recovery backup failed: {}", e));
+if !raw_journal.exists() || fs::metadata(&raw_journal).map(|m| m.len()).unwrap_or(0) != raw_journal_data.len() as u64 { return fail("raw journal backup failed; live files untouched"); }
 let raw_board = recovery_dir.join("plan.memory.before.json");
 if let Err(e) = atomic_write(&raw_board, memory.as_bytes()) { return fail(&format!("raw board backup failed: {}", e)); }
 let after_board_backup = recovery_dir.join("plan.memory.after.json");
 if let Err(e) = atomic_write(&after_board_backup, after_text.as_bytes()) { return fail(&format!("after-board archive failed: {}", e)); }
-let after_journal = recovery_dir.join("plan.journal.after.json");
-if let Err(e) = atomic_write(&after_journal, journal_text.as_bytes()) { return fail(&format!("after-journal archive failed: {}", e)); }
+if !sharded {
+    let after_journal = recovery_dir.join("plan.journal.after.json");
+    if let Err(e) = atomic_write(&after_journal, journal_text.as_bytes()) { return fail(&format!("after-journal archive failed: {}", e)); }
+}
 let mut manifest = DataObject::new(); manifest.put_string("operation", "kb.plan bounded recovery"); manifest.put_int("time", time());
 manifest.put_string("author", "agent.plan.repair_storage"); manifest.put_string("base", &hash);
 manifest.put_int("entries", entries.len() as i64); manifest.put_int("recovered_patches", patches.len() as i64);
 manifest.put_boolean("journal_was_malformed", was_malformed); manifest.put_int("discarded_incomplete_bytes", journal_bytes.len().saturating_sub(consumed) as i64);
 manifest.put_string("note", "Raw pre-repair bytes retained. Only the incomplete journal suffix is discarded; durable checkpoints are compacted. Lifecycle and step counts unchanged.");
 if let Err(e) = atomic_write(&recovery_dir.join("manifest.json"), manifest.to_string().as_bytes()) { return fail(&format!("manifest archive failed: {}", e)); }
-// Journal first: the old writer panics while reading a malformed journal, so
-// this ordering restores its ability to record the board compaction itself.
-if let Err(e) = atomic_write(&journal_path, journal_text.as_bytes()) { return fail(&format!("journal replacement failed; raw evidence retained at {}: {}", recovery_dir.display(), e)); }
-let verified = store.get_data("kb", &jid).get_object("data").get_array("list");
-if verified.len() != patches.len() { return fail("journal verification count mismatch; archived recovery is intact"); }
+// Legacy: journal first, because the old writer panics while reading malformed
+// JSON. Sharded: ordinary patch_control_facet appends one small record/index.
+if !sharded {
+    if let Err(e) = atomic_write(&journal_path, journal_text.as_bytes()) { return fail(&format!("journal replacement failed; raw evidence retained at {}: {}", recovery_dir.display(), e)); }
+    let verified = store.get_data("kb", &jid).get_object("data").get_array("list");
+    if verified.len() != patches.len() { return fail("journal verification count mismatch; archived recovery is intact"); }
+}
 let label = "plan recovery: bounded checkpoints; valid patch prefix preserved";
 let written = crate::api::new().dev.code.patch_control_facet("kb".to_string(), "plan".to_string(), "memory".to_string(), memory.clone(), after_text.clone(), hash.clone(), label.to_string(), "recovery".to_string(), nn_sessionid.clone());
 if written.try_get_string("status").unwrap_or_default() != "ok" {
