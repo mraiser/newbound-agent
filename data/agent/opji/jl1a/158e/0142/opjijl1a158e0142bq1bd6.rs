@@ -489,7 +489,7 @@ if was_accepted || e.has("active_run") {
     if !sok {
         out.put_string("status", "err");
         out.put_string("action", "start_failed");
-        out.put_string("msg", "could not move the item to in-progress before the turn (likely stale_base) - re-read the board and retry; the turn was NOT run");
+        out.put_string("msg", "could not move the item to in-progress before the turn; the turn was NOT run. Inspect write_msg/kind: stale_base requires a fresh board hash, while storage/journal failures require repair.");
         if sw.has("msg") { out.put_string("write_msg", &sw.get_string("msg")); }
         if sw.has("current_hash") { out.put_string("current_hash", &sw.get_string("current_hash")); }
         return out;
@@ -505,6 +505,7 @@ _step_guard.set_run(&run_id);
 // Durable active pointer: if this turn dies before its final journal write,
 // the item still identifies the saved run and the checkpoint it inherited.
 let mut active_pointer_saved = false;
+let mut active_pointer_write = DataObject::new();
 {
     let r0 = api.dev.code.read_control_facet("kb".to_string(), "plan".to_string(), "memory".to_string());
     let h0 = r0.get_string("hash");
@@ -535,13 +536,15 @@ let mut active_pointer_saved = false;
                 "".to_string(), a0.to_string(), h0, "plan run started; durable active pointer".to_string(), "executive".to_string(), nn_sessionid.clone());
             active_pointer_saved = aw.try_get_boolean("ok").unwrap_or(false)
                 || aw.try_get_string("status").map(|s| s == "ok").unwrap_or(false);
+            active_pointer_write = aw;
             break;
         }
     }
 }
 if !active_pointer_saved {
     out.put_string("status", "err"); out.put_string("action", "start_failed");
-    out.put_string("msg", "could not journal the active run pointer before the turn (likely stale_base); no model turn was run");
+    out.put_string("msg", "could not journal the active run pointer before the turn; no model turn was run. Inspect write_result for stale_base versus storage/journal failure.");
+    out.put_object("write_result", active_pointer_write);
     return out;
 }
 let mut context_manifest = DataObject::new();
