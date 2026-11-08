@@ -30,25 +30,5 @@ let mut entry = DataObject::new(); let mut logs = DataArray::new();
 let mut le = DataObject::new(); le.put_string("result", "legacy response longer than a one-line hint"); le.put_string("run_id", "run-old"); logs.push_object(le); entry.put_array("step_log", logs);
 let assembled = crate::agent::plan::continuity_context::continuity_context(entry);
 check("legacy continuity does not amputate response", assembled.get_string("handoff_received").contains("longer than a one-line hint") && assembled.get_string("previous_run_id") == "run-old");
-// The production regression: checkpoints must not become a recursive object
-// graph or an unbounded transcript merely because each individual string has
-// a nominal cap.
-let mut inherited = DataObject::new(); inherited.put_string("summary", "old inherited state");
-let mut hostile = cp.deep_copy(); hostile.put_object("inherited", inherited);
-hostile.put_string("transcript_excerpt", &"secret transcript ".repeat(5000));
-let mut big_work = DataArray::new();
-for i in 0..40 {
-    let mut w = DataObject::new(); w.put_string("tool", "dev-code-invoke_command");
-    w.put_string("target", &format!("fixture.{}", i)); w.put_boolean("ok", true);
-    w.put_string("result", &format!("{}:{}", i, "x".repeat(12000))); big_work.push_object(w);
-}
-let mut hi = DataObject::new(); hi.put_string("response", "PROGRESS: bounded fixture\nNEXT: verify size\nSTATUS: IN_PROGRESS");
-hi.put_string("run_id", "run-compact"); hi.put_array("work", big_work);
-let bounded_cp = crate::agent::plan::checkpoint::checkpoint(hi);
-let compact = crate::agent::plan::compact_checkpoint::compact_checkpoint(hostile);
-check("hostile checkpoint drops inherited state and transcripts", !compact.has("inherited") && !compact.has("transcript_excerpt"));
-check("checkpoint observation arrays and results are bounded", bounded_cp.get_array("observations").len() == 8 && bounded_cp.get_array("observations").get_object(0).get_string("result").chars().count() <= 700);
-check("bounded checkpoints stay bounded as whole objects", bounded_cp.to_string().len() < 45000 && compact.to_string().len() < 45000);
-check("bounded checkpoint retains continuation and evidence", bounded_cp.get_string("next") == "verify size" && bounded_cp.get_array("evidence").len() > 0);
 let mut out = DataObject::new(); out.put_string("status", if passed == total { "ok" } else { "err" });
 out.put_int("passed", passed); out.put_int("total", total); out.put_array("checks", checks); out

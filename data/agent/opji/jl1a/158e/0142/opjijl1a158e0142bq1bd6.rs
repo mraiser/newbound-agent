@@ -489,7 +489,7 @@ if was_accepted || e.has("active_run") {
     if !sok {
         out.put_string("status", "err");
         out.put_string("action", "start_failed");
-        out.put_string("msg", "could not move the item to in-progress before the turn; the turn was NOT run. Inspect write_msg/kind: stale_base requires a fresh board hash, while storage/journal failures require repair.");
+        out.put_string("msg", "could not move the item to in-progress before the turn (likely stale_base) - re-read the board and retry; the turn was NOT run");
         if sw.has("msg") { out.put_string("write_msg", &sw.get_string("msg")); }
         if sw.has("current_hash") { out.put_string("current_hash", &sw.get_string("current_hash")); }
         return out;
@@ -505,7 +505,6 @@ _step_guard.set_run(&run_id);
 // Durable active pointer: if this turn dies before its final journal write,
 // the item still identifies the saved run and the checkpoint it inherited.
 let mut active_pointer_saved = false;
-let mut active_pointer_write = DataObject::new();
 {
     let r0 = api.dev.code.read_control_facet("kb".to_string(), "plan".to_string(), "memory".to_string());
     let h0 = r0.get_string("hash");
@@ -519,32 +518,20 @@ let mut active_pointer_write = DataObject::new();
             active.put_int("started", now); active.put_string("state", "starting");
             active.put_string("previous_run_id", &previous_run_id);
             active.put_boolean("recovered", recovered_run);
-            // A run pointer is provenance, not another full checkpoint copy.
-            // The item's bounded checkpoint remains authoritative; carrying an
-            // inherited object here recursively multiplied board/journal size.
-            if prefer_structured {
-                let mut inherited_ref = DataObject::new();
-                inherited_ref.put_string("run_id", &inherited_structured.try_get_string("run_id").unwrap_or_default());
-                inherited_ref.put_int("time", inherited_checkpoint_time);
-                inherited_ref.put_string("source", "kb.plan.checkpoint");
-                active.put_object("inherited_ref", inherited_ref);
-            } else if !handoff_received.is_empty() {
-                active.put_string("inherited_text", &handoff_received.chars().take(8000).collect::<String>());
-            }
+            if prefer_structured { active.put_object("inherited", inherited_structured.clone()); }
+            else if !handoff_received.is_empty() { active.put_string("inherited_text", &handoff_received); }
             item.put_object("active_run", active);
             let aw = api.dev.code.patch_control_facet("kb".to_string(), "plan".to_string(), "memory".to_string(),
                 "".to_string(), a0.to_string(), h0, "plan run started; durable active pointer".to_string(), "executive".to_string(), nn_sessionid.clone());
             active_pointer_saved = aw.try_get_boolean("ok").unwrap_or(false)
                 || aw.try_get_string("status").map(|s| s == "ok").unwrap_or(false);
-            active_pointer_write = aw;
             break;
         }
     }
 }
 if !active_pointer_saved {
     out.put_string("status", "err"); out.put_string("action", "start_failed");
-    out.put_string("msg", "could not journal the active run pointer before the turn; no model turn was run. Inspect write_result for stale_base versus storage/journal failure.");
-    out.put_object("write_result", active_pointer_write);
+    out.put_string("msg", "could not journal the active run pointer before the turn (likely stale_base); no model turn was run");
     return out;
 }
 let mut context_manifest = DataObject::new();
@@ -771,7 +758,7 @@ log.push_object(entry_log);
 e.put_array("step_log", log);
 // Durable compact continuity facet. Runtime activity may roll off; the
 // checkpoint and its provenance remain with the item and its journal.
-e.put_object("checkpoint", crate::agent::plan::compact_checkpoint::compact_checkpoint(structured_checkpoint.clone()));
+e.put_object("checkpoint", structured_checkpoint.clone());
 let mut last_run = DataObject::new(); last_run.put_string("run_id", &actual_run_id);
 last_run.put_string("previous_run_id", &previous_run_id); last_run.put_int("time", now);
 last_run.put_string("outcome", &tl_status); last_run.put_boolean("recovered", recovered_run);
