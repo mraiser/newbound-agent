@@ -88,7 +88,8 @@ function errorHint(msg) {
 
 // Generous: the autonomous developer workflow legitimately spends rounds
 // on compile-debug cycles.
-const MAX_ROUNDS = 10;
+// MAX_ROUNDS is declared with the other ready-fetched config above (was a
+// hard-coded const here); chatTurn reads it as the tool-loop round limit.
 
 // The system prompt lives client-side now — the cost of skipping
 // control_query, and the point: the notebook knows what the model is looking
@@ -278,9 +279,31 @@ const READ_TOOL_PREFIXES = [
 // remember runs WITHOUT confirmation on explicit user request — the ask
 // itself is the authorization (docs/memory.md); autonomous memory
 // formation belongs to the archivist, and the prompt says so.
+// ── Global approval kill-switch (AUTO_APPROVE_TOOLS in
+// runtime/agent/botd.properties; agent.agentloop.get_auto_approve reads it
+// live). Fetched once at ready. When true, gateFor short-circuits every
+// call to "auto" — above the owner tag convention AND the hard overrides —
+// so mutating commands run without the typed confirm in chat AND askrow.
+// False/absent/unreadable: the normal per-call gate below, unchanged.
+let AUTO_APPROVE = false;
+agentCall("agentloop", "get_auto_approve", {}).then((r) => {
+  AUTO_APPROVE = r?.status === "ok" && r?.enabled === true;
+}).catch(() => { AUTO_APPROVE = false; });
+
+// Per-turn tool budget (TOOL_BUDGET in runtime/agent/botd.properties;
+// agent.agentloop.get_tool_budget). Same boot-time snapshot + restart
+// cadence as AUTO_APPROVE_TOOLS. Fetched once at ready; absent/invalid the
+// server already fell back to 10, so only a positive number overrides.
+let MAX_ROUNDS = 10;
+agentCall("agentloop", "get_tool_budget", {}).then((r) => {
+  const n = Number(r?.budget);
+  if (r?.status === "ok" && Number.isFinite(n) && n > 0) MAX_ROUNDS = n;
+}).catch(() => {});
+
 const AUTO_OVERRIDES = new Set(["dev-code-remember"]);
 
 function gateFor(name, entry) {
+  if (AUTO_APPROVE) return "auto";
   if (AUTO_OVERRIDES.has(name)) return "auto";
   const tags = entry?.tags ?? [];
   if (tags.includes("agent-confirm")) return "confirm";
@@ -354,10 +377,21 @@ function parseToolName(name) {
  * One conversational turn, driving chat_llm until it answers in text.
  * execTool(call) is the session's: it renders the cell, gates mutating
  * commands behind the typed confirm, runs it, and resolves the tool-result
- * CONTENT string (or a denial note). Returns the final text.
+ * CONTENT string (or a denial note) — or {content, images} when the tool
+ * produced pictures (image file paths, e.g. a scratchpad snapshot).
+ * Returns the final text.
  */
-async function chatTurn({ messages, tools, execTool, onRound }) {
+async function chatTurn({ messages, tools, execTool, onRound, venue = "", entity = "" }) {
   const seen = new Map();   // result text -> tool name, for the context guard
+  // Capture boundary (harvest H1c): the venue's own array is snapshotted at
+  // entry so the realized turn (user ask + tool exchanges + assistant reply)
+  // can be recorded to the message store at completion. Opt-in by VENUE:
+  // the caller passes { venue } to label the stream (chat | agent-app); when
+  // absent, nothing is captured — every arm also drives chat_llm, and an
+  // ambient hook would flood the conversation with background traffic. Full
+  // fidelity stays in the session store; msg keeps the realized conversation
+  // with tool exchanges folded to one-line glue.
+  const turnStart = messages.length;
   // Recall layer 4: the mode-keyed pack for THIS ask, APPENDED to the one
   // system message on every provider call but never written into the
   // venue's own messages array — the conversation the venue keeps must
@@ -381,13 +415,23 @@ async function chatTurn({ messages, tools, execTool, onRound }) {
   // curriculum as a stable prefix, so server-side prefix caching still
   // hits. The venue's own array is never mutated; the merged copy lives
   // only for the duration of the call.
+  // Thinking blocks are signed against the conversation they were made in,
+  // system prompt included, and that prompt differs on every turn (a fresh
+  // pack per ask, a refreshed memory:index, the owner addendum). Replaying
+  // an EARLIER turn's block is a 400: "Invalid signature in thinking block
+  // ... The system prompt differs from the one this block was created with."
+  // Only this call's own tool loop ran under this exact prompt, so blocks
+  // from before turnStart are left out of the copy that is sent. The venue's
+  // array (and the session store) keep them untouched.
   const convo = () => {
-    if (!pack) return messages;
-    if (messages[0]?.role === "system") {
-      return [{ ...messages[0], content: messages[0].content + "\n\n" + pack.block },
-              ...messages.slice(1)];
+    const base = messages.map((m, i) => (i < turnStart && m?.thinking_blocks)
+      ? (({ thinking_blocks, ...rest }) => rest)(m) : m);
+    if (!pack) return base;
+    if (base[0]?.role === "system") {
+      return [{ ...base[0], content: base[0].content + "\n\n" + pack.block },
+              ...base.slice(1)];
     }
-    return [{ role: "system", content: pack.block }, ...messages];
+    return [{ role: "system", content: pack.block }, ...base];
   };
   for (let round = 0; round < MAX_ROUNDS; round++) {
     const r = await chatLlm(convo(), tools);
@@ -401,12 +445,19 @@ async function chatTurn({ messages, tools, execTool, onRound }) {
     if (d.status === "err") throw new Error(d.msg ?? "chat_llm failed");
     if (d.kind === "error") throw new Error(d.content ?? "chat_llm failed");
     if (d.kind !== "tool_calls") {
+      if (venue) invoke("agent", "msg", "capture",
+        { venue, entity, provenance: "chatTurn", messages: messages.slice(turnStart) }).catch(() => {});
       return d.content ?? "";
     }
     messages.push(d.assistant_message);
     onRound?.(d.tool_calls);
+    const roundImages = [];
     for (const call of d.tool_calls) {
-      const content = await execTool(call);
+      let content = await execTool(call);
+      if (content && typeof content === "object") {
+        if (Array.isArray(content.images)) roundImages.push(...content.images);
+        content = String(content.content ?? "");
+      }
       // Context guard: if an identical result already sits in this turn's
       // messages (the model re-read an unchanged facet — a real trace showed
       // the same 26KB source pulled three times), elide the duplicate TEXT.
@@ -417,6 +468,14 @@ async function chatTurn({ messages, tools, execTool, onRound }) {
           ? `[result identical to the ${prior} call earlier this turn — unchanged; reuse that output]`
           : content });
       if (prior === undefined) seen.set(content, call.function?.name ?? "tool");
+    }
+    // Tool messages carry no images on every wire (OpenAI's can't), so the
+    // round's pictures ride ONE user message after all of its tool results —
+    // the same `images` path chat_llm already renders for attachments.
+    // Arms without vision get the paths in the text.
+    if (roundImages.length) {
+      messages.push({ role: "user", images: roundImages,
+        content: `[SNAPSHOT IMAGES from this round's tool calls: ${roundImages.join(", ")}]` });
     }
   }
   // Budget exhausted. A bare stop misreports turns whose LAST round did the
@@ -431,6 +490,8 @@ async function chatTurn({ messages, tools, execTool, onRound }) {
       const d = r.data ?? {};
       if (d.status !== "err" && d.kind !== "error" && d.kind !== "tool_calls"
           && (d.content ?? "").trim()) {
+        if (venue) invoke("agent", "msg", "capture",
+          { venue, entity, provenance: "chatTurn", messages: messages.slice(turnStart) }).catch(() => {});
         return d.content;
       }
     }

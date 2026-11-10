@@ -29,6 +29,13 @@ let src_extracted = Path::new(&src_dir).is_dir();
 let patched = std::fs::read_to_string(&cpp).map(|c| c.contains("NoobscapeStartWatcher")).unwrap_or(false);
 let built = Path::new(&built_binary).is_file();
 
+// Build deps staged? The deps step fetches Mozilla's prebuilt toolchains into
+// ~/.mozbuild; clang + node + cbindgen present is a reliable done signal.
+let deps = {
+    let mb = format!("{}/.mozbuild", std::env::var("HOME").unwrap_or_default());
+    ["clang", "node", "cbindgen"].iter().all(|t| Path::new(&format!("{}/{}", mb, t)).exists())
+};
+
 // Install state: is NOOBSCAPE_BIN present, and where does it point?
 let bin_exists = Path::new(&bin).exists();
 let bin_target = std::fs::read_link(&bin).map(|p| p.display().to_string()).unwrap_or_default();
@@ -84,6 +91,7 @@ o.put_boolean("workspace_exists", workspace_exists);
 o.put_boolean("kit_present", kit_present);
 o.put_boolean("src_extracted", src_extracted);
 o.put_boolean("patched", patched);
+o.put_boolean("deps", deps);
 o.put_boolean("built", built);
 o.put_boolean("installed", installed);
 o.put_string("bin_target", &bin_target);

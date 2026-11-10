@@ -1,0 +1,194 @@
+use ndata::dataobject::DataObject;
+use ndata::dataarray::DataArray;
+use flowlang::datastore::DataStore;
+use flowlang::flowlang::system::time::time;
+pub fn execute(o: DataObject) -> DataObject {
+    use std::panic;
+    for p in ["run_id", "event"] {
+        if !o.has(p) {
+            let mut e = DataObject::new();
+            e.put_string("status", "err");
+            e.put_string("msg", &format!("missing required parameter: {}", p));
+            let mut result_obj = DataObject::new();
+            result_obj.put_object("a", e);
+            return result_obj;
+        }
+    }
+    let ax = panic::catch_unwind(panic::AssertUnwindSafe(|| {
+        let arg_0: String = o.get_string("run_id");
+        let arg_1: DataObject = o.get_object("event");
+        activity_emit(arg_0, arg_1)
+    }));
+    match ax {
+        Ok(ax) => {
+            let mut result_obj = DataObject::new();
+    result_obj.put_object("a", ax);
+            result_obj
+        }
+        Err(err) => {
+            let mut err_obj = DataObject::new();
+            err_obj.put_string("status", "err");
+
+            let msg = if let Some(s) = err.downcast_ref::<&str>() {
+                s.to_string()
+            } else if let Some(s) = err.downcast_ref::<String>() {
+                s.clone()
+            } else {
+                "Unknown panic occurred".to_string()
+            };
+
+            err_obj.put_string("msg", &msg);
+            // Wrapped in the same `a` envelope a successful return uses.
+            // Unwrapped, callers that unpack the envelope (newbound's
+            // format_result, for one) report an opaque 500 — "Not an object:
+            // DString(\"err\")" — instead of this message.
+            let mut result_obj = DataObject::new();
+            result_obj.put_object("a", err_obj);
+            result_obj
+        }
+    }
+}
+
+pub fn activity_emit(run_id: String, event: DataObject) -> DataObject {
+// Internal activity sink. The model is not given this command as a tool; the
+// execution loop emits facts at real model/tool boundaries. The runtime store
+// is instance-local and bounded; kb.plan remains the durable intent/journal.
+fn process_start() -> i64 {
+    std::fs::read_to_string("/proc/self/stat").ok().and_then(|s| {
+        let tail = s.rsplit_once(") ")?.1;
+        tail.split_whitespace().nth(19)?.parse::<i64>().ok()
+    }).unwrap_or(0)
+}
+if run_id.trim().is_empty() || run_id.len() > 160 {
+    let mut o = DataObject::new(); o.put_string("status", "err");
+    o.put_string("msg", "activity_emit requires a bounded run_id"); return o;
+}
+let now = time();
+let mut globals = DataStore::globals();
+let boot = if let Ok(a) = globals.try_get_object("AGENT_PLAN_ACTIVITY") {
+    a.try_get_int("boot").unwrap_or(0)
+} else { 0 };
+let boot = if boot == 0 {
+    let mut a = globals.try_get_object("AGENT_PLAN_ACTIVITY").unwrap_or_else(|_| DataObject::new());
+    a.put_int("boot", now); globals.put_object("AGENT_PLAN_ACTIVITY", a); now
+} else { boot };
+let _write_guard = crate::agent::plan::run_state::lock();
+let store = DataStore::new();
+let mut rec = if store.exists("runtime", "agent_plan_runs") {
+    store.get_data("runtime", "agent_plan_runs")
+} else {
+    let mut r = DataObject::new(); r.put_string("id", "agent_plan_runs");
+    r.put_string("username", "system"); r.put_array("readers", DataArray::new());
+    r.put_array("writers", DataArray::new());
+    r.put_object("data", { let mut d=DataObject::new(); d.put_array("runs", DataArray::new()); d }); r
+};
+let mut d = rec.get_object("data");
+let mut runs = if d.has("runs") { d.get_array("runs") } else { DataArray::new() };
+let mut found = -1i64;
+for i in 0..runs.len() {
+    if runs.get_object(i).try_get_string("run_id").unwrap_or_default() == run_id { found=i as i64; break; }
+}
+let mut r = if found >= 0 { runs.get_object(found as usize) } else {
+    let mut r = DataObject::new(); r.put_string("run_id", &run_id);
+    r.put_int("started", now); r.put_int("seq", 0); r.put_int("round", 0);
+    r.put_int("tool_calls", 0); r.put_int("errors", 0); r.put_int("failure_streak", 0);
+    r.put_int("duplicate_streak", 0); r.put_array("events", DataArray::new());
+    r.put_boolean("active", true); r.put_int("boot", boot);
+    runs.push_object(r.clone()); r
+};
+let kind = event.try_get_string("kind").unwrap_or_else(|_| "activity".to_string());
+if kind == "start" {
+    r.put_boolean("active", true); r.put_boolean("stale", false); r.put_int("boot", boot);
+    r.put_boolean("interrupted", false);
+    if event.has("recovered") { r.put_boolean("recovered", event.get_boolean("recovered")); }
+    r.put_int("started", now); r.put_int("pid", std::process::id() as i64);
+    r.put_int("process_start", process_start());
+    r.put_string("state", "preparing");
+}
+for k in ["claim", "phase", "state", "outcome", "checkpoint", "previous_run_id"] {
+    if event.has(k) { r.put_string(k, &event.get_string(k)); }
+}
+for k in ["turn", "round", "max_rounds", "tool_calls", "errors"] {
+    if event.has(k) {
+        let incoming = event.get_int(k);
+        // Lifecycle events carry different subsets. A later wait with round
+        // N must not erase cumulative counters observed at round N-1.
+        let current = r.try_get_int(k).unwrap_or(0);
+        r.put_int(k, incoming.max(current));
+    }
+}
+// These are CURRENT streaks, not maxima: a successful tool result resets them.
+for k in ["failure_streak", "duplicate_streak"] {
+    if event.has(k) { r.put_int(k, event.get_int(k)); }
+}
+for k in ["context", "handoff", "pending_tool", "delivery", "inherited_checkpoint", "control"] {
+    if let Ok(v) = event.try_get_object(k) { r.put_object(k, v); }
+}
+if kind == "context_delivered" {
+    let mut delivery = DataObject::new();
+    delivery.put_int("time", now); delivery.put_string("state", "provider_responded");
+    delivery.put_int("round", event.try_get_int("round").unwrap_or(1));
+    delivery.put_string("detail", &event.try_get_string("detail").unwrap_or_default());
+    r.put_object("delivery", delivery);
+}
+if kind == "tool_result" || kind == "tool_skipped" {
+    r.remove_property("pending_tool");
+}
+if kind == "finish" {
+    r.put_boolean("active", false); r.put_int("ended", now); r.remove_property("pending_tool");
+    let interrupted = r.try_get_string("phase").unwrap_or_default() == "interrupted" || r.try_get_string("phase").unwrap_or_default() == "paused" || r.try_get_string("phase").unwrap_or_default() == "stopped" || r.try_get_string("outcome").unwrap_or_default() == "ERROR" || r.try_get_string("outcome").unwrap_or_default() == "PAUSED" || r.try_get_string("outcome").unwrap_or_default() == "STOPPED";
+    let controlled = r.try_get_string("outcome").unwrap_or_default();
+    r.put_boolean("interrupted", interrupted);
+    if controlled == "PAUSED" || controlled == "STOPPED" {
+        r.put_string("state", &controlled.to_lowercase());
+        r.put_boolean("paused", controlled == "PAUSED");
+    } else if interrupted {
+        let phase = r.try_get_string("phase").unwrap_or_default();
+        if phase == "paused" || phase == "stopped" { r.put_string("state", &phase); }
+        else { r.put_string("state", "interrupted"); }
+    } else {
+        // A normal finish invalidates any still-pending request. Do not let
+        // a late pause/stop flag masquerade as an applied hold on later reads.
+        r.put_boolean("paused", false); r.put_boolean("stop_requested", false);
+        if r.try_get_string("control_state").unwrap_or_default() == "requested" {
+            if let Ok(mut c) = r.try_get_object("control") {
+                c.put_string("state", "late_ignored");
+                c.put_string("detail", "The run reached its normal finish before this request could be applied at a safe boundary.");
+                r.put_object("control", c);
+            }
+            r.put_string("control_state", "late_ignored");
+        }
+    }
+}
+let seq = r.try_get_int("seq").unwrap_or(0) + 1;
+if kind == "checkpoint" || kind == "observation" { r.put_int("checkpoint_seq", seq); }
+if kind == "control_applied" {
+    let requested = event.try_get_string("requested").unwrap_or_default();
+    r.put_string("control_state", if requested=="pause" {"paused"} else {"stopped"});
+    if let Ok(c0)=event.try_get_object("control") {r.put_object("control",c0);}
+}
+r.put_int("updated", now); r.put_int("last_event_at", now);
+r.put_int("seq", seq);
+let mut e = event.deep_copy();
+e.put_int("seq", seq); e.put_int("time", now);
+let mut events = r.get_array("events");
+events.push_object(e);
+while events.len() > 400 { events.remove_property(0); }
+// Keep the newest eight finished runs plus every active run. A burst of
+// activity must not evict the run whose checkpoint is needed for recovery.
+// Retain at most eight FINISHED runs, regardless of where active runs sit in
+// insertion order. Removing index zero until a total cap can evict an active
+// run precisely when its recovery data is most needed.
+let mut finished = (0..runs.len()).filter(|i| !runs.get_object(*i).try_get_boolean("active").unwrap_or(false)).count();
+while finished > 8 {
+    let mut remove = None;
+    for i in 0..runs.len() {
+        if !runs.get_object(i).try_get_boolean("active").unwrap_or(false) { remove=Some(i); break; }
+    }
+    match remove {Some(i)=>{runs.remove_property(i);finished-=1;},None=>break,}
+}
+d.put_array("runs", runs); rec.put_object("data", d); rec.put_int("time", now);
+store.set_data("runtime", "agent_plan_runs", rec);
+let mut out = DataObject::new(); out.put_string("status", "ok");
+out.put_string("run_id", &run_id); out.put_int("seq", seq); out.put_int("boot", boot); out
+}

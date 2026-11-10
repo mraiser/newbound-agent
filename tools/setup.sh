@@ -64,7 +64,7 @@ echo "== setup: agent repo $AGENT_DIR onto checkout $NB"
 CHURN_FILES="agent/src/api.rs kb/src/api.rs"
 DIRTY_BEFORE=$(cd "$AGENT_DIR" && git status --porcelain -- $CHURN_FILES)
 
-# 1. Overlay (idempotent; also sets skip-worktree on the scratch skeleton).
+# 1. Overlay (idempotent; also seeds the instance-local scratch library).
 "$AGENT_DIR/tools/overlay.sh" "$AGENT_DIR"
 
 # 2. cmd crate scaffold, if this checkout ships without one.
@@ -153,9 +153,9 @@ echo "== skip-worktree set on the builder-written newbound files (undo: git upda
  done)
 
 # 9. Top up the brain from the primer (docs/one-memory-cycle.md A4).
-#    Idempotent (exact-claim dedupe) and best-effort: a fresh clone's brain
-#    starts from the frozen kb snapshot, and the primer carries whatever
-#    doctrine/process material was curated after the freeze.
+#    Idempotent (exact-claim dedupe) and best-effort. data/kb is untracked,
+#    so a fresh clone has no brain until this runs: the primer is the only
+#    snapshot, and it also refills a brain that lost domains.
 if [ -f "$AGENT_DIR/docs/kb-seed.json" ]; then
   if "$AGENT_DIR/tools/nb-call.py" -C "$NB" agent-archivist-bootstrap \
        "{\"path\": \"$AGENT_DIR/docs/kb-seed.json\"}" >/dev/null 2>&1; then

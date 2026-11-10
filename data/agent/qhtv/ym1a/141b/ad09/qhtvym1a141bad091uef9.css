@@ -1,0 +1,14 @@
+.nb-stage { display: flex; flex-direction: column; gap: 12px; }
+.nb-stage-empty { margin: 0; color: var(--text-dim); font-size: 13px; line-height: 1.5; }
+.nb-stage-frame { border: 1px solid var(--line); border-radius: 8px; background: var(--ground, transparent); }
+.nb-stage-bar { display: flex; align-items: center; gap: 8px; padding: 4px 8px;
+  border-bottom: 1px solid var(--line); font-family: var(--mono, ui-monospace, monospace); font-size: 11px; }
+.nb-stage-spec { flex: 1; min-width: 0; color: var(--text-dim); overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap; }
+.nb-stage-status { color: var(--danger, #c15a5a); }
+.nb-stage-bar button { background: none; border: 1px solid transparent; border-radius: 6px;
+  color: var(--text-dim); cursor: pointer; padding: 0 6px; font-size: 12px; }
+.nb-stage-bar button:hover { border-color: var(--line); color: var(--text); }
+/* contain: a staged control's fixed/absolute UI stays inside its frame */
+.nb-stage-instance { display: block; position: relative; contain: layout paint;
+  overflow: auto; padding: 8px; }

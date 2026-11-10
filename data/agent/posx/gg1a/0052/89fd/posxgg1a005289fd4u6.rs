@@ -17,6 +17,7 @@ fn ensure_exec_state(g: &mut DataObject) -> DataObject {
         ex.put_int("drive", 4);
         ex.put_int("next_act_time", 0);
         ex.put_int("acts_total", 0);
+        ex.put_int("plan_steps", 0);
         ex.put_int("work_depth", 0);
         ex.put_int("salience_calls", 0);
         ex.put_int("escalations", 0);
@@ -45,6 +46,7 @@ if ex.has("last_context") {
 }
 o.put_int("drive", if ex.has("drive") { ex.get_int("drive") } else { 4 });
 o.put_int("acts_total", if ex.has("acts_total") { ex.get_int("acts_total") } else { 0 });
+o.put_int("plan_steps", if ex.has("plan_steps") { ex.get_int("plan_steps") } else { 0 });
 o.put_int("work_depth", if ex.has("work_depth") { ex.get_int("work_depth") } else { 0 });
 let next_at = if ex.has("next_act_time") { ex.get_int("next_act_time") } else { 0 };
 let now = time();

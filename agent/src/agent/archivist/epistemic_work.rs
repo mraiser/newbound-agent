@@ -286,9 +286,35 @@ for lib in libs {
                     let tags = tags.to_lowercase();
                     let toks: Vec<&str> = tags.split(',').map(|t| t.trim()).collect();
                     let has_tag = |s: &str| toks.iter().any(|t| *t == s);
-                    if !has_tag("done") && !has_tag("abandoned") {
-                        let (pr, stage) = if has_tag("in-progress") { (2i64, "in-progress") }
-                            else if has_tag("accepted") { (2i64, "accepted") }
+                    // (A) SUB-ITEMS: if this entry is a PARENT (another entry
+                    // points at it via `parent`), the children are the unit of
+                    // work - surface THEM, not the container. The parent only
+                    // reports done once all its children are done (step_item's
+                    // rollup), so it has no independent queue presence while it
+                    // has children; it re-surfaces here only if childless.
+                    let mut is_parent = false;
+                    for k in 0..a.len() {
+                        if k == j { continue; }
+                        let sib = a.get_object(k);
+                        if sib.try_get_string("parent").unwrap_or_default() == claim { is_parent = true; break; }
+                    }
+                    if is_parent { continue; }
+                    // Loop-terminal states: `done` (human-confirmed), `abandoned`,
+                    // and `completed` (agent VERIFIED done, awaiting human review)
+                    // are all settled for the work queue - the loop must not
+                    // re-queue them. `completed` still matters for VISIBILITY
+                    // (a human should see it), but it is not epistemic work.
+                    if !has_tag("done") && !has_tag("abandoned") && !has_tag("completed") {
+                        // Decoupled (P-b follow-up): an `accepted` plan item is a SIGNED WORK
+                        // ORDER - the human re-authorization - so it must never be held hostage
+                        // behind same-priority `review` items (seniority tie-break starved it).
+                        // Give accepted/in-progress their own lane ABOVE review; `proposed`
+                        // (un-approved intent) stays BELOW review, surfaced only.
+                        // `blocked` (agent hit a wall, waits for a human) is surfaced
+                        // only, like proposed - never a work order until re-accepted.
+                        let (pr, stage) = if has_tag("blocked") { (1i64, "blocked") }
+                            else if has_tag("accepted") { (4i64, "accepted") }
+                            else if has_tag("in-progress") { (3i64, "in-progress") }
                             else { (1i64, "proposed") };
                         let mut it = DataObject::new();
                         it.put_string("kind", "plan");
@@ -296,6 +322,7 @@ for lib in libs {
                         it.put_string("lib", &lib);
                         it.put_string("domain", &name);
                         it.put_string("claim", &claim);
+                        it.put_string("stage", stage);
                         it.put_string("why", &format!("plan item ({}) - active intent in kb.plan, surfaced never auto-executed", stage));
                         n_plan += 1;
                         items.push((pr, t0, it));

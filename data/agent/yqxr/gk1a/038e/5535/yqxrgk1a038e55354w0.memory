@@ -1,0 +1,7 @@
+[
+  {
+    "claim": "agent.tools.run_local enforces its timeout by killing the child's whole process group through libc kill(-pgid, SIGKILL) (child spawned with process_group(0)); the external 'kill -KILL -<pgid>' from procps-ng 4.x exits 0 yet signals nothing, which left 'sh -c' grandchildren holding the output pipes until they finished on their own.",
+    "detail": "Verified 2026-09-29: a 2s timeout on 'sh -c \"sleep 30; echo late\"' took 12s with the external kill (two 5s pipe-read backstops expiring) and returns in 2.07s with libc kill. Any command that must bound a subprocess tree should signal the group via libc, not shell out to kill. Pipe reads stay bounded (5s) as a backstop for descendants that leave the group.",
+    "time": 1790690410778
+  }
+]

@@ -87,6 +87,7 @@ fn ensure_exec_state(g: &mut DataObject) -> DataObject {
         ex.put_int("drive", 4);
         ex.put_int("next_act_time", 0);
         ex.put_int("acts_total", 0);
+        ex.put_int("plan_steps", 0);
         ex.put_int("work_depth", 0);
         ex.put_int("salience_calls", 0);
         ex.put_int("escalations", 0);
@@ -114,6 +115,25 @@ fn salience_on() -> bool {
         let g = a.try_get_object("agent").ok()?;
         let r = g.try_get_object("runtime").ok()?;
         r.try_get_string("SALIENCE").ok()
+    })().map(|v| {
+        let v = v.trim().to_lowercase();
+        v == "on" || v == "true" || v == "1" || v == "yes"
+    }).unwrap_or(false)
+}
+// PLAN_AUTONOMY (kb.plan GATED plan-item autonomy, P-b): the gate for the
+// executive acting on ACCEPTED plan items. DEFAULT OFF - absent or any value
+// other than on/true/1/yes means plan items are only ever SURFACED, never
+// stepped (exactly the pre-autonomy behavior). The human move_item to
+// `accepted` is the authorization; this flag is the owner's kill-switch on
+// top of it. Read live from the agent runtime settings each tick, so it can
+// be flipped without a restart.
+fn plan_autonomy_on() -> bool {
+    (|| -> Option<String> {
+        let s = DataStore::globals().try_get_object("system").ok()?;
+        let a = s.try_get_object("apps").ok()?;
+        let g = a.try_get_object("agent").ok()?;
+        let r = g.try_get_object("runtime").ok()?;
+        r.try_get_string("PLAN_AUTONOMY").ok()
     })().map(|v| {
         let v = v.trim().to_lowercase();
         v == "on" || v == "true" || v == "1" || v == "yes"
@@ -566,6 +586,17 @@ std::thread::spawn(move || {
                                     }
                                 }
                                 act.put_string("action", &action);
+                            } else if kind == "plan" {
+                                // Plan items are NOT stepped here any more (owner,
+                                // 2026-10): agent.plan.worker_start runs kb.plan
+                                // autonomy on its own thread - gated by
+                                // PLAN_AUTONOMY alone, paced by the LLM, idle when
+                                // the board is empty - so drive no longer has to
+                                // be cranked for plans and a minutes-long step no
+                                // longer blocks perception. The executive only
+                                // surfaces them, as it always did when unarmed.
+                                let _ = plan_autonomy_on;
+                                act.put_string("action", "surfaced");
                             } else {
                                 act.put_string("action", "surfaced");
                             }

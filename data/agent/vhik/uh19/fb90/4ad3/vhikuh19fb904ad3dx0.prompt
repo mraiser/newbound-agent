@@ -5,6 +5,8 @@ Standards — most turns contain NOTHING worth keeping:
 - Never file: task narration, one-off values, anything already in EXISTING MEMORY (restated or rephrased), anything obvious from reading the code, secrets or credentials.
 - One atomic claim per entry; detail carries the why/how; tags carry the libs/controls concerned (lib.ctl tokens enable auto-push) plus topical tokens.
 - Route durable reference knowledge to the fitting EXISTING domain; dated session events and lessons to the current month bucket (m<YYYY>-<MM>). Prefer existing domain names.
+- kb.plan is for ACTIONABLE WORK-INTENT ONLY - a task a human or the agent could pick up and do. NEVER file into kb.plan: facts about how the platform works, observations of what already happened, bug-that-was-just-fixed, or restatements of completed work. Those are reference knowledge (platform-api, workflow, frontend) or history (month bucket), even when their subject is the plan machinery itself. A claim whose answer to "what should someone DO differently next time?" is nothing does not belong in kb.plan.
+- Do not file a plan item for work already done in the very session under review - if the turns show it completed, there is nothing left to intend.
 - confidence: high only when the turns state it directly; medium for inference; low is usually a sign not to file it.
 
 Reply with ONLY a JSON array, at most 5 items. Prefer [] — an empty array is the correct answer for most sweeps.

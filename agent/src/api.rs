@@ -45,6 +45,64 @@ pub mod agent {
             ::flowlang::rustcmd::RustCmd::new("mqghlt1a00a71c647q1").execute(d).expect("Rust command execution failed").get_object("a")
         }
 
+        pub fn llm_common() -> DataObject {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("yjtwjo1a0f76c075aw168").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn llm_openai(messages: DataArray, tools: DataArray, model: String, temperature: f64, max_tokens: i64, arm: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_array("messages", messages);
+            d.put_array("tools", tools);
+            d.put_string("model", &model);
+            d.put_float("temperature", temperature);
+            d.put_int("max_tokens", max_tokens);
+            d.put_string("arm", &arm);
+            ::flowlang::rustcmd::RustCmd::new("kyrpov1a0f76c0e7cj16a").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn llm_anthropic() -> DataObject {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("ltmonk1a0f76c15dag16c").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn llm_gemini() -> DataObject {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("rosqph1a0f76c1d5fp16f").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn llm_ollama(messages: DataArray, tools: DataArray, model: String, temperature: f64, max_tokens: i64, keep_alive: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_array("messages", messages);
+            d.put_array("tools", tools);
+            d.put_string("model", &model);
+            d.put_float("temperature", temperature);
+            d.put_int("max_tokens", max_tokens);
+            d.put_string("keep_alive", &keep_alive);
+            ::flowlang::rustcmd::RustCmd::new("gmjnvy1a0f76c2535s171").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn llm_local(messages: DataArray, tools: DataArray, meta: DataObject) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_array("messages", messages);
+            d.put_array("tools", tools);
+            d.put_object("meta", meta);
+            ::flowlang::rustcmd::RustCmd::new("prnmjj1a0f76c2d46r173").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn llm_remote(messages: DataArray, tools: DataArray, meta: DataObject) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_array("messages", messages);
+            d.put_array("tools", tools);
+            d.put_object("meta", meta);
+            ::flowlang::rustcmd::RustCmd::new("pktyxy1a0f76c2dddj175").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn last_request() -> DataObject {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("hnnxvh1a0f8ea39d3g117").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
     }
     pub mod plugin {
         use ::ndata::dataobject::DataObject;
@@ -78,23 +136,21 @@ pub mod agent {
         }
 
     }
-    pub mod scratch {
-        use ::ndata::dataobject::DataObject;
-        use ::ndata::dataarray::DataArray;
-        use ::ndata::databytes::DataBytes;
-        use ::ndata::data::Data;
-
-        pub fn eval_pshkms19ee68b2a1ct46() -> DataObject {
-            let d = DataObject::new();
-            ::flowlang::rustcmd::RustCmd::new("ukvisj19ee68b2a21o48").execute(d).expect("Rust command execution failed").get_object("a")
-        }
-
-    }
     pub mod agentloop {
         use ::ndata::dataobject::DataObject;
         use ::ndata::dataarray::DataArray;
         use ::ndata::databytes::DataBytes;
         use ::ndata::data::Data;
+
+        pub fn get_auto_approve() -> DataObject {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("ygtyyt1a0b6a79f48i2d7").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn get_tool_budget() -> DataObject {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("vpiuwl1a0b6b267c5p2fd").execute(d).expect("Rust command execution failed").get_object("a")
+        }
 
     }
     pub mod agentprompt {
@@ -225,6 +281,29 @@ pub mod agent {
             d.put_string("filename", &filename);
             d.put_string("data_b64", &data_b64);
             ::flowlang::rustcmd::RustCmd::new("sspmvm1a039233859t28").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn session_index(op: String, id: String, arg: String, nn_sessionid: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("op", &op);
+            d.put_string("id", &id);
+            d.put_string("arg", &arg);
+            d.put_string("nn_sessionid", &nn_sessionid);
+            ::flowlang::rustcmd::RustCmd::new("kjntuo1a0f6c2de8br7e4").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn session_open(id: String, nn_sessionid: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("id", &id);
+            d.put_string("nn_sessionid", &nn_sessionid);
+            ::flowlang::rustcmd::RustCmd::new("rznplq1a0f6c40cb5j7e9").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn session_touch(id: String, nn_sessionid: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("id", &id);
+            d.put_string("nn_sessionid", &nn_sessionid);
+            ::flowlang::rustcmd::RustCmd::new("sgkymg1a0f6cc40cfx82b").execute(d).expect("Rust command execution failed").get_object("a")
         }
 
     }
@@ -604,6 +683,11 @@ pub mod agent {
             ::flowlang::rustcmd::RustCmd::new("hgkzok1a01a3db91ck1").execute(d).expect("Rust command execution failed").get_object("a")
         }
 
+        pub fn export_tick() -> DataObject {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("kwjqsj1a0f7e1d22cq394").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
     }
     pub mod msg {
         use ::ndata::dataobject::DataObject;
@@ -633,6 +717,21 @@ pub mod agent {
             d.put_string("venue", &venue);
             d.put_int("limit", limit);
             ::flowlang::rustcmd::RustCmd::new("qvoxjm1a019c5b988h1").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn expand_clipped(fragment: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("fragment", &fragment);
+            ::flowlang::rustcmd::RustCmd::new("pzrpnp1a0b6e1cc06q9d").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn capture(venue: String, messages: DataArray, entity: String, provenance: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("venue", &venue);
+            d.put_array("messages", messages);
+            d.put_string("entity", &entity);
+            d.put_string("provenance", &provenance);
+            ::flowlang::rustcmd::RustCmd::new("tvoqtn1a0f70d35bes95f").execute(d).expect("Rust command execution failed").get_object("a")
         }
 
     }
@@ -673,6 +772,49 @@ pub mod agent {
             ::flowlang::rustcmd::RustCmd::new("mwqqpm1a038e5b92dn4").execute(d).expect("Rust command execution failed").get_object("a")
         }
 
+        pub fn get_time() -> i64 {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("yjtzkw1a0ed711c7eq1").execute(d).expect("Rust command execution failed").get_int("a")
+        }
+
+        pub fn read_file(path: String) -> String {
+            let mut d = DataObject::new();
+            d.put_string("path", &path);
+            ::flowlang::rustcmd::RustCmd::new("zimtvy1a0ed7164adw1").execute(d).expect("Rust command execution failed").get_string("a")
+        }
+
+        pub fn list_dir(path: String) -> DataArray {
+            let mut d = DataObject::new();
+            d.put_string("path", &path);
+            ::flowlang::rustcmd::RustCmd::new("oxpnry1a0ed7192e6u1").execute(d).expect("Rust command execution failed").get_array("a")
+        }
+
+        pub fn read_properties(path: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("path", &path);
+            ::flowlang::rustcmd::RustCmd::new("ymgzvi1a0ed71c361w1").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn write_properties(path: String, data: DataObject) -> String {
+            let mut d = DataObject::new();
+            d.put_string("path", &path);
+            d.put_object("data", data);
+            ::flowlang::rustcmd::RustCmd::new("lwviqs1a0ed71cd59j1").execute(d).expect("Rust command execution failed").get_string("a")
+        }
+
+        pub fn get_path_info(path: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("path", &path);
+            ::flowlang::rustcmd::RustCmd::new("nqojhg1a0ed71d6e3r1").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn run_local(argv: DataArray, timeout_secs: i64) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_array("argv", argv);
+            d.put_int("timeout_secs", timeout_secs);
+            ::flowlang::rustcmd::RustCmd::new("nsuqxx1a0ed71e06bk1").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
     }
     pub mod plan {
         use ::ndata::dataobject::DataObject;
@@ -694,12 +836,143 @@ pub mod agent {
             ::flowlang::rustcmd::RustCmd::new("ijyjoz1a03a510268ta").execute(d).expect("Rust command execution failed").get_object("a")
         }
 
-        pub fn add_item(claim: String, detail: String, nn_sessionid: String) -> DataObject {
+        pub fn add_item(claim: String, detail: String, parent: String, nn_sessionid: String) -> DataObject {
             let mut d = DataObject::new();
             d.put_string("claim", &claim);
             d.put_string("detail", &detail);
+            d.put_string("parent", &parent);
             d.put_string("nn_sessionid", &nn_sessionid);
             ::flowlang::rustcmd::RustCmd::new("uyunpg1a03a5137c3yc").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn step_item(claim: String, base: String, nn_sessionid: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("claim", &claim);
+            d.put_string("base", &base);
+            d.put_string("nn_sessionid", &nn_sessionid);
+            ::flowlang::rustcmd::RustCmd::new("opjijl1a158e0142bq1bd6").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn worker_start() -> DataObject {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("houmzl1a164f67b76ncc0").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn worker_status() -> DataObject {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("lnvhiz1a164f6bd27wcc2").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn board_hash() -> DataObject {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("ivuywy1a16526c37aoe1f").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn add_note(claim: String, note: String, nn_sessionid: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("claim", &claim);
+            d.put_string("note", &note);
+            d.put_string("nn_sessionid", &nn_sessionid);
+            ::flowlang::rustcmd::RustCmd::new("sgxusm1a1689003c3wf4").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn test_parent_coordination_eligibility() -> DataObject {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("lijoqw1a16fde422eg104").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn set_autonomy(enabled: bool) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_boolean("enabled", enabled);
+            ::flowlang::rustcmd::RustCmd::new("wulhwh1a1706f7abap180").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn activity_status(after: i64, limit: i64) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_int("after", after);
+            d.put_int("limit", limit);
+            ::flowlang::rustcmd::RustCmd::new("jtjtqi1a170a9c443ye3").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn activity_emit(run_id: String, event: DataObject) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("run_id", &run_id);
+            d.put_object("event", event);
+            ::flowlang::rustcmd::RustCmd::new("hqiyvu1a170ab764eje8").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn activity_history(run_id: String, after: i64, limit: i64) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("run_id", &run_id);
+            d.put_int("after", after);
+            d.put_int("limit", limit);
+            ::flowlang::rustcmd::RustCmd::new("nziuhh1a170b568f7m103").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn continuity_context(entry: DataObject) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_object("entry", entry);
+            ::flowlang::rustcmd::RustCmd::new("xmpmpm1a170c21e04s155").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn checkpoint(input: DataObject) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_object("input", input);
+            ::flowlang::rustcmd::RustCmd::new("gzvvxz1a170edb05ck227").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn checkpoint_read(checkpoint: DataObject, fallback_text: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_object("checkpoint", checkpoint);
+            d.put_string("fallback_text", &fallback_text);
+            ::flowlang::rustcmd::RustCmd::new("jtqzuq1a170f0650ag22f").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn test_continuity_contract() -> DataObject {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("zjzrxh1a1710a67b0o2ca").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn continuity_status(claim: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("claim", &claim);
+            ::flowlang::rustcmd::RustCmd::new("mgnmgi1a1710d320ck2d8").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn run_control(run_id: String, claim: String, action: String, note: String, base: String, nn_sessionid: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("run_id", &run_id);
+            d.put_string("claim", &claim);
+            d.put_string("action", &action);
+            d.put_string("note", &note);
+            d.put_string("base", &base);
+            d.put_string("nn_sessionid", &nn_sessionid);
+            ::flowlang::rustcmd::RustCmd::new("syhhtm1a172795455j611").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn run_state() -> DataObject {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("qyjgkh1a1727aa651z616").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn test_run_control_contract() -> DataObject {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("wpiwht1a17287e0f5n647").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn add_subtask(parent: String, claim: String, detail: String, lifecycle: String, nn_sessionid: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("parent", &parent);
+            d.put_string("claim", &claim);
+            d.put_string("detail", &detail);
+            d.put_string("lifecycle", &lifecycle);
+            d.put_string("nn_sessionid", &nn_sessionid);
+            ::flowlang::rustcmd::RustCmd::new("qizorr1a1acc07097r3fb").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn step_lock() -> DataObject {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("trzxxv1a1ad30b084u58c").execute(d).expect("Rust command execution failed").get_object("a")
         }
 
     }
@@ -759,6 +1032,30 @@ pub mod agent {
             ::flowlang::rustcmd::RustCmd::new("ykmzmg1a03b82db11g1e").execute(d).expect("Rust command execution failed").get_object("a")
         }
 
+        pub fn screenshot(url: String, path: String, width: i64, height: i64) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("url", &url);
+            d.put_string("path", &path);
+            d.put_int("width", width);
+            d.put_int("height", height);
+            ::flowlang::rustcmd::RustCmd::new("rvuzgy1a03fb16529n1").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn act(action: String, selector: String, arg: String, timeout_ms: i64) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("action", &action);
+            d.put_string("selector", &selector);
+            d.put_string("arg", &arg);
+            d.put_int("timeout_ms", timeout_ms);
+            ::flowlang::rustcmd::RustCmd::new("mqgnnp1a10bcf38a1j18d").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn find_text(query: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("query", &query);
+            ::flowlang::rustcmd::RustCmd::new("pkupwt1a10c9da63bv3a").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
     }
     pub mod browser_builder {
         use ::ndata::dataobject::DataObject;
@@ -810,6 +1107,50 @@ pub mod agent {
             d.put_string("mode", &mode);
             ::flowlang::rustcmd::RustCmd::new("jnuoor1a03dde99c1l2e").execute(d).expect("Rust command execution failed").get_object("a")
         }
+
+        pub fn repatch() -> DataObject {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("uxxoxp1a073004790n1").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+    }
+    pub mod committer {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+        pub fn set_enabled(repo: String, enabled: bool) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("repo", &repo);
+            d.put_boolean("enabled", enabled);
+            ::flowlang::rustcmd::RustCmd::new("mvpptg1a1018f7572k1a79").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn compose_message(repo: String, unit: String, siblings: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("repo", &repo);
+            d.put_string("unit", &unit);
+            d.put_string("siblings", &siblings);
+            ::flowlang::rustcmd::RustCmd::new("stxkgw1a101903675m1a7c").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn sweep() -> DataObject {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("qjqlvj1a101918b6fx1a81").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn status() -> DataObject {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("zwullg1a10191fcd8p1a84").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+    }
+    pub mod stage {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
 
     }
 }
@@ -1029,13 +1370,6 @@ pub mod app {
         use ::ndata::data::Data;
 
     }
-    pub mod scenegraph {
-        use ::ndata::dataobject::DataObject;
-        use ::ndata::dataarray::DataArray;
-        use ::ndata::databytes::DataBytes;
-        use ::ndata::data::Data;
-
-    }
     pub mod select {
         use ::ndata::dataobject::DataObject;
         use ::ndata::dataarray::DataArray;
@@ -1101,13 +1435,6 @@ pub mod app {
         }
 
     }
-    pub mod sceneplayer {
-        use ::ndata::dataobject::DataObject;
-        use ::ndata::dataarray::DataArray;
-        use ::ndata::databytes::DataBytes;
-        use ::ndata::data::Data;
-
-    }
     pub mod sceneexpr {
         use ::ndata::dataobject::DataObject;
         use ::ndata::dataarray::DataArray;
@@ -1136,20 +1463,6 @@ pub mod app {
         use ::ndata::data::Data;
 
     }
-    pub mod scenerun {
-        use ::ndata::dataobject::DataObject;
-        use ::ndata::dataarray::DataArray;
-        use ::ndata::databytes::DataBytes;
-        use ::ndata::data::Data;
-
-    }
-    pub mod forcelayout {
-        use ::ndata::dataobject::DataObject;
-        use ::ndata::dataarray::DataArray;
-        use ::ndata::databytes::DataBytes;
-        use ::ndata::data::Data;
-
-    }
     pub mod tokens {
         use ::ndata::dataobject::DataObject;
         use ::ndata::dataarray::DataArray;
@@ -1158,6 +1471,152 @@ pub mod app {
 
     }
     pub mod webgl {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+    }
+    pub mod home {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+    }
+    pub mod scenehost {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+    }
+}
+
+pub mod camera {
+    pub mod camera {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+        pub fn available() -> DataObject {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("vjpitv1843dfcd472td7").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn events() -> DataArray {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("vyywsl18495656547m98").execute(d).expect("Rust command execution failed").get_array("a")
+        }
+
+        pub fn init() -> String {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("lpxgsi18439f44808s89").execute(d).expect("Rust command execution failed").get_string("a")
+        }
+
+        pub fn keyframe(timestamp: String) -> String {
+            let mut d = DataObject::new();
+            d.put_string("timestamp", &timestamp);
+            ::flowlang::rustcmd::RustCmd::new("uypumz184f29704cbs39").execute(d).expect("Rust command execution failed").get_string("a")
+        }
+
+        pub fn keyframes(nn_path: String) -> String {
+            let mut d = DataObject::new();
+            d.put_string("nn_path", &nn_path);
+            ::flowlang::rustcmd::RustCmd::new("zvlkyu184b51974e2qa").execute(d).expect("Rust command execution failed").get_string("a")
+        }
+
+        pub fn last_keyframe() -> String {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("kwpmxu1844e0f248am45").execute(d).expect("Rust command execution failed").get_string("a")
+        }
+
+        pub fn on_capture(jpg: String, timestamp: i64, mp4: String) -> String {
+            let mut d = DataObject::new();
+            d.put_string("jpg", &jpg);
+            d.put_int("timestamp", timestamp);
+            d.put_string("mp4", &mp4);
+            ::flowlang::rustcmd::RustCmd::new("twnymk1844db44f3fve4").execute(d).expect("Rust command execution failed").get_string("a")
+        }
+
+        pub fn play(nn_path: String) -> String {
+            let mut d = DataObject::new();
+            d.put_string("nn_path", &nn_path);
+            ::flowlang::rustcmd::RustCmd::new("guwsgi184b8daca10re").execute(d).expect("Rust command execution failed").get_string("a")
+        }
+
+        pub fn remove_old() -> String {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("vgxvrr184f385730fy1da").execute(d).expect("Rust command execution failed").get_string("a")
+        }
+
+        pub fn settings(settings: Data) -> DataObject {
+            let mut d = DataObject::new();
+            d.set_property("settings", settings);
+            ::flowlang::rustcmd::RustCmd::new("mgyrou18447eaa6c2l78e").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn snapshot(device: String, format: String, width: String, height: String, rot: String) -> String {
+            let mut d = DataObject::new();
+            d.put_string("device", &device);
+            d.put_string("format", &format);
+            d.put_string("width", &width);
+            d.put_string("height", &height);
+            d.put_string("rot", &rot);
+            ::flowlang::rustcmd::RustCmd::new("suqirv184446104d3x55").execute(d).expect("Rust command execution failed").get_string("a")
+        }
+
+        pub fn start_recording() -> String {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("lspkqt18439ff8220ta5").execute(d).expect("Rust command execution failed").get_string("a")
+        }
+
+        pub fn status() -> DataObject {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("norphu18452a74484p2ed").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn stop_recording() -> String {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("lkiphi1844d32b0f5z24").execute(d).expect("Rust command execution failed").get_string("a")
+        }
+
+        pub fn live() -> DataBytes {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("sgmxup1869485c680qaa").execute(d).expect("Rust command execution failed").get_bytes("a")
+        }
+
+        pub fn events_page(since: String, limit: String) -> DataArray {
+            let mut d = DataObject::new();
+            d.put_string("since", &since);
+            d.put_string("limit", &limit);
+            ::flowlang::rustcmd::RustCmd::new("xuxzml19ff1f4faeau1").execute(d).expect("Rust command execution failed").get_array("a")
+        }
+
+    }
+    pub mod camera_settings {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+    }
+    pub mod dvr {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+    }
+    pub mod live {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+    }
+    pub mod dvr_settings {
         use ::ndata::dataobject::DataObject;
         use ::ndata::dataarray::DataArray;
         use ::ndata::databytes::DataBytes;
@@ -1224,6 +1683,34 @@ pub mod dev {
             let mut d = DataObject::new();
             d.put_string("lib", &lib);
             ::flowlang::rustcmd::RustCmd::new("lrgoyo19fe9049accu1").execute(d).expect("Rust command execution failed").get_string("a")
+        }
+
+        pub fn crate_versions() -> DataObject {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("wysojo1a052c43c59ha").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn update_crates(flowlang: String, ndata: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("flowlang", &flowlang);
+            d.put_string("ndata", &ndata);
+            ::flowlang::rustcmd::RustCmd::new("mzhpqp1a052c4c270sc").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn update_crates_status() -> DataObject {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("nxnqxj1a052c503b6ke").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn restart_instance() -> String {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("zosxwm1a052c55690j10").execute(d).expect("Rust command execution failed").get_string("a")
+        }
+
+        pub fn hard_reset(url: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("url", &url);
+            ::flowlang::rustcmd::RustCmd::new("lwnwig1a052f17ecdt4").execute(d).expect("Rust command execution failed").get_object("a")
         }
 
     }
@@ -1916,6 +2403,53 @@ pub mod dev {
             ::flowlang::rustcmd::RustCmd::new("ioyipx19feee23f1bq1").execute(d).expect("Rust command execution failed").get_object("a")
         }
 
+        pub fn create_control(lib: String, name: String, desc: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("lib", &lib);
+            d.put_string("name", &name);
+            d.put_string("desc", &desc);
+            ::flowlang::rustcmd::RustCmd::new("isnhix1a108282fe6n3c").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn find(kind: String, lib: String, ctl: String, cmd: String, name: String, id: String, source_kind: String, query: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("kind", &kind);
+            d.put_string("lib", &lib);
+            d.put_string("ctl", &ctl);
+            d.put_string("cmd", &cmd);
+            d.put_string("name", &name);
+            d.put_string("id", &id);
+            d.put_string("source_kind", &source_kind);
+            d.put_string("query", &query);
+            ::flowlang::rustcmd::RustCmd::new("zhwgvy1a10c906584k214").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn trace_flow(lib: String, ctl: String, cmd: String, args: DataObject, nn_sessionid: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("lib", &lib);
+            d.put_string("ctl", &ctl);
+            d.put_string("cmd", &cmd);
+            d.put_object("args", args);
+            d.put_string("nn_sessionid", &nn_sessionid);
+            ::flowlang::rustcmd::RustCmd::new("msuuqu1a165e00598r1161").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn check_python(lib: String, ctl: String, cmd: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("lib", &lib);
+            d.put_string("ctl", &ctl);
+            d.put_string("cmd", &cmd);
+            ::flowlang::rustcmd::RustCmd::new("tgzgxv1a19e04dfe3g1").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn check_js(lib: String, ctl: String, cmd: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("lib", &lib);
+            d.put_string("ctl", &ctl);
+            d.put_string("cmd", &cmd);
+            ::flowlang::rustcmd::RustCmd::new("uuowqh1a1a0efa6baj1").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
     }
     pub mod viewctx {
         use ::ndata::dataobject::DataObject;
@@ -1991,6 +2525,472 @@ pub mod dev {
         pub fn autocommit_sweep() -> DataObject {
             let d = DataObject::new();
             ::flowlang::rustcmd::RustCmd::new("xlqhrg1a02521633dv7").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn merge_to_master(repo: String, branch: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("repo", &repo);
+            d.put_string("branch", &branch);
+            ::flowlang::rustcmd::RustCmd::new("rwuprt1a05cfd1d26o118").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn abandon_branch(repo: String, branch: String, discard: bool, delete_remote: bool, next_branch: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("repo", &repo);
+            d.put_string("branch", &branch);
+            d.put_boolean("discard", discard);
+            d.put_boolean("delete_remote", delete_remote);
+            d.put_string("next_branch", &next_branch);
+            ::flowlang::rustcmd::RustCmd::new("hgoiwu1a05cfe25f6g11c").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn set_autocommit(name: String, autocommit: bool) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("name", &name);
+            d.put_boolean("autocommit", autocommit);
+            ::flowlang::rustcmd::RustCmd::new("hzykqu1a05d00c1a3r124").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn store_status(repo: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("repo", &repo);
+            ::flowlang::rustcmd::RustCmd::new("olzqvh1a05d34239fp1").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn commit_unit(repo: String, lib: String, ctl: String, message: String, author: String, nn_sessionid: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("repo", &repo);
+            d.put_string("lib", &lib);
+            d.put_string("ctl", &ctl);
+            d.put_string("message", &message);
+            d.put_string("author", &author);
+            d.put_string("nn_sessionid", &nn_sessionid);
+            ::flowlang::rustcmd::RustCmd::new("rgkipv1a05d34ad79m3").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn repo_state(repo: String, fetch: bool) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("repo", &repo);
+            d.put_boolean("fetch", fetch);
+            ::flowlang::rustcmd::RustCmd::new("uptjzh1a0733cce74r7").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn start_branch(repo: String, branch: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("repo", &repo);
+            d.put_string("branch", &branch);
+            ::flowlang::rustcmd::RustCmd::new("ymlwwx1a0733d3513t9").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn update_from_master(repo: String, branch: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("repo", &repo);
+            d.put_string("branch", &branch);
+            ::flowlang::rustcmd::RustCmd::new("wrwzmq1a0733d8548hb").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn carry_branch(repo: String, branch: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("repo", &repo);
+            d.put_string("branch", &branch);
+            ::flowlang::rustcmd::RustCmd::new("ljkngp1a0740a1c47j1").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn untrack_generated(repo: String, message: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("repo", &repo);
+            d.put_string("message", &message);
+            ::flowlang::rustcmd::RustCmd::new("slhoyo1a0740a96d8s3").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+    }
+    pub mod flownode {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+    }
+    pub mod flowspike {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+    }
+    pub mod flowview3d {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+    }
+    pub mod flowedit3d {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+    }
+    pub mod flowtoken {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+    }
+    pub mod flowstep {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+        pub fn step(state: DataObject, pick: DataObject) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_object("state", state);
+            d.put_object("pick", pick);
+            ::flowlang::rustcmd::RustCmd::new("kwjhgp1a16a026788s1c8").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn run(body: DataObject, args: DataObject, policy: String, budget: i64) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_object("body", body);
+            d.put_object("args", args);
+            d.put_string("policy", &policy);
+            d.put_int("budget", budget);
+            ::flowlang::rustcmd::RustCmd::new("qktspz1a16a0b52e9u214").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn validate(body: DataObject, args: DataObject, events: DataArray) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_object("body", body);
+            d.put_object("args", args);
+            d.put_array("events", events);
+            ::flowlang::rustcmd::RustCmd::new("phmyms1a16a0b6cbfw216").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn parity(lib: String, ctl: String, cmd: String, args: DataObject, presets: DataObject, policy: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("lib", &lib);
+            d.put_string("ctl", &ctl);
+            d.put_string("cmd", &cmd);
+            d.put_object("args", args);
+            d.put_object("presets", presets);
+            d.put_string("policy", &policy);
+            ::flowlang::rustcmd::RustCmd::new("uzuhpw1a16a0b877fz218").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn drive(state: DataObject, mode: String, pick: DataObject, target: DataObject, budget: i64) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_object("state", state);
+            d.put_string("mode", &mode);
+            d.put_object("pick", pick);
+            d.put_object("target", target);
+            d.put_int("budget", budget);
+            ::flowlang::rustcmd::RustCmd::new("iijpnu1a16a2cc451mc1").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn debug_reap() -> DataObject {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("xuyiro1a16a466259h99").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn debug_stop(session: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("session", &session);
+            ::flowlang::rustcmd::RustCmd::new("lojxro1a16a467d30i9b").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn debug_set_breakpoints(session: String, list: DataArray) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("session", &session);
+            d.put_array("list", list);
+            ::flowlang::rustcmd::RustCmd::new("lyxgmp1a16a4698d4x9d").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn debug_step(session: String, mode: String, pick: DataObject) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("session", &session);
+            d.put_string("mode", &mode);
+            d.put_object("pick", pick);
+            ::flowlang::rustcmd::RustCmd::new("wojtzq1a16a46b4bcy9f").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn debug_state(session: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("session", &session);
+            ::flowlang::rustcmd::RustCmd::new("tgoxzr1a16a46d1d9ja2").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn debug_start(lib: String, ctl: String, cmd: String, body: DataObject, args: DataObject) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("lib", &lib);
+            d.put_string("ctl", &ctl);
+            d.put_string("cmd", &cmd);
+            d.put_object("body", body);
+            d.put_object("args", args);
+            ::flowlang::rustcmd::RustCmd::new("nmmhrq1a16a46ef33ra4").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn run_flow(lib: String, ctl: String, cmd: String, args: DataObject, events: i64, budget: i64, nn_sessionid: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("lib", &lib);
+            d.put_string("ctl", &ctl);
+            d.put_string("cmd", &cmd);
+            d.put_object("args", args);
+            d.put_int("events", events);
+            d.put_int("budget", budget);
+            d.put_string("nn_sessionid", &nn_sessionid);
+            ::flowlang::rustcmd::RustCmd::new("zixhvt1a1921dffe4of5").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+    }
+    pub mod flowdebug {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+    }
+}
+
+pub mod dudeapi {
+    pub mod dudeapi {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+        pub fn character(id: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("id", &id);
+            ::flowlang::rustcmd::RustCmd::new("zxsmqt19938ad344em46").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn characters() -> DataArray {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("ptjuru199383729del2afd").execute(d).expect("Rust command execution failed").get_array("a")
+        }
+
+        pub fn get_all_stats(lora_ids: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("lora_ids", &lora_ids);
+            ::flowlang::rustcmd::RustCmd::new("lvkhvi199390758dbj1e").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn get_media_upload_url(filename: String, filetype: String, filesize: i64, nn_session: DataObject) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("filename", &filename);
+            d.put_string("filetype", &filetype);
+            d.put_int("filesize", filesize);
+            d.put_object("nn_session", nn_session);
+            ::flowlang::rustcmd::RustCmd::new("oysjmo19953ae9eb9u9cb").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn get_r2_presigned_post(filename: String, filesize: i64) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("filename", &filename);
+            d.put_int("filesize", filesize);
+            ::flowlang::rustcmd::RustCmd::new("xutjtj19954c032a7i259").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn get_user_votes(nn_headers: Data) -> DataObject {
+            let mut d = DataObject::new();
+            d.set_property("nn_headers", nn_headers);
+            ::flowlang::rustcmd::RustCmd::new("zgstnn19938cca6cbx36").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn is_upload_done(uid: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("uid", &uid);
+            ::flowlang::rustcmd::RustCmd::new("igvwsx199451df7can3b").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn login(username: String, password: String, create: bool, nn_session: DataObject) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("username", &username);
+            d.put_string("password", &password);
+            d.put_boolean("create", create);
+            d.put_object("nn_session", nn_session);
+            ::flowlang::rustcmd::RustCmd::new("moyzyq1993dea2a5dl656").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn logout(nn_session: DataObject) -> String {
+            let mut d = DataObject::new();
+            d.put_object("nn_session", nn_session);
+            ::flowlang::rustcmd::RustCmd::new("qrqzhu1993de924c5s651").execute(d).expect("Rust command execution failed").get_string("a")
+        }
+
+        pub fn r2_complete_multipart_upload(key: String, uploadId: String, parts: DataArray, nn_session: DataObject) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("key", &key);
+            d.put_string("uploadId", &uploadId);
+            d.put_array("parts", parts);
+            d.put_object("nn_session", nn_session);
+            ::flowlang::rustcmd::RustCmd::new("kkpjxz19954108e84vbb").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn r2_get_multipart_presigned_url(key: String, uploadId: String, partNumber: i64, nn_session: DataObject) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("key", &key);
+            d.put_string("uploadId", &uploadId);
+            d.put_int("partNumber", partNumber);
+            d.put_object("nn_session", nn_session);
+            ::flowlang::rustcmd::RustCmd::new("roqqzs19954b0d9c5k234").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn r2_start_multipart_upload(filename: String, nn_session: DataObject) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("filename", &filename);
+            d.put_object("nn_session", nn_session);
+            ::flowlang::rustcmd::RustCmd::new("npthvy19953c9d61fg1e").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn sessioninfo(nn_session: DataObject) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_object("nn_session", nn_session);
+            ::flowlang::rustcmd::RustCmd::new("kqhgkn1993dda2b44t62d").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn start_upload(filename: String, filesize: i64, nn_session: DataObject) -> String {
+            let mut d = DataObject::new();
+            d.put_string("filename", &filename);
+            d.put_int("filesize", filesize);
+            d.put_object("nn_session", nn_session);
+            ::flowlang::rustcmd::RustCmd::new("rljzyw19944f461ebjd2").execute(d).expect("Rust command execution failed").get_string("a")
+        }
+
+        pub fn tags(id: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("id", &id);
+            ::flowlang::rustcmd::RustCmd::new("wqgthn19938bb98f5r26").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn update_character_entity(character_data: DataObject, nn_session: DataObject) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_object("character_data", character_data);
+            d.put_object("nn_session", nn_session);
+            ::flowlang::rustcmd::RustCmd::new("guvsnj1994355d9e6w64d").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn update_lora_post(character_id: String, lora_id: String, lora_name: String, base_model: String, trigger_words: String, description: String, media: DataArray, nn_session: DataObject) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("character_id", &character_id);
+            d.put_string("lora_id", &lora_id);
+            d.put_string("lora_name", &lora_name);
+            d.put_string("base_model", &base_model);
+            d.put_string("trigger_words", &trigger_words);
+            d.put_string("description", &description);
+            d.put_array("media", media);
+            d.put_object("nn_session", nn_session);
+            ::flowlang::rustcmd::RustCmd::new("txhwol1993f52e9aew3f").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn update_media_order(character_id: String, lora_id: String, new_media_order: DataArray) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("character_id", &character_id);
+            d.put_string("lora_id", &lora_id);
+            d.put_array("new_media_order", new_media_order);
+            ::flowlang::rustcmd::RustCmd::new("iwpvmt19924098ab0taaa").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn upload_chunk(upload_id: String, chunk_index: i64, chunk_data: String) -> String {
+            let mut d = DataObject::new();
+            d.put_string("upload_id", &upload_id);
+            d.put_int("chunk_index", chunk_index);
+            d.put_string("chunk_data", &chunk_data);
+            ::flowlang::rustcmd::RustCmd::new("hgiutm19945125d3fr1f").execute(d).expect("Rust command execution failed").get_string("a")
+        }
+
+        pub fn vote(category: String, nn_headers: Data, lora: String, value: i64) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("category", &category);
+            d.set_property("nn_headers", nn_headers);
+            d.put_string("lora", &lora);
+            d.put_int("value", value);
+            ::flowlang::rustcmd::RustCmd::new("mzyups1991f6de270z1f1").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn delete_lora(character_id: String, lora_id: String, nn_session: DataObject) -> bool {
+            let mut d = DataObject::new();
+            d.put_string("character_id", &character_id);
+            d.put_string("lora_id", &lora_id);
+            d.put_object("nn_session", nn_session);
+            ::flowlang::rustcmd::RustCmd::new("iujkhk1998d94bfccn116").execute(d).expect("Rust command execution failed").get_boolean("a")
+        }
+
+    }
+}
+
+pub mod files {
+    pub mod files {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+        pub fn list_dir(path: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("path", &path);
+            ::flowlang::rustcmd::RustCmd::new("ortlrv1a1acf70b79i47").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn propfind(path: String, href_prefix: String, depth: String, request_xml: String) -> String {
+            let mut d = DataObject::new();
+            d.put_string("path", &path);
+            d.put_string("href_prefix", &href_prefix);
+            d.put_string("depth", &depth);
+            d.put_string("request_xml", &request_xml);
+            ::flowlang::rustcmd::RustCmd::new("lkrnty1a1ad082598jc4").execute(d).expect("Rust command execution failed").get_string("a")
+        }
+
+        pub fn get_file(path: String) -> String {
+            let mut d = DataObject::new();
+            d.put_string("path", &path);
+            ::flowlang::rustcmd::RustCmd::new("xoxynz1a1ad08644cwc7").execute(d).expect("Rust command execution failed").get_string("a")
+        }
+
+        pub fn make_collection(path: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("path", &path);
+            ::flowlang::rustcmd::RustCmd::new("mxzpit1a1ad1915b1v1ac").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn delete_path(path: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("path", &path);
+            ::flowlang::rustcmd::RustCmd::new("mlkrim1a1ad195821n1af").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn put_file(path: String, content: Data) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("path", &path);
+            d.set_property("content", content);
+            ::flowlang::rustcmd::RustCmd::new("hhyigz1a1ad1c6753s1d7").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn dav(nn_method: String, nn_path: String, nn_headers: DataObject, nn_body: Data) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("nn_method", &nn_method);
+            d.put_string("nn_path", &nn_path);
+            d.put_object("nn_headers", nn_headers);
+            d.set_property("nn_body", nn_body);
+            ::flowlang::rustcmd::RustCmd::new("lsknnh1a1ae3844ebuc9").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn resolve_path(path: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("path", &path);
+            ::flowlang::rustcmd::RustCmd::new("znqlyo1a1ae6442f0g14").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn dav_tree(operation: String, source: String, destination: String, overwrite: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("operation", &operation);
+            d.put_string("source", &source);
+            d.put_string("destination", &destination);
+            d.put_string("overwrite", &overwrite);
+            ::flowlang::rustcmd::RustCmd::new("uzhykj1a1b0eade9fg63f").execute(d).expect("Rust command execution failed").get_object("a")
         }
 
     }
@@ -2170,6 +3170,22 @@ pub mod fillmore {
             d.put_object("job", job);
             ::flowlang::rustcmd::RustCmd::new("hpovqp19c92292802o2da").execute(d).expect("Rust command execution failed").get_object("a")
         }
+
+        pub fn lora_to_mhm(job: DataObject) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_object("job", job);
+            ::flowlang::rustcmd::RustCmd::new("tnppoo1a0a9d501f7j1").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+    }
+}
+
+pub mod flowfixtures {
+    pub mod callees {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
 
     }
 }
@@ -2499,6 +3515,18 @@ pub mod genmore {
             ::flowlang::rustcmd::RustCmd::new("shosru19fc2e3d9ffm44").execute(d).expect("Rust command execution failed").get_object("a")
         }
 
+        pub fn image_edit(job: DataObject) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_object("job", job);
+            ::flowlang::rustcmd::RustCmd::new("qptrls1a10767f55exc33").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn dataset_edit(job: DataObject) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_object("job", job);
+            ::flowlang::rustcmd::RustCmd::new("tziolu1a1078325f8gc70").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
     }
     pub mod hunyuan {
         use ::ndata::dataobject::DataObject;
@@ -2729,6 +3757,24 @@ pub mod genmore {
             let mut d = DataObject::new();
             d.put_object("job", job);
             ::flowlang::rustcmd::RustCmd::new("onhisw19f4c21d2d9rf8").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+    }
+    pub mod moss {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+        pub fn install() -> DataObject {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("umvuiw1a173a7a1d3k1c6").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn generate(job: DataObject) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_object("job", job);
+            ::flowlang::rustcmd::RustCmd::new("xvtmus1a173a82034p1c9").execute(d).expect("Rust command execution failed").get_object("a")
         }
 
     }
@@ -2988,6 +4034,12 @@ pub mod grabmore {
             let mut d = DataObject::new();
             d.put_object("job", job);
             ::flowlang::rustcmd::RustCmd::new("xiujot1952fc1db3ewa1").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn import_lora(job: DataObject) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_object("job", job);
+            ::flowlang::rustcmd::RustCmd::new("ugwquh1a0ed2d2e4ct3c").execute(d).expect("Rust command execution failed").get_object("a")
         }
 
     }
@@ -3385,6 +4437,67 @@ pub mod gudrun {
             d.put_string("jobid", &jobid);
             d.put_string("nn_sessionid", &nn_sessionid);
             ::flowlang::rustcmd::RustCmd::new("whssht1a03e666a7bh1").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn logout(nn_sessionid: String) -> String {
+            let mut d = DataObject::new();
+            d.put_string("nn_sessionid", &nn_sessionid);
+            ::flowlang::rustcmd::RustCmd::new("tlzxtg1a12fcc4c35s13d").execute(d).expect("Rust command execution failed").get_string("a")
+        }
+
+        pub fn google_signin(sub: String, email: String, nn_sessionid: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("sub", &sub);
+            d.put_string("email", &email);
+            d.put_string("nn_sessionid", &nn_sessionid);
+            ::flowlang::rustcmd::RustCmd::new("qrhqtg1a13a2b6cb2r161e").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn google_unlink(nn_sessionid: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("nn_sessionid", &nn_sessionid);
+            ::flowlang::rustcmd::RustCmd::new("nrmklr1a14eebbe4eg10f").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn google_login(nn_sessionid: String) -> String {
+            let mut d = DataObject::new();
+            d.put_string("nn_sessionid", &nn_sessionid);
+            ::flowlang::rustcmd::RustCmd::new("khvmuq1a1594909fcs222").execute(d).expect("Rust command execution failed").get_string("a")
+        }
+
+        pub fn google_callback(code: Data, state: String, error: Data, nn_sessionid: String) -> String {
+            let mut d = DataObject::new();
+            d.set_property("code", code);
+            d.put_string("state", &state);
+            d.set_property("error", error);
+            d.put_string("nn_sessionid", &nn_sessionid);
+            ::flowlang::rustcmd::RustCmd::new("gilwkw1a159755187u292").execute(d).expect("Rust command execution failed").get_string("a")
+        }
+
+        pub fn establish(permalink: String) -> String {
+            let mut d = DataObject::new();
+            d.put_string("permalink", &permalink);
+            ::flowlang::rustcmd::RustCmd::new("plupvu1a1694f5313q1").execute(d).expect("Rust command execution failed").get_string("a")
+        }
+
+        pub fn characters(nn_sessionid: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("nn_sessionid", &nn_sessionid);
+            ::flowlang::rustcmd::RustCmd::new("kpssvl1a17f085a87t65a").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn character_save(nn_sessionid: String, character: DataObject) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("nn_sessionid", &nn_sessionid);
+            d.put_object("character", character);
+            ::flowlang::rustcmd::RustCmd::new("kiwrmu1a17f08b7d7s65d").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn character_portrait(nn_sessionid: String, id: String) -> String {
+            let mut d = DataObject::new();
+            d.put_string("nn_sessionid", &nn_sessionid);
+            d.put_string("id", &id);
+            ::flowlang::rustcmd::RustCmd::new("xjxqki1a17f08cc66g65f").execute(d).expect("Rust command execution failed").get_string("a")
         }
 
     }
@@ -3846,6 +4959,513 @@ pub mod gudrun {
         use ::ndata::data::Data;
 
     }
+    pub mod lora_to_mhm {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+        pub fn submit(job: DataObject, nn_sessionid: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_object("job", job);
+            d.put_string("nn_sessionid", &nn_sessionid);
+            ::flowlang::rustcmd::RustCmd::new("horxtz1a0a9d4f19en1").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn load_lora_tags(storeid: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("storeid", &storeid);
+            ::flowlang::rustcmd::RustCmd::new("simokj1a0a9d4fa42t1").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+    }
+    pub mod select_lora {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+    }
+    pub mod import_lora {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+    }
+    pub mod image_edit {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+    }
+    pub mod profile {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+    }
+    pub mod workspace_page {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+    }
+    pub mod characters {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+    }
+}
+
+pub mod hagarmap {
+    pub mod hagarmap {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+        pub fn fetch_layers() -> DataObject {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("xuwujq1a057976c2al23").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+    }
+}
+
+pub mod hollis {
+    pub mod hollis {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+        pub fn init() -> DataObject {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("ivzzkv19ac0d239dbj735").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+    }
+    pub mod audio {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+        pub fn cortex() -> DataObject {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("oqygpv19b9daa9ec2g46").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn data() -> DataObject {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("nivmwo19b9d344142x86c").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn perception() -> DataObject {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("nljigt19b9d50299bi16").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn sensor() -> DataObject {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("nuitnj19b9d3f80e4u887").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn transcribe() -> DataObject {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("qoylhr19ba8c31f8dnf7").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn inject(text: String, entity: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("text", &text);
+            d.put_string("entity", &entity);
+            ::flowlang::rustcmd::RustCmd::new("srpgkg1a0103a67c3x1").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn status() -> DataObject {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("sxspyl1a0103a9670v3").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn transcripts(limit: i64) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_int("limit", limit);
+            ::flowlang::rustcmd::RustCmd::new("lolthi1a010424a55p1").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+    }
+}
+
+pub mod img2mhm {
+    pub mod img2mhm {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+        pub fn fit(photo: String, out_path: String, debug_dir: String, mirror_tta: bool) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("photo", &photo);
+            d.put_string("out_path", &out_path);
+            d.put_string("debug_dir", &debug_dir);
+            d.put_boolean("mirror_tta", mirror_tta);
+            ::flowlang::rustcmd::RustCmd::new("pxnzll1a08b81d069hb").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn eval(dir: String, out_dir: String, identity: bool) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("dir", &dir);
+            d.put_string("out_dir", &out_dir);
+            d.put_boolean("identity", identity);
+            ::flowlang::rustcmd::RustCmd::new("gxqiml1a08b8698b9o12").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn portrait(filename: String, data_b64: String, mirror_tta: bool, extras: DataArray, body_filename: String, body_b64: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("filename", &filename);
+            d.put_string("data_b64", &data_b64);
+            d.put_boolean("mirror_tta", mirror_tta);
+            d.put_array("extras", extras);
+            d.put_string("body_filename", &body_filename);
+            d.put_string("body_b64", &body_b64);
+            ::flowlang::rustcmd::RustCmd::new("gsngow1a08fce651bo7").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn download(id: String, name: String) -> String {
+            let mut d = DataObject::new();
+            d.put_string("id", &id);
+            d.put_string("name", &name);
+            ::flowlang::rustcmd::RustCmd::new("oulxsj1a08fcf714el9").execute(d).expect("Rust command execution failed").get_string("a")
+        }
+
+        pub fn tune(set_dir: String, max_evals: i64, keys: String, objective: String, dry_run: bool) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("set_dir", &set_dir);
+            d.put_int("max_evals", max_evals);
+            d.put_string("keys", &keys);
+            d.put_string("objective", &objective);
+            d.put_boolean("dry_run", dry_run);
+            ::flowlang::rustcmd::RustCmd::new("jsskjn1a09029ad79l2b").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn tune_launch(set_dir: String, max_evals: i64, keys: String, objective: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("set_dir", &set_dir);
+            d.put_int("max_evals", max_evals);
+            d.put_string("keys", &keys);
+            d.put_string("objective", &objective);
+            ::flowlang::rustcmd::RustCmd::new("xgrmqk1a09060b7adh10").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn tune_status(set_name: String, tail_lines: i64) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("set_name", &set_name);
+            d.put_int("tail_lines", tail_lines);
+            ::flowlang::rustcmd::RustCmd::new("iszvis1a090611b01o12").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn sheet(dir: String, photos: String, out: String, cols: i64) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("dir", &dir);
+            d.put_string("photos", &photos);
+            d.put_string("out", &out);
+            d.put_int("cols", cols);
+            ::flowlang::rustcmd::RustCmd::new("skqsgr1a0912b51e5i1").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn loopfit(photo: String, photos: String, body_photo: String, out_path: String, rounds: i64, body: bool) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("photo", &photo);
+            d.put_string("photos", &photos);
+            d.put_string("body_photo", &body_photo);
+            d.put_string("out_path", &out_path);
+            d.put_int("rounds", rounds);
+            d.put_boolean("body", body);
+            ::flowlang::rustcmd::RustCmd::new("hrpxtr1a096cac46ar1").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn gen_views(trigger: String, lora_path: String, out_dir: String, seed: i64, per_view: i64, basemodel: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("trigger", &trigger);
+            d.put_string("lora_path", &lora_path);
+            d.put_string("out_dir", &out_dir);
+            d.put_int("seed", seed);
+            d.put_int("per_view", per_view);
+            d.put_string("basemodel", &basemodel);
+            ::flowlang::rustcmd::RustCmd::new("nkiqnv1a09d993deer1").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn images_to_mhm(dirs: String, out_path: String, max_extras: i64) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("dirs", &dirs);
+            d.put_string("out_path", &out_path);
+            d.put_int("max_extras", max_extras);
+            ::flowlang::rustcmd::RustCmd::new("wzkvsy1a09d994695p1").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn lora_test(trigger: String, lora_path: String, dataset_dirs: String, out_dir: String, seed: i64, per_view: i64) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("trigger", &trigger);
+            d.put_string("lora_path", &lora_path);
+            d.put_string("dataset_dirs", &dataset_dirs);
+            d.put_string("out_dir", &out_dir);
+            d.put_int("seed", seed);
+            d.put_int("per_view", per_view);
+            ::flowlang::rustcmd::RustCmd::new("trhzos1a09d994b8cj1").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn task_generate_views(job: DataObject) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_object("job", job);
+            ::flowlang::rustcmd::RustCmd::new("roqvnr1a09ff2d304r1").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn task_images_to_mhm(job: DataObject) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_object("job", job);
+            ::flowlang::rustcmd::RustCmd::new("ygnpzr1a09ff2d42am1").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+    }
+    pub mod assets {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+        pub fn paths() -> DataObject {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("rgjoys1a08b4aafb9r1b").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn bootstrap() -> DataObject {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("rvyxmn1a08b4ae252m1d").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn status() -> DataObject {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("xujgty1a08b4af36fy1f").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn install() -> DataObject {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("zvylql1a09f949a4fj1").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+    }
+    pub mod mh {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+        pub fn core() -> DataObject {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("nywpnv1a08b4cc91bh21").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn info() -> DataObject {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("vmvgqm1a08b4d697et23").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn apply(mhm_path: String, obj_path: String, body_only: bool) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("mhm_path", &mhm_path);
+            d.put_string("obj_path", &obj_path);
+            d.put_boolean("body_only", body_only);
+            ::flowlang::rustcmd::RustCmd::new("uilgqi1a08b4d9721z25").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn selftest() -> DataObject {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("zhxhgw1a08b4e0f17h27").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn matrices(rebuild: bool) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_boolean("rebuild", rebuild);
+            ::flowlang::rustcmd::RustCmd::new("spqsvl1a08b50ffcfi2f").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn render(mhm_path: String, out_path: String, size: i64, yaw_deg: f64) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("mhm_path", &mhm_path);
+            d.put_string("out_path", &out_path);
+            d.put_int("size", size);
+            d.put_float("yaw_deg", yaw_deg);
+            ::flowlang::rustcmd::RustCmd::new("wtvpwi1a09020c319p1e").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn parity(mhm_path: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("mhm_path", &mhm_path);
+            ::flowlang::rustcmd::RustCmd::new("gwpolh1a090240467t24").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn mpfb(mhm_path: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("mhm_path", &mhm_path);
+            ::flowlang::rustcmd::RustCmd::new("tsorrt1a090247926u26").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn render_aug(mhm_path: String, out_path: String, size: i64, yaw_deg: f64, pitch_deg: f64, light: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("mhm_path", &mhm_path);
+            d.put_string("out_path", &out_path);
+            d.put_int("size", size);
+            d.put_float("yaw_deg", yaw_deg);
+            d.put_float("pitch_deg", pitch_deg);
+            d.put_string("light", &light);
+            ::flowlang::rustcmd::RustCmd::new("krjqri1a097ed2e0ay1").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn project_skin(mhm_path: String, photo: String, size: i64) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("mhm_path", &mhm_path);
+            d.put_string("photo", &photo);
+            d.put_int("size", size);
+            ::flowlang::rustcmd::RustCmd::new("rvnhxi1a09bfadf8ew1").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+    }
+    pub mod face {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+        pub fn vision(photo: String, debug_dir: String, mirror_tta: bool) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("photo", &photo);
+            d.put_string("debug_dir", &debug_dir);
+            d.put_boolean("mirror_tta", mirror_tta);
+            ::flowlang::rustcmd::RustCmd::new("whxwgv1a08b521be0v33").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn pickle(path: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("path", &path);
+            ::flowlang::rustcmd::RustCmd::new("ghoyxi1a08b56d834u3a").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn flame(obj_path: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("obj_path", &obj_path);
+            ::flowlang::rustcmd::RustCmd::new("qqyqot1a08b57ff26i3c").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn wrap(rebuild: bool, dump_dir: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_boolean("rebuild", rebuild);
+            d.put_string("dump_dir", &dump_dir);
+            ::flowlang::rustcmd::RustCmd::new("ivloqj1a08b719aaep4").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn appearance(photo: String, gender: f64, age: f64) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("photo", &photo);
+            d.put_float("gender", gender);
+            d.put_float("age", age);
+            ::flowlang::rustcmd::RustCmd::new("nlxzss1a08b862e7bw10").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn twin(photo: String, out: String, crop: f64, scale: f64) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("photo", &photo);
+            d.put_string("out", &out);
+            d.put_float("crop", crop);
+            d.put_float("scale", scale);
+            ::flowlang::rustcmd::RustCmd::new("prwyin1a08b87378cp17").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn onnx_info(path: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("path", &path);
+            ::flowlang::rustcmd::RustCmd::new("vwiznr1a0901a2872q10").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn identity(photo: String, other: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("photo", &photo);
+            d.put_string("other", &other);
+            ::flowlang::rustcmd::RustCmd::new("qsnnms1a0902194c2p20").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn dataset(subjects: i64, out_dir: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_int("subjects", subjects);
+            d.put_string("out_dir", &out_dir);
+            ::flowlang::rustcmd::RustCmd::new("qovxqk1a090225b36u22").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn landmarks(photo: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("photo", &photo);
+            ::flowlang::rustcmd::RustCmd::new("spyigu1a094f26640k1").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn vl(photo: String, force: bool) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("photo", &photo);
+            d.put_boolean("force", force);
+            ::flowlang::rustcmd::RustCmd::new("pxjmru1a095b0b067j1").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn pose(photo: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("photo", &photo);
+            ::flowlang::rustcmd::RustCmd::new("xnlgsy1a096c88cb4n1").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn matte(photo: String, render_bg: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("photo", &photo);
+            d.put_string("render_bg", &render_bg);
+            ::flowlang::rustcmd::RustCmd::new("lzoxlg1a09704c857o1").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn headpose(photo: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("photo", &photo);
+            ::flowlang::rustcmd::RustCmd::new("jxwxrj1a09b05303bq1").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+    }
+    pub mod solve {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+        pub fn fista() -> DataObject {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("uxmgpp1a08b5182dbo31").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn synthetic(seed: i64, active: i64) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_int("seed", seed);
+            d.put_int("active", active);
+            ::flowlang::rustcmd::RustCmd::new("omhomn1a08b53c516p35").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn fit(seed: i64, active: i64) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_int("seed", seed);
+            d.put_int("active", active);
+            ::flowlang::rustcmd::RustCmd::new("wjlrvu1a08b786ebfv6").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+    }
 }
 
 pub mod kb {
@@ -3870,28 +5490,7 @@ pub mod kb {
         use ::ndata::data::Data;
 
     }
-    pub mod m2026_07 {
-        use ::ndata::dataobject::DataObject;
-        use ::ndata::dataarray::DataArray;
-        use ::ndata::databytes::DataBytes;
-        use ::ndata::data::Data;
-
-    }
     pub mod doctrine {
-        use ::ndata::dataobject::DataObject;
-        use ::ndata::dataarray::DataArray;
-        use ::ndata::databytes::DataBytes;
-        use ::ndata::data::Data;
-
-    }
-    pub mod nebula {
-        use ::ndata::dataobject::DataObject;
-        use ::ndata::dataarray::DataArray;
-        use ::ndata::databytes::DataBytes;
-        use ::ndata::data::Data;
-
-    }
-    pub mod camera {
         use ::ndata::dataobject::DataObject;
         use ::ndata::dataarray::DataArray;
         use ::ndata::databytes::DataBytes;
@@ -4144,6 +5743,156 @@ pub mod nebula {
     }
 }
 
+pub mod nio {
+    pub mod api {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+    }
+    pub mod architecture {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+    }
+    pub mod commands {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+    }
+    pub mod commandspython {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+    }
+    pub mod commandsrust {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+    }
+    pub mod controls {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+    }
+    pub mod core_app {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+    }
+    pub mod core_dev {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+    }
+    pub mod core_peer {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+    }
+    pub mod diagram_architecture {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+    }
+    pub mod doc {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+    }
+    pub mod filesystem {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+    }
+    pub mod flowlang {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+    }
+    pub mod helloworld {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+    }
+    pub mod installation {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+    }
+    pub mod introduction {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+    }
+    pub mod ndata {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+    }
+    pub mod nio {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+    }
+    pub mod nosql {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+    }
+    pub mod services {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+    }
+    pub mod core_security {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+    }
+}
+
 pub mod peer {
     pub mod headsup {
         use ::ndata::dataobject::DataObject;
@@ -4321,25 +6070,864 @@ pub mod peer {
     }
 }
 
+pub mod raspberry {
+    pub mod cpu {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+    }
+    pub mod disk {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+    }
+    pub mod memory {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+    }
+    pub mod raspberry {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+        pub fn arch() -> String {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("ikjksv18728f0ca40q63").execute(d).expect("Rust command execution failed").get_string("a")
+        }
+
+        pub fn cpu() -> DataObject {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("nmrzsl18513568ccdo331").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn device() -> String {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("iyznpq18513530ee2w327").execute(d).expect("Rust command execution failed").get_string("a")
+        }
+
+        pub fn disks() -> DataArray {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("uzxrlj185135ce2c5i345").execute(d).expect("Rust command execution failed").get_array("a")
+        }
+
+        pub fn info() -> DataObject {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("yrqktu18508da0c72g11").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn init() -> DataObject {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("khxgvv18530b685b7v2c9").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn memory() -> DataObject {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("kzkpvj185135b4174z33e").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn os() -> DataObject {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("xijrwh18728e08d92l3d5").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn temp() -> DataObject {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("wkyqzm185135eb268m34c").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+    }
+    pub mod temperature {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+    }
+    pub mod apt {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+        pub fn list_available() -> DataObject {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("kpturq185d21bef9dt22").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn update() -> DataObject {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("svstyl185d210ffb7g9d6").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn upgrade() -> DataObject {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("pjjmwh185d21e032bu2f").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+    }
+}
+
 pub mod runtime {
 }
 
 pub mod scratch {
+    pub mod build_docker_image {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+        pub fn build_master_source(build_dir: String, overlay_dir: String, src_data_dir: String, libraries: DataArray) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("build_dir", &build_dir);
+            d.put_string("overlay_dir", &overlay_dir);
+            d.put_string("src_data_dir", &src_data_dir);
+            d.put_array("libraries", libraries);
+            ::flowlang::rustcmd::RustCmd::new("jluxhy198801fe88ep9d6").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+    }
+    pub mod chat {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+        pub fn ask_llm(prompt: String, system_prompt: Data) -> String {
+            let mut d = DataObject::new();
+            d.put_string("prompt", &prompt);
+            d.set_property("system_prompt", system_prompt);
+            ::flowlang::rustcmd::RustCmd::new("ukrzqp1988a68aff7g256").execute(d).expect("Rust command execution failed").get_string("a")
+        }
+
+        pub fn chat(message: String, context: DataObject) -> String {
+            let mut d = DataObject::new();
+            d.put_string("message", &message);
+            d.put_object("context", context);
+            ::flowlang::rustcmd::RustCmd::new("xttrkn1975b7ab76dg2a1").execute(d).expect("Rust command execution failed").get_string("a")
+        }
+
+        pub fn describe_command(lib: String, ctl: String, cmd: String) -> String {
+            let mut d = DataObject::new();
+            d.put_string("lib", &lib);
+            d.put_string("ctl", &ctl);
+            d.put_string("cmd", &cmd);
+            ::flowlang::rustcmd::RustCmd::new("skzupu19867c87171mb19").execute(d).expect("Rust command execution failed").get_string("a")
+        }
+
+        pub fn list_tools() -> DataObject {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("sqrymt197c1a51b75t50").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+    }
+    pub mod command_metadata {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+        pub fn describe_command(command_name: String, lang: String, returntype: String, groups: String, params: DataArray, imports: String, code: String, current_description: String) -> String {
+            let mut d = DataObject::new();
+            d.put_string("command_name", &command_name);
+            d.put_string("lang", &lang);
+            d.put_string("returntype", &returntype);
+            d.put_string("groups", &groups);
+            d.put_array("params", params);
+            d.put_string("imports", &imports);
+            d.put_string("code", &code);
+            d.put_string("current_description", &current_description);
+            ::flowlang::rustcmd::RustCmd::new("qipmpn19867c0aa2fwb07").execute(d).expect("Rust command execution failed").get_string("a")
+        }
+
+        pub fn describe_parameter(command_name: String, param_name: String, param_type: String, current_param_description: String, lang: String, returntype: String, groups: String, all_command_params: DataArray, imports: String, code: String) -> String {
+            let mut d = DataObject::new();
+            d.put_string("command_name", &command_name);
+            d.put_string("param_name", &param_name);
+            d.put_string("param_type", &param_type);
+            d.put_string("current_param_description", &current_param_description);
+            d.put_string("lang", &lang);
+            d.put_string("returntype", &returntype);
+            d.put_string("groups", &groups);
+            d.put_array("all_command_params", all_command_params);
+            d.put_string("imports", &imports);
+            d.put_string("code", &code);
+            ::flowlang::rustcmd::RustCmd::new("whthou1986856b99fs12c").execute(d).expect("Rust command execution failed").get_string("a")
+        }
+
+    }
+    pub mod confirm {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+    }
+    pub mod detect_nix {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+        pub fn detect_nix() -> DataObject {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("kjnxqr1987082b8b0u1c").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn system_call(args: DataArray) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_array("args", args);
+            ::flowlang::rustcmd::RustCmd::new("zhlvpw198707807b3o14").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+    }
+    pub mod helloworld {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+    }
+    pub mod map {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+        pub fn gpx_aggregator(directory_path: String) -> DataArray {
+            let mut d = DataObject::new();
+            d.put_string("directory_path", &directory_path);
+            ::flowlang::rustcmd::RustCmd::new("xhtlps197beb58342t68").execute(d).expect("Rust command execution failed").get_array("a")
+        }
+
+        pub fn trails(points_array: DataArray) -> DataArray {
+            let mut d = DataObject::new();
+            d.put_array("points_array", points_array);
+            ::flowlang::rustcmd::RustCmd::new("pwojuu197be773e8au20").execute(d).expect("Rust command execution failed").get_array("a")
+        }
+
+    }
+    pub mod nix_config_editor {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+        pub fn save_nix_config(file_path: String, new_content: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("file_path", &file_path);
+            d.put_string("new_content", &new_content);
+            ::flowlang::rustcmd::RustCmd::new("rjptsi1988c5a5129y124").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+    }
+    pub mod pystuff {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+    }
     pub mod scratch {
         use ::ndata::dataobject::DataObject;
         use ::ndata::dataarray::DataArray;
         use ::ndata::databytes::DataBytes;
         use ::ndata::data::Data;
 
-        pub fn eval_kvytvt1a03e072c30s6() -> DataObject {
+        pub fn do_the_thing() -> DataObject {
             let d = DataObject::new();
-            ::flowlang::rustcmd::RustCmd::new("siqpqm1a03e072c30w8").execute(d).expect("Rust command execution failed").get_object("a")
+            ::flowlang::rustcmd::RustCmd::new("rvijkr1975aa659achc6").execute(d).expect("Rust command execution failed").get_object("a")
         }
 
-        pub fn eval_hhjkti1a03ebcc8bfo6() -> DataObject {
+        pub fn gen_flux() -> DataObject {
             let d = DataObject::new();
-            ::flowlang::rustcmd::RustCmd::new("pozvyu1a03ebcc8bfg8").execute(d).expect("Rust command execution failed").get_object("a")
+            ::flowlang::rustcmd::RustCmd::new("svyvwr1978ed45bf9r18").execute(d).expect("Rust command execution failed").get_object("a")
         }
+
+        pub fn genwen() -> String {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("qxwqgn197519d9ecdl19").execute(d).expect("Rust command execution failed").get_string("a")
+        }
+
+        pub fn load_candle_twice() -> bool {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("osypuz19773657d57k24").execute(d).expect("Rust command execution failed").get_boolean("a")
+        }
+
+        pub fn log_http_begin(timestamp: i64, referer: String) -> String {
+            let mut d = DataObject::new();
+            d.put_int("timestamp", timestamp);
+            d.put_string("referer", &referer);
+            ::flowlang::rustcmd::RustCmd::new("lhhxyl1989e5d306bn10a").execute(d).expect("Rust command execution failed").get_string("a")
+        }
+
+        pub fn loradude_versions() -> DataArray {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("jlluov197467314b3o191").execute(d).expect("Rust command execution failed").get_array("a")
+        }
+
+        pub fn prune_filevergnugen() -> DataObject {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("vnzhxl198f66e329fn72a").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn find_broken_files(dir1: String, dir2: String) -> DataArray {
+            let mut d = DataObject::new();
+            d.put_string("dir1", &dir1);
+            d.put_string("dir2", &dir2);
+            ::flowlang::rustcmd::RustCmd::new("jlvljg19f84c1bec2rb6f").execute(d).expect("Rust command execution failed").get_array("a")
+        }
+
+        pub fn eval_ntumlt1a0e4ce96b8l26a() -> DataObject {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("svwzig1a0e4ce96b8l26c").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn eval_oyphxt1a0e7be9b41v64d() -> DataObject {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("mkgyrp1a0e7be9b41o64f").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn eval_xwurxz1a107debf18hd3e() -> DataObject {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("zmkphi1a107debf1aud40").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn eval_qphkot1a10bd12503k19b() -> DataObject {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("ptwtlh1a10bd12503z19d").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn eval_hlngtn1a10bdbfcbcs1b() -> DataObject {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("owtkij1a10bdbfcbdu1d").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn eval_pptrgy1a10bf1f238v7f() -> DataObject {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("nmovgk1a10bf1f239l81").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn eval_vzpwry1a10c99a195g22d() -> DataObject {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("pmrsku1a10c99a196l22f").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn eval_truvmi1a191c3027ao21() -> DataObject {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("qlpgzo1a191c3027ag23").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+    }
+    pub mod stripe {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+        pub fn fetch_data() -> DataArray {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("ipwnig1984cf3a3d9o24e6").execute(d).expect("Rust command execution failed").get_array("a")
+        }
+
+    }
+    pub mod users {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+        pub fn list_users() -> DataArray {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("suxpzq19b8e4d3892r636").execute(d).expect("Rust command execution failed").get_array("a")
+        }
+
+    }
+    pub mod skills {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+        pub fn plan_decomposition_progress() -> DataObject {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("sivsol1a15e9cc3e9k322b").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn chrome_eval(js: String, timeout_ms: i64) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("js", &js);
+            d.put_int("timeout_ms", timeout_ms);
+            ::flowlang::rustcmd::RustCmd::new("oyzilg1a15f8b368ax45e").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn qwenvl_captions_selftest(mode: String, confirm: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("mode", &mode);
+            d.put_string("confirm", &confirm);
+            ::flowlang::rustcmd::RustCmd::new("wtsyuv1a168582cd8q1851").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn run_bg(lib: String, ctl: String, cmd: String, args: DataObject, name: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("lib", &lib);
+            d.put_string("ctl", &ctl);
+            d.put_string("cmd", &cmd);
+            d.put_object("args", args);
+            d.put_string("name", &name);
+            ::flowlang::rustcmd::RustCmd::new("lpqjgs1a1687d52fao56").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn wan22_e2e(mode: String, jobid: String, trigger: String, store_captions: String, confirm: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("mode", &mode);
+            d.put_string("jobid", &jobid);
+            d.put_string("trigger", &trigger);
+            d.put_string("store_captions", &store_captions);
+            d.put_string("confirm", &confirm);
+            ::flowlang::rustcmd::RustCmd::new("nzimgn1a1688a12faob2").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn qweni_captions_selftest() -> DataObject {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("rxhzlr1a168b4833au19f").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn qweni_store_roundtrip(source_store: String, trigger: String, keep: bool) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("source_store", &source_store);
+            d.put_string("trigger", &trigger);
+            d.put_boolean("keep", keep);
+            ::flowlang::rustcmd::RustCmd::new("qqsmrv1a168ccbf42t28b").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn synchro_s0_check() -> DataObject {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("hzllvh1a168fa4162xa8").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn flowdoc_s2_check() -> DataObject {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("gvvhni1a169101fcdq18e").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn flowstep_p0_rust_callee(a: String) -> String {
+            let mut d = DataObject::new();
+            d.put_string("a", &a);
+            ::flowlang::rustcmd::RustCmd::new("rrxrqz1a169ec86cal11f").execute(d).expect("Rust command execution failed").get_string("a")
+        }
+
+        pub fn flowstep_p0_check() -> DataObject {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("yykngp1a169f045c7g149").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn flowstep_p1_check(home: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("home", &home);
+            ::flowlang::rustcmd::RustCmd::new("ypyuji1a16a09e97cy206").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn flowstep_p2_check(home: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("home", &home);
+            ::flowlang::rustcmd::RustCmd::new("xzmhmq1a16a2ba925sb7").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn flowstep_p3_check(home: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("home", &home);
+            ::flowlang::rustcmd::RustCmd::new("yuloqu1a16a4215a9g80").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn facet_view(lib: String, ctl: String, facet: String, query: String, from: i64, to: i64) -> String {
+            let mut d = DataObject::new();
+            d.put_string("lib", &lib);
+            d.put_string("ctl", &ctl);
+            d.put_string("facet", &facet);
+            d.put_string("query", &query);
+            d.put_int("from", from);
+            d.put_int("to", to);
+            ::flowlang::rustcmd::RustCmd::new("ltkmsn1a16a6520c5z146").execute(d).expect("Rust command execution failed").get_string("a")
+        }
+
+        pub fn board_watch(claim_contains: String, expect_lifecycle: String, parent_contains: String, timeout_ms: i64, interval_ms: i64) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("claim_contains", &claim_contains);
+            d.put_string("expect_lifecycle", &expect_lifecycle);
+            d.put_string("parent_contains", &parent_contains);
+            d.put_int("timeout_ms", timeout_ms);
+            d.put_int("interval_ms", interval_ms);
+            ::flowlang::rustcmd::RustCmd::new("phzlws1a16e62662aq3a").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn grep_rust(lib: String, ctl: String, cmd: String, query: String, from: i64, to: i64) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("lib", &lib);
+            d.put_string("ctl", &ctl);
+            d.put_string("cmd", &cmd);
+            d.put_string("query", &query);
+            d.put_int("from", from);
+            d.put_int("to", to);
+            ::flowlang::rustcmd::RustCmd::new("shjmwg1a16e680162k48").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn board_state() -> DataObject {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("hnnggv1a16e6a3c7dn4f").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn flowstep_r3_mutate(o: DataObject, k: String, v: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_object("o", o);
+            d.put_string("k", &k);
+            d.put_string("v", &v);
+            ::flowlang::rustcmd::RustCmd::new("wknhul1a17024b93bn264").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn flowstep_r3_alias_probe() -> DataObject {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("ktjlzv1a1702a263br277").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn flowstep_r3_persistent_probe(home: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("home", &home);
+            ::flowlang::rustcmd::RustCmd::new("islnzw1a170702e2ci187").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn flowstep_r3_branch_probe(home: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("home", &home);
+            ::flowlang::rustcmd::RustCmd::new("swqjhk1a172d3a65ei5c").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn flowstep_r3_fork_everywhere(home: String, only: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("home", &home);
+            d.put_string("only", &only);
+            ::flowlang::rustcmd::RustCmd::new("rlmyqy1a1733b1bc5n5d").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn flowstep_r3_trim(home: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("home", &home);
+            ::flowlang::rustcmd::RustCmd::new("khvpjp1a17342f1b9h94").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn flowstep_r3_helpers_prep(home: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("home", &home);
+            ::flowlang::rustcmd::RustCmd::new("kvmzky1a1735fc524u72").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn flowstep_r3_pjoin_check(home: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("home", &home);
+            ::flowlang::rustcmd::RustCmd::new("ziprzi1a17362d4e9s80").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn flowstep_r3_split_check(home: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("home", &home);
+            ::flowlang::rustcmd::RustCmd::new("pwghnz1a191b99d09ua15").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn flowstep_r3_d2_check(home: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("home", &home);
+            ::flowlang::rustcmd::RustCmd::new("wnrhny1a191cceed7w6a").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn flowstep_r3_seq_check(home: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("home", &home);
+            ::flowlang::rustcmd::RustCmd::new("pkntom1a191d3af12ob3").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn flowstep_r4_gate(name: String, i: i64) -> String {
+            let mut d = DataObject::new();
+            d.put_string("name", &name);
+            d.put_int("i", i);
+            ::flowlang::rustcmd::RustCmd::new("koykjx1a191f4d8a6tca").execute(d).expect("Rust command execution failed").get_string("a")
+        }
+
+        pub fn flowstep_r4_check(home: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("home", &home);
+            ::flowlang::rustcmd::RustCmd::new("xglihn1a191f8f672le3").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn flowstep_r5_check(home: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("home", &home);
+            ::flowlang::rustcmd::RustCmd::new("qjlmtl1a19222bb1dr110").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn flowstep_r6_timeline_check(home: String, node: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("home", &home);
+            d.put_string("node", &node);
+            ::flowlang::rustcmd::RustCmd::new("zgzuuh1a1925023a4t107").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn nb_tab_eval(js: String, timeout_ms: i64) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("js", &js);
+            d.put_int("timeout_ms", timeout_ms);
+            ::flowlang::rustcmd::RustCmd::new("tniuhy1a1925b222eo17c").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn r6_browser_drive(script: DataArray) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_array("script", script);
+            ::flowlang::rustcmd::RustCmd::new("uhvmgl1a1926496d1l1d2").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn flowstep_r6_default_check(home: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("home", &home);
+            ::flowlang::rustcmd::RustCmd::new("xjxxhi1a1926b9050v1fe").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn r6_browser_setup(fresh: String, cmd: String, headless: bool) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("fresh", &fresh);
+            d.put_string("cmd", &cmd);
+            d.put_boolean("headless", headless);
+            ::flowlang::rustcmd::RustCmd::new("lvgyty1a1926eff50k21a").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn r6_gl_pixdiff(name: String, against: String, x: i64, y: i64, w: i64, h: i64) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("name", &name);
+            d.put_string("against", &against);
+            d.put_int("x", x);
+            d.put_int("y", y);
+            d.put_int("w", w);
+            d.put_int("h", h);
+            ::flowlang::rustcmd::RustCmd::new("hqujot1a192a27ceav159").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn flowstep_r6_nested_fatal_check(home: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("home", &home);
+            ::flowlang::rustcmd::RustCmd::new("zrxxhs1a192ec9e6fg362").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+    }
+    pub mod stageclock {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+    }
+    pub mod behavpeer_model {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+    }
+    pub mod comp_peer {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+    }
+    pub mod comp_app {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+    }
+    pub mod plan_autonomy_progress {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+    }
+    pub mod flow3d_progress {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+    }
+    pub mod wan22_caption_progress {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+    }
+    pub mod qweni_caption_progress {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+    }
+    pub mod synchro_s3_progress {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+    }
+    pub mod flowstep_p0_progress {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+        pub fn progress() -> DataObject {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("qhqiuw1a16eb0ab0ck197").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+    }
+    pub mod flowstep_p1_progress {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+    }
+    pub mod flowstep_p2_progress {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+    }
+    pub mod flowstep_p3_progress {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+    }
+    pub mod flowstep_p4_progress {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+    }
+    pub mod flowstep_p5_progress {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+    }
+    pub mod flowstep_r2_progress {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+    }
+    pub mod flowstep {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+        pub fn debug_step(session: String, mode: String, pick: DataObject) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("session", &session);
+            d.put_string("mode", &mode);
+            d.put_object("pick", pick);
+            ::flowlang::rustcmd::RustCmd::new("ypgjvs1a1701e59b5q250").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn debug_start(lib: String, ctl: String, cmd: String, body: DataObject, args: DataObject) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("lib", &lib);
+            d.put_string("ctl", &ctl);
+            d.put_string("cmd", &cmd);
+            d.put_object("body", body);
+            d.put_object("args", args);
+            ::flowlang::rustcmd::RustCmd::new("tortlg1a1701e5f6fy252").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn debug_state(session: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("session", &session);
+            ::flowlang::rustcmd::RustCmd::new("xtmiru1a1701e651am254").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn debug_stop(session: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("session", &session);
+            ::flowlang::rustcmd::RustCmd::new("xvxvyh1a170427181r86").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn debug_reap() -> DataObject {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("iigvyz1a191f4638frc7").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn run_flow(lib: String, ctl: String, cmd: String, args: DataObject, events: i64, budget: i64, nn_sessionid: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("lib", &lib);
+            d.put_string("ctl", &ctl);
+            d.put_string("cmd", &cmd);
+            d.put_object("args", args);
+            d.put_int("events", events);
+            d.put_int("budget", budget);
+            d.put_string("nn_sessionid", &nn_sessionid);
+            ::flowlang::rustcmd::RustCmd::new("jrmqgt1a192164d7eyb0").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+    }
+    pub mod flowstep_r3_progress {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+    }
+    pub mod moss_image_progress {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+    }
+    pub mod flowstep_r4_progress {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+    }
+    pub mod flowstep_r5_progress {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+    }
+    pub mod flowstep_r6_progress {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
 
     }
 }
@@ -4561,6 +7149,28 @@ pub mod trainmore {
             ::flowlang::rustcmd::RustCmd::new("totsmo1a03e84382bs1").execute(d).expect("Rust command execution failed").get_object("a")
         }
 
+        pub fn qwenvl_captions(imgdir: String, cached: DataObject, trigger: String, musubi: String, model: String, bashcmd: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("imgdir", &imgdir);
+            d.put_object("cached", cached);
+            d.put_string("trigger", &trigger);
+            d.put_string("musubi", &musubi);
+            d.put_string("model", &model);
+            d.put_string("bashcmd", &bashcmd);
+            ::flowlang::rustcmd::RustCmd::new("yvurpl1a168469ddfv17da").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn aitk_datasets(src: String, tiers_root: String, resolutions: DataArray, max_upscale: f64, lowres_tag: String, caption_dropout: f64) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("src", &src);
+            d.put_string("tiers_root", &tiers_root);
+            d.put_array("resolutions", resolutions);
+            d.put_float("max_upscale", max_upscale);
+            d.put_string("lowres_tag", &lowres_tag);
+            d.put_float("caption_dropout", caption_dropout);
+            ::flowlang::rustcmd::RustCmd::new("pizsoj1a17a8710cfw4f7").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
     }
     pub mod ernie {
         use ::ndata::dataobject::DataObject;
@@ -4717,6 +7327,17 @@ pub mod trainmore {
             ::flowlang::rustcmd::RustCmd::new("kuoris199633b56d6g253").execute(d).expect("Rust command execution failed").get_string("a")
         }
 
+        pub fn captions(imgdir: String, cached: DataObject, trigger: String, musubi: String, model: String, bashcmd: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("imgdir", &imgdir);
+            d.put_object("cached", cached);
+            d.put_string("trigger", &trigger);
+            d.put_string("musubi", &musubi);
+            d.put_string("model", &model);
+            d.put_string("bashcmd", &bashcmd);
+            ::flowlang::rustcmd::RustCmd::new("kphwgq1a168b20a88w195").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
     }
     pub mod sdxl {
         use ::ndata::dataobject::DataObject;
@@ -4821,12 +7442,44 @@ pub mod trainmore {
         }
 
     }
+    pub mod moss {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+        pub fn install() -> DataObject {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("suktvk1a1738fc325m141").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn train(job: DataObject) -> String {
+            let mut d = DataObject::new();
+            d.put_object("job", job);
+            ::flowlang::rustcmd::RustCmd::new("ivlrqn1a173908515q147").execute(d).expect("Rust command execution failed").get_string("a")
+        }
+
+    }
+}
+
+pub mod workspace {
+    pub mod workspace {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+        pub fn stats() -> DataObject {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("suhstn1a0fc98ffc1me27").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+    }
 }
 
 pub struct old_agent_agent {}
 pub struct old_agent_llm {}
 pub struct old_agent_plugin {}
-pub struct old_agent_scratch {}
 pub struct old_agent_agentloop {}
 pub struct old_agent_agentprompt {}
 pub struct old_agent_memory {}
@@ -4844,6 +7497,8 @@ pub struct old_agent_tools {}
 pub struct old_agent_plan {}
 pub struct old_agent_browser {}
 pub struct old_agent_browser_builder {}
+pub struct old_agent_committer {}
+pub struct old_agent_stage {}
 pub struct old_app_api {}
 pub struct old_app_app {}
 pub struct old_app_appcard {}
@@ -4852,22 +7507,25 @@ pub struct old_app_dial {}
 pub struct old_app_list {}
 pub struct old_app_list_item {}
 pub struct old_app_login {}
-pub struct old_app_scenegraph {}
 pub struct old_app_select {}
 pub struct old_app_service {}
 pub struct old_app_shape {}
 pub struct old_app_ui {}
 pub struct old_app_ui_reference {}
 pub struct old_app_util {}
-pub struct old_app_sceneplayer {}
 pub struct old_app_sceneexpr {}
 pub struct old_app_scenetokens {}
 pub struct old_app_scenedoc {}
 pub struct old_app_sceneproject {}
-pub struct old_app_scenerun {}
-pub struct old_app_forcelayout {}
 pub struct old_app_tokens {}
 pub struct old_app_webgl {}
+pub struct old_app_home {}
+pub struct old_app_scenehost {}
+pub struct old_camera_camera {}
+pub struct old_camera_camera_settings {}
+pub struct old_camera_dvr {}
+pub struct old_camera_live {}
+pub struct old_camera_dvr_settings {}
 pub struct old_dev_dev {}
 pub struct old_dev_editcommand {}
 pub struct old_dev_editcontrol {}
@@ -4894,9 +7552,19 @@ pub struct old_dev_facets {}
 pub struct old_dev_code {}
 pub struct old_dev_viewctx {}
 pub struct old_dev_git {}
+pub struct old_dev_flownode {}
+pub struct old_dev_flowspike {}
+pub struct old_dev_flowview3d {}
+pub struct old_dev_flowedit3d {}
+pub struct old_dev_flowtoken {}
+pub struct old_dev_flowstep {}
+pub struct old_dev_flowdebug {}
+pub struct old_dudeapi_dudeapi {}
+pub struct old_files_files {}
 pub struct old_fillmore_fillmore {}
 pub struct old_fillmore_queue {}
 pub struct old_fillmore_jobs {}
+pub struct old_flowfixtures_callees {}
 pub struct old_genmore_common {}
 pub struct old_genmore_ernie {}
 pub struct old_genmore_flux {}
@@ -4911,6 +7579,7 @@ pub struct old_genmore_wan {}
 pub struct old_genmore_wan22 {}
 pub struct old_genmore_zimg {}
 pub struct old_genmore_krea2 {}
+pub struct old_genmore_moss {}
 pub struct old_grabmore_grabmore {}
 pub struct old_grabmore_imageproc {}
 pub struct old_grabmore_selenium {}
@@ -4961,26 +7630,99 @@ pub struct old_gudrun_topnav {}
 pub struct old_gudrun_train {}
 pub struct old_gudrun_video_to_lora {}
 pub struct old_gudrun_select_fileupload {}
+pub struct old_gudrun_lora_to_mhm {}
+pub struct old_gudrun_select_lora {}
+pub struct old_gudrun_import_lora {}
+pub struct old_gudrun_image_edit {}
+pub struct old_gudrun_profile {}
+pub struct old_gudrun_workspace_page {}
+pub struct old_gudrun_characters {}
+pub struct old_hagarmap_hagarmap {}
+pub struct old_hollis_hollis {}
+pub struct old_hollis_audio {}
+pub struct old_img2mhm_img2mhm {}
+pub struct old_img2mhm_assets {}
+pub struct old_img2mhm_mh {}
+pub struct old_img2mhm_face {}
+pub struct old_img2mhm_solve {}
 pub struct old_kb_platform_api {}
 pub struct old_kb_workflow {}
 pub struct old_kb_frontend {}
-pub struct old_kb_m2026_07 {}
 pub struct old_kb_doctrine {}
-pub struct old_kb_nebula {}
-pub struct old_kb_camera {}
 pub struct old_kb_plan {}
 pub struct old_minifig_minifig {}
 pub struct old_nebula_lighthouse {}
 pub struct old_nebula_nebula {}
 pub struct old_nebula_network {}
 pub struct old_nebula_member {}
+pub struct old_nio_api {}
+pub struct old_nio_architecture {}
+pub struct old_nio_commands {}
+pub struct old_nio_commandspython {}
+pub struct old_nio_commandsrust {}
+pub struct old_nio_controls {}
+pub struct old_nio_core_app {}
+pub struct old_nio_core_dev {}
+pub struct old_nio_core_peer {}
+pub struct old_nio_diagram_architecture {}
+pub struct old_nio_doc {}
+pub struct old_nio_filesystem {}
+pub struct old_nio_flowlang {}
+pub struct old_nio_helloworld {}
+pub struct old_nio_installation {}
+pub struct old_nio_introduction {}
+pub struct old_nio_ndata {}
+pub struct old_nio_nio {}
+pub struct old_nio_nosql {}
+pub struct old_nio_services {}
+pub struct old_nio_core_security {}
 pub struct old_peer_headsup {}
 pub struct old_peer_peer {}
 pub struct old_peer_peer_model {}
 pub struct old_peer_reboot {}
 pub struct old_peer_service {}
 pub struct old_peer_peer_select {}
+pub struct old_raspberry_cpu {}
+pub struct old_raspberry_disk {}
+pub struct old_raspberry_memory {}
+pub struct old_raspberry_raspberry {}
+pub struct old_raspberry_temperature {}
+pub struct old_raspberry_apt {}
+pub struct old_scratch_build_docker_image {}
+pub struct old_scratch_chat {}
+pub struct old_scratch_command_metadata {}
+pub struct old_scratch_confirm {}
+pub struct old_scratch_detect_nix {}
+pub struct old_scratch_helloworld {}
+pub struct old_scratch_map {}
+pub struct old_scratch_nix_config_editor {}
+pub struct old_scratch_pystuff {}
 pub struct old_scratch_scratch {}
+pub struct old_scratch_stripe {}
+pub struct old_scratch_users {}
+pub struct old_scratch_skills {}
+pub struct old_scratch_stageclock {}
+pub struct old_scratch_behavpeer_model {}
+pub struct old_scratch_comp_peer {}
+pub struct old_scratch_comp_app {}
+pub struct old_scratch_plan_autonomy_progress {}
+pub struct old_scratch_flow3d_progress {}
+pub struct old_scratch_wan22_caption_progress {}
+pub struct old_scratch_qweni_caption_progress {}
+pub struct old_scratch_synchro_s3_progress {}
+pub struct old_scratch_flowstep_p0_progress {}
+pub struct old_scratch_flowstep_p1_progress {}
+pub struct old_scratch_flowstep_p2_progress {}
+pub struct old_scratch_flowstep_p3_progress {}
+pub struct old_scratch_flowstep_p4_progress {}
+pub struct old_scratch_flowstep_p5_progress {}
+pub struct old_scratch_flowstep_r2_progress {}
+pub struct old_scratch_flowstep {}
+pub struct old_scratch_flowstep_r3_progress {}
+pub struct old_scratch_moss_image_progress {}
+pub struct old_scratch_flowstep_r4_progress {}
+pub struct old_scratch_flowstep_r5_progress {}
+pub struct old_scratch_flowstep_r6_progress {}
 pub struct old_security_security {}
 pub struct old_storage_storage {}
 pub struct old_trainmore_common {}
@@ -4997,11 +7739,12 @@ pub struct old_trainmore_wan {}
 pub struct old_trainmore_wan22 {}
 pub struct old_trainmore_zimg {}
 pub struct old_trainmore_krea2 {}
+pub struct old_trainmore_moss {}
+pub struct old_workspace_workspace {}
 pub struct old_agent {
     pub agent: old_agent_agent,
     pub llm: old_agent_llm,
     pub plugin: old_agent_plugin,
-    pub scratch: old_agent_scratch,
     pub agentloop: old_agent_agentloop,
     pub agentprompt: old_agent_agentprompt,
     pub memory: old_agent_memory,
@@ -5019,6 +7762,8 @@ pub struct old_agent {
     pub plan: old_agent_plan,
     pub browser: old_agent_browser,
     pub browser_builder: old_agent_browser_builder,
+    pub committer: old_agent_committer,
+    pub stage: old_agent_stage,
 }
 pub struct old_app {
     pub api: old_app_api,
@@ -5029,22 +7774,27 @@ pub struct old_app {
     pub list: old_app_list,
     pub list_item: old_app_list_item,
     pub login: old_app_login,
-    pub scenegraph: old_app_scenegraph,
     pub select: old_app_select,
     pub service: old_app_service,
     pub shape: old_app_shape,
     pub ui: old_app_ui,
     pub ui_reference: old_app_ui_reference,
     pub util: old_app_util,
-    pub sceneplayer: old_app_sceneplayer,
     pub sceneexpr: old_app_sceneexpr,
     pub scenetokens: old_app_scenetokens,
     pub scenedoc: old_app_scenedoc,
     pub sceneproject: old_app_sceneproject,
-    pub scenerun: old_app_scenerun,
-    pub forcelayout: old_app_forcelayout,
     pub tokens: old_app_tokens,
     pub webgl: old_app_webgl,
+    pub home: old_app_home,
+    pub scenehost: old_app_scenehost,
+}
+pub struct old_camera {
+    pub camera: old_camera_camera,
+    pub camera_settings: old_camera_camera_settings,
+    pub dvr: old_camera_dvr,
+    pub live: old_camera_live,
+    pub dvr_settings: old_camera_dvr_settings,
 }
 pub struct old_dev {
     pub dev: old_dev_dev,
@@ -5073,11 +7823,27 @@ pub struct old_dev {
     pub code: old_dev_code,
     pub viewctx: old_dev_viewctx,
     pub git: old_dev_git,
+    pub flownode: old_dev_flownode,
+    pub flowspike: old_dev_flowspike,
+    pub flowview3d: old_dev_flowview3d,
+    pub flowedit3d: old_dev_flowedit3d,
+    pub flowtoken: old_dev_flowtoken,
+    pub flowstep: old_dev_flowstep,
+    pub flowdebug: old_dev_flowdebug,
+}
+pub struct old_dudeapi {
+    pub dudeapi: old_dudeapi_dudeapi,
+}
+pub struct old_files {
+    pub files: old_files_files,
 }
 pub struct old_fillmore {
     pub fillmore: old_fillmore_fillmore,
     pub queue: old_fillmore_queue,
     pub jobs: old_fillmore_jobs,
+}
+pub struct old_flowfixtures {
+    pub callees: old_flowfixtures_callees,
 }
 pub struct old_genmore {
     pub common: old_genmore_common,
@@ -5094,6 +7860,7 @@ pub struct old_genmore {
     pub wan22: old_genmore_wan22,
     pub zimg: old_genmore_zimg,
     pub krea2: old_genmore_krea2,
+    pub moss: old_genmore_moss,
 }
 pub struct old_grabmore {
     pub grabmore: old_grabmore_grabmore,
@@ -5148,15 +7915,33 @@ pub struct old_gudrun {
     pub train: old_gudrun_train,
     pub video_to_lora: old_gudrun_video_to_lora,
     pub select_fileupload: old_gudrun_select_fileupload,
+    pub lora_to_mhm: old_gudrun_lora_to_mhm,
+    pub select_lora: old_gudrun_select_lora,
+    pub import_lora: old_gudrun_import_lora,
+    pub image_edit: old_gudrun_image_edit,
+    pub profile: old_gudrun_profile,
+    pub workspace_page: old_gudrun_workspace_page,
+    pub characters: old_gudrun_characters,
+}
+pub struct old_hagarmap {
+    pub hagarmap: old_hagarmap_hagarmap,
+}
+pub struct old_hollis {
+    pub hollis: old_hollis_hollis,
+    pub audio: old_hollis_audio,
+}
+pub struct old_img2mhm {
+    pub img2mhm: old_img2mhm_img2mhm,
+    pub assets: old_img2mhm_assets,
+    pub mh: old_img2mhm_mh,
+    pub face: old_img2mhm_face,
+    pub solve: old_img2mhm_solve,
 }
 pub struct old_kb {
     pub platform_api: old_kb_platform_api,
     pub workflow: old_kb_workflow,
     pub frontend: old_kb_frontend,
-    pub m2026_07: old_kb_m2026_07,
     pub doctrine: old_kb_doctrine,
-    pub nebula: old_kb_nebula,
-    pub camera: old_kb_camera,
     pub plan: old_kb_plan,
 }
 pub struct old_minifig {
@@ -5168,6 +7953,29 @@ pub struct old_nebula {
     pub network: old_nebula_network,
     pub member: old_nebula_member,
 }
+pub struct old_nio {
+    pub api: old_nio_api,
+    pub architecture: old_nio_architecture,
+    pub commands: old_nio_commands,
+    pub commandspython: old_nio_commandspython,
+    pub commandsrust: old_nio_commandsrust,
+    pub controls: old_nio_controls,
+    pub core_app: old_nio_core_app,
+    pub core_dev: old_nio_core_dev,
+    pub core_peer: old_nio_core_peer,
+    pub diagram_architecture: old_nio_diagram_architecture,
+    pub doc: old_nio_doc,
+    pub filesystem: old_nio_filesystem,
+    pub flowlang: old_nio_flowlang,
+    pub helloworld: old_nio_helloworld,
+    pub installation: old_nio_installation,
+    pub introduction: old_nio_introduction,
+    pub ndata: old_nio_ndata,
+    pub nio: old_nio_nio,
+    pub nosql: old_nio_nosql,
+    pub services: old_nio_services,
+    pub core_security: old_nio_core_security,
+}
 pub struct old_peer {
     pub headsup: old_peer_headsup,
     pub peer: old_peer_peer,
@@ -5176,10 +7984,52 @@ pub struct old_peer {
     pub service: old_peer_service,
     pub peer_select: old_peer_peer_select,
 }
+pub struct old_raspberry {
+    pub cpu: old_raspberry_cpu,
+    pub disk: old_raspberry_disk,
+    pub memory: old_raspberry_memory,
+    pub raspberry: old_raspberry_raspberry,
+    pub temperature: old_raspberry_temperature,
+    pub apt: old_raspberry_apt,
+}
 pub struct old_runtime {
 }
 pub struct old_scratch {
+    pub build_docker_image: old_scratch_build_docker_image,
+    pub chat: old_scratch_chat,
+    pub command_metadata: old_scratch_command_metadata,
+    pub confirm: old_scratch_confirm,
+    pub detect_nix: old_scratch_detect_nix,
+    pub helloworld: old_scratch_helloworld,
+    pub map: old_scratch_map,
+    pub nix_config_editor: old_scratch_nix_config_editor,
+    pub pystuff: old_scratch_pystuff,
     pub scratch: old_scratch_scratch,
+    pub stripe: old_scratch_stripe,
+    pub users: old_scratch_users,
+    pub skills: old_scratch_skills,
+    pub stageclock: old_scratch_stageclock,
+    pub behavpeer_model: old_scratch_behavpeer_model,
+    pub comp_peer: old_scratch_comp_peer,
+    pub comp_app: old_scratch_comp_app,
+    pub plan_autonomy_progress: old_scratch_plan_autonomy_progress,
+    pub flow3d_progress: old_scratch_flow3d_progress,
+    pub wan22_caption_progress: old_scratch_wan22_caption_progress,
+    pub qweni_caption_progress: old_scratch_qweni_caption_progress,
+    pub synchro_s3_progress: old_scratch_synchro_s3_progress,
+    pub flowstep_p0_progress: old_scratch_flowstep_p0_progress,
+    pub flowstep_p1_progress: old_scratch_flowstep_p1_progress,
+    pub flowstep_p2_progress: old_scratch_flowstep_p2_progress,
+    pub flowstep_p3_progress: old_scratch_flowstep_p3_progress,
+    pub flowstep_p4_progress: old_scratch_flowstep_p4_progress,
+    pub flowstep_p5_progress: old_scratch_flowstep_p5_progress,
+    pub flowstep_r2_progress: old_scratch_flowstep_r2_progress,
+    pub flowstep: old_scratch_flowstep,
+    pub flowstep_r3_progress: old_scratch_flowstep_r3_progress,
+    pub moss_image_progress: old_scratch_moss_image_progress,
+    pub flowstep_r4_progress: old_scratch_flowstep_r4_progress,
+    pub flowstep_r5_progress: old_scratch_flowstep_r5_progress,
+    pub flowstep_r6_progress: old_scratch_flowstep_r6_progress,
 }
 pub struct old_security {
     pub security: old_security_security,
@@ -5202,24 +8052,38 @@ pub struct old_trainmore {
     pub wan22: old_trainmore_wan22,
     pub zimg: old_trainmore_zimg,
     pub krea2: old_trainmore_krea2,
+    pub moss: old_trainmore_moss,
+}
+pub struct old_workspace {
+    pub workspace: old_workspace_workspace,
 }
 pub struct api {
     pub agent: old_agent,
     pub app: old_app,
+    pub camera: old_camera,
     pub dev: old_dev,
+    pub dudeapi: old_dudeapi,
+    pub files: old_files,
     pub fillmore: old_fillmore,
+    pub flowfixtures: old_flowfixtures,
     pub genmore: old_genmore,
     pub grabmore: old_grabmore,
     pub gudrun: old_gudrun,
+    pub hagarmap: old_hagarmap,
+    pub hollis: old_hollis,
+    pub img2mhm: old_img2mhm,
     pub kb: old_kb,
     pub minifig: old_minifig,
     pub nebula: old_nebula,
+    pub nio: old_nio,
     pub peer: old_peer,
+    pub raspberry: old_raspberry,
     pub runtime: old_runtime,
     pub scratch: old_scratch,
     pub security: old_security,
     pub storage: old_storage,
     pub trainmore: old_trainmore,
+    pub workspace: old_workspace,
 }
 
 pub const fn new() -> api {
@@ -5228,7 +8092,6 @@ pub const fn new() -> api {
             agent: old_agent_agent {},
             llm: old_agent_llm {},
             plugin: old_agent_plugin {},
-            scratch: old_agent_scratch {},
             agentloop: old_agent_agentloop {},
             agentprompt: old_agent_agentprompt {},
             memory: old_agent_memory {},
@@ -5246,6 +8109,8 @@ pub const fn new() -> api {
             plan: old_agent_plan {},
             browser: old_agent_browser {},
             browser_builder: old_agent_browser_builder {},
+            committer: old_agent_committer {},
+            stage: old_agent_stage {},
         },
         app: old_app {
             api: old_app_api {},
@@ -5256,22 +8121,27 @@ pub const fn new() -> api {
             list: old_app_list {},
             list_item: old_app_list_item {},
             login: old_app_login {},
-            scenegraph: old_app_scenegraph {},
             select: old_app_select {},
             service: old_app_service {},
             shape: old_app_shape {},
             ui: old_app_ui {},
             ui_reference: old_app_ui_reference {},
             util: old_app_util {},
-            sceneplayer: old_app_sceneplayer {},
             sceneexpr: old_app_sceneexpr {},
             scenetokens: old_app_scenetokens {},
             scenedoc: old_app_scenedoc {},
             sceneproject: old_app_sceneproject {},
-            scenerun: old_app_scenerun {},
-            forcelayout: old_app_forcelayout {},
             tokens: old_app_tokens {},
             webgl: old_app_webgl {},
+            home: old_app_home {},
+            scenehost: old_app_scenehost {},
+        },
+        camera: old_camera {
+            camera: old_camera_camera {},
+            camera_settings: old_camera_camera_settings {},
+            dvr: old_camera_dvr {},
+            live: old_camera_live {},
+            dvr_settings: old_camera_dvr_settings {},
         },
         dev: old_dev {
             dev: old_dev_dev {},
@@ -5300,11 +8170,27 @@ pub const fn new() -> api {
             code: old_dev_code {},
             viewctx: old_dev_viewctx {},
             git: old_dev_git {},
+            flownode: old_dev_flownode {},
+            flowspike: old_dev_flowspike {},
+            flowview3d: old_dev_flowview3d {},
+            flowedit3d: old_dev_flowedit3d {},
+            flowtoken: old_dev_flowtoken {},
+            flowstep: old_dev_flowstep {},
+            flowdebug: old_dev_flowdebug {},
+        },
+        dudeapi: old_dudeapi {
+            dudeapi: old_dudeapi_dudeapi {},
+        },
+        files: old_files {
+            files: old_files_files {},
         },
         fillmore: old_fillmore {
             fillmore: old_fillmore_fillmore {},
             queue: old_fillmore_queue {},
             jobs: old_fillmore_jobs {},
+        },
+        flowfixtures: old_flowfixtures {
+            callees: old_flowfixtures_callees {},
         },
         genmore: old_genmore {
             common: old_genmore_common {},
@@ -5321,6 +8207,7 @@ pub const fn new() -> api {
             wan22: old_genmore_wan22 {},
             zimg: old_genmore_zimg {},
             krea2: old_genmore_krea2 {},
+            moss: old_genmore_moss {},
         },
         grabmore: old_grabmore {
             grabmore: old_grabmore_grabmore {},
@@ -5375,15 +8262,33 @@ pub const fn new() -> api {
             train: old_gudrun_train {},
             video_to_lora: old_gudrun_video_to_lora {},
             select_fileupload: old_gudrun_select_fileupload {},
+            lora_to_mhm: old_gudrun_lora_to_mhm {},
+            select_lora: old_gudrun_select_lora {},
+            import_lora: old_gudrun_import_lora {},
+            image_edit: old_gudrun_image_edit {},
+            profile: old_gudrun_profile {},
+            workspace_page: old_gudrun_workspace_page {},
+            characters: old_gudrun_characters {},
+        },
+        hagarmap: old_hagarmap {
+            hagarmap: old_hagarmap_hagarmap {},
+        },
+        hollis: old_hollis {
+            hollis: old_hollis_hollis {},
+            audio: old_hollis_audio {},
+        },
+        img2mhm: old_img2mhm {
+            img2mhm: old_img2mhm_img2mhm {},
+            assets: old_img2mhm_assets {},
+            mh: old_img2mhm_mh {},
+            face: old_img2mhm_face {},
+            solve: old_img2mhm_solve {},
         },
         kb: old_kb {
             platform_api: old_kb_platform_api {},
             workflow: old_kb_workflow {},
             frontend: old_kb_frontend {},
-            m2026_07: old_kb_m2026_07 {},
             doctrine: old_kb_doctrine {},
-            nebula: old_kb_nebula {},
-            camera: old_kb_camera {},
             plan: old_kb_plan {},
         },
         minifig: old_minifig {
@@ -5395,6 +8300,29 @@ pub const fn new() -> api {
             network: old_nebula_network {},
             member: old_nebula_member {},
         },
+        nio: old_nio {
+            api: old_nio_api {},
+            architecture: old_nio_architecture {},
+            commands: old_nio_commands {},
+            commandspython: old_nio_commandspython {},
+            commandsrust: old_nio_commandsrust {},
+            controls: old_nio_controls {},
+            core_app: old_nio_core_app {},
+            core_dev: old_nio_core_dev {},
+            core_peer: old_nio_core_peer {},
+            diagram_architecture: old_nio_diagram_architecture {},
+            doc: old_nio_doc {},
+            filesystem: old_nio_filesystem {},
+            flowlang: old_nio_flowlang {},
+            helloworld: old_nio_helloworld {},
+            installation: old_nio_installation {},
+            introduction: old_nio_introduction {},
+            ndata: old_nio_ndata {},
+            nio: old_nio_nio {},
+            nosql: old_nio_nosql {},
+            services: old_nio_services {},
+            core_security: old_nio_core_security {},
+        },
         peer: old_peer {
             headsup: old_peer_headsup {},
             peer: old_peer_peer {},
@@ -5403,10 +8331,52 @@ pub const fn new() -> api {
             service: old_peer_service {},
             peer_select: old_peer_peer_select {},
         },
+        raspberry: old_raspberry {
+            cpu: old_raspberry_cpu {},
+            disk: old_raspberry_disk {},
+            memory: old_raspberry_memory {},
+            raspberry: old_raspberry_raspberry {},
+            temperature: old_raspberry_temperature {},
+            apt: old_raspberry_apt {},
+        },
         runtime: old_runtime {
         },
         scratch: old_scratch {
+            build_docker_image: old_scratch_build_docker_image {},
+            chat: old_scratch_chat {},
+            command_metadata: old_scratch_command_metadata {},
+            confirm: old_scratch_confirm {},
+            detect_nix: old_scratch_detect_nix {},
+            helloworld: old_scratch_helloworld {},
+            map: old_scratch_map {},
+            nix_config_editor: old_scratch_nix_config_editor {},
+            pystuff: old_scratch_pystuff {},
             scratch: old_scratch_scratch {},
+            stripe: old_scratch_stripe {},
+            users: old_scratch_users {},
+            skills: old_scratch_skills {},
+            stageclock: old_scratch_stageclock {},
+            behavpeer_model: old_scratch_behavpeer_model {},
+            comp_peer: old_scratch_comp_peer {},
+            comp_app: old_scratch_comp_app {},
+            plan_autonomy_progress: old_scratch_plan_autonomy_progress {},
+            flow3d_progress: old_scratch_flow3d_progress {},
+            wan22_caption_progress: old_scratch_wan22_caption_progress {},
+            qweni_caption_progress: old_scratch_qweni_caption_progress {},
+            synchro_s3_progress: old_scratch_synchro_s3_progress {},
+            flowstep_p0_progress: old_scratch_flowstep_p0_progress {},
+            flowstep_p1_progress: old_scratch_flowstep_p1_progress {},
+            flowstep_p2_progress: old_scratch_flowstep_p2_progress {},
+            flowstep_p3_progress: old_scratch_flowstep_p3_progress {},
+            flowstep_p4_progress: old_scratch_flowstep_p4_progress {},
+            flowstep_p5_progress: old_scratch_flowstep_p5_progress {},
+            flowstep_r2_progress: old_scratch_flowstep_r2_progress {},
+            flowstep: old_scratch_flowstep {},
+            flowstep_r3_progress: old_scratch_flowstep_r3_progress {},
+            moss_image_progress: old_scratch_moss_image_progress {},
+            flowstep_r4_progress: old_scratch_flowstep_r4_progress {},
+            flowstep_r5_progress: old_scratch_flowstep_r5_progress {},
+            flowstep_r6_progress: old_scratch_flowstep_r6_progress {},
         },
         security: old_security {
             security: old_security_security {},
@@ -5429,6 +8399,10 @@ pub const fn new() -> api {
             wan22: old_trainmore_wan22 {},
             zimg: old_trainmore_zimg {},
             krea2: old_trainmore_krea2 {},
+            moss: old_trainmore_moss {},
+        },
+        workspace: old_workspace {
+            workspace: old_workspace_workspace {},
         },
     }
 }
@@ -5450,6 +8424,38 @@ impl old_agent_llm {
     pub fn claude_code(&self, messages: DataArray, tools: DataArray) -> DataObject {
         self::agent::llm::claude_code(messages, tools)
     }
+    #[deprecated(note = "use api::agent::llm::llm_common instead")]
+    pub fn llm_common(&self) -> DataObject {
+        self::agent::llm::llm_common()
+    }
+    #[deprecated(note = "use api::agent::llm::llm_openai instead")]
+    pub fn llm_openai(&self, messages: DataArray, tools: DataArray, model: String, temperature: f64, max_tokens: i64, arm: String) -> DataObject {
+        self::agent::llm::llm_openai(messages, tools, model, temperature, max_tokens, arm)
+    }
+    #[deprecated(note = "use api::agent::llm::llm_anthropic instead")]
+    pub fn llm_anthropic(&self) -> DataObject {
+        self::agent::llm::llm_anthropic()
+    }
+    #[deprecated(note = "use api::agent::llm::llm_gemini instead")]
+    pub fn llm_gemini(&self) -> DataObject {
+        self::agent::llm::llm_gemini()
+    }
+    #[deprecated(note = "use api::agent::llm::llm_ollama instead")]
+    pub fn llm_ollama(&self, messages: DataArray, tools: DataArray, model: String, temperature: f64, max_tokens: i64, keep_alive: String) -> DataObject {
+        self::agent::llm::llm_ollama(messages, tools, model, temperature, max_tokens, keep_alive)
+    }
+    #[deprecated(note = "use api::agent::llm::llm_local instead")]
+    pub fn llm_local(&self, messages: DataArray, tools: DataArray, meta: DataObject) -> DataObject {
+        self::agent::llm::llm_local(messages, tools, meta)
+    }
+    #[deprecated(note = "use api::agent::llm::llm_remote instead")]
+    pub fn llm_remote(&self, messages: DataArray, tools: DataArray, meta: DataObject) -> DataObject {
+        self::agent::llm::llm_remote(messages, tools, meta)
+    }
+    #[deprecated(note = "use api::agent::llm::last_request instead")]
+    pub fn last_request(&self) -> DataObject {
+        self::agent::llm::last_request()
+    }
 }
 impl old_agent_plugin {
     #[deprecated(note = "use api::agent::plugin::control_query instead")]
@@ -5465,10 +8471,14 @@ impl old_agent_plugin {
         self::agent::plugin::describe_command(command_name, lang, returntype, groups, params, imports, code, current_description)
     }
 }
-impl old_agent_scratch {
-    #[deprecated(note = "use api::agent::scratch::eval_pshkms19ee68b2a1ct46 instead")]
-    pub fn eval_pshkms19ee68b2a1ct46(&self) -> DataObject {
-        self::agent::scratch::eval_pshkms19ee68b2a1ct46()
+impl old_agent_agentloop {
+    #[deprecated(note = "use api::agent::agentloop::get_auto_approve instead")]
+    pub fn get_auto_approve(&self) -> DataObject {
+        self::agent::agentloop::get_auto_approve()
+    }
+    #[deprecated(note = "use api::agent::agentloop::get_tool_budget instead")]
+    pub fn get_tool_budget(&self) -> DataObject {
+        self::agent::agentloop::get_tool_budget()
     }
 }
 impl old_agent_archivist {
@@ -5533,6 +8543,18 @@ impl old_agent_chat {
     #[deprecated(note = "use api::agent::chat::upload instead")]
     pub fn upload(&self, filename: String, data_b64: String) -> DataObject {
         self::agent::chat::upload(filename, data_b64)
+    }
+    #[deprecated(note = "use api::agent::chat::session_index instead")]
+    pub fn session_index(&self, op: String, id: String, arg: String, nn_sessionid: String) -> DataObject {
+        self::agent::chat::session_index(op, id, arg, nn_sessionid)
+    }
+    #[deprecated(note = "use api::agent::chat::session_open instead")]
+    pub fn session_open(&self, id: String, nn_sessionid: String) -> DataObject {
+        self::agent::chat::session_open(id, nn_sessionid)
+    }
+    #[deprecated(note = "use api::agent::chat::session_touch instead")]
+    pub fn session_touch(&self, id: String, nn_sessionid: String) -> DataObject {
+        self::agent::chat::session_touch(id, nn_sessionid)
     }
 }
 impl old_agent_executive {
@@ -5748,6 +8770,10 @@ impl old_agent_model {
     pub fn harvest_report(&self, window_days: i64) -> DataObject {
         self::agent::model::harvest_report(window_days)
     }
+    #[deprecated(note = "use api::agent::model::export_tick instead")]
+    pub fn export_tick(&self) -> DataObject {
+        self::agent::model::export_tick()
+    }
 }
 impl old_agent_msg {
     #[deprecated(note = "use api::agent::msg::put instead")]
@@ -5761,6 +8787,14 @@ impl old_agent_msg {
     #[deprecated(note = "use api::agent::msg::recent instead")]
     pub fn recent(&self, venue: String, limit: i64) -> DataObject {
         self::agent::msg::recent(venue, limit)
+    }
+    #[deprecated(note = "use api::agent::msg::expand_clipped instead")]
+    pub fn expand_clipped(&self, fragment: String) -> DataObject {
+        self::agent::msg::expand_clipped(fragment)
+    }
+    #[deprecated(note = "use api::agent::msg::capture instead")]
+    pub fn capture(&self, venue: String, messages: DataArray, entity: String, provenance: String) -> DataObject {
+        self::agent::msg::capture(venue, messages, entity, provenance)
     }
 }
 impl old_agent_context {
@@ -5778,6 +8812,34 @@ impl old_agent_tools {
     pub fn rsync_push(&self, host: String, src: String, dst: String) -> DataObject {
         self::agent::tools::rsync_push(host, src, dst)
     }
+    #[deprecated(note = "use api::agent::tools::get_time instead")]
+    pub fn get_time(&self) -> i64 {
+        self::agent::tools::get_time()
+    }
+    #[deprecated(note = "use api::agent::tools::read_file instead")]
+    pub fn read_file(&self, path: String) -> String {
+        self::agent::tools::read_file(path)
+    }
+    #[deprecated(note = "use api::agent::tools::list_dir instead")]
+    pub fn list_dir(&self, path: String) -> DataArray {
+        self::agent::tools::list_dir(path)
+    }
+    #[deprecated(note = "use api::agent::tools::read_properties instead")]
+    pub fn read_properties(&self, path: String) -> DataObject {
+        self::agent::tools::read_properties(path)
+    }
+    #[deprecated(note = "use api::agent::tools::write_properties instead")]
+    pub fn write_properties(&self, path: String, data: DataObject) -> String {
+        self::agent::tools::write_properties(path, data)
+    }
+    #[deprecated(note = "use api::agent::tools::get_path_info instead")]
+    pub fn get_path_info(&self, path: String) -> DataObject {
+        self::agent::tools::get_path_info(path)
+    }
+    #[deprecated(note = "use api::agent::tools::run_local instead")]
+    pub fn run_local(&self, argv: DataArray, timeout_secs: i64) -> DataObject {
+        self::agent::tools::run_local(argv, timeout_secs)
+    }
 }
 impl old_agent_plan {
     #[deprecated(note = "use api::agent::plan::board instead")]
@@ -5789,8 +8851,88 @@ impl old_agent_plan {
         self::agent::plan::move_item(claim, lifecycle, base, nn_sessionid)
     }
     #[deprecated(note = "use api::agent::plan::add_item instead")]
-    pub fn add_item(&self, claim: String, detail: String, nn_sessionid: String) -> DataObject {
-        self::agent::plan::add_item(claim, detail, nn_sessionid)
+    pub fn add_item(&self, claim: String, detail: String, parent: String, nn_sessionid: String) -> DataObject {
+        self::agent::plan::add_item(claim, detail, parent, nn_sessionid)
+    }
+    #[deprecated(note = "use api::agent::plan::step_item instead")]
+    pub fn step_item(&self, claim: String, base: String, nn_sessionid: String) -> DataObject {
+        self::agent::plan::step_item(claim, base, nn_sessionid)
+    }
+    #[deprecated(note = "use api::agent::plan::worker_start instead")]
+    pub fn worker_start(&self) -> DataObject {
+        self::agent::plan::worker_start()
+    }
+    #[deprecated(note = "use api::agent::plan::worker_status instead")]
+    pub fn worker_status(&self) -> DataObject {
+        self::agent::plan::worker_status()
+    }
+    #[deprecated(note = "use api::agent::plan::board_hash instead")]
+    pub fn board_hash(&self) -> DataObject {
+        self::agent::plan::board_hash()
+    }
+    #[deprecated(note = "use api::agent::plan::add_note instead")]
+    pub fn add_note(&self, claim: String, note: String, nn_sessionid: String) -> DataObject {
+        self::agent::plan::add_note(claim, note, nn_sessionid)
+    }
+    #[deprecated(note = "use api::agent::plan::test_parent_coordination_eligibility instead")]
+    pub fn test_parent_coordination_eligibility(&self) -> DataObject {
+        self::agent::plan::test_parent_coordination_eligibility()
+    }
+    #[deprecated(note = "use api::agent::plan::set_autonomy instead")]
+    pub fn set_autonomy(&self, enabled: bool) -> DataObject {
+        self::agent::plan::set_autonomy(enabled)
+    }
+    #[deprecated(note = "use api::agent::plan::activity_status instead")]
+    pub fn activity_status(&self, after: i64, limit: i64) -> DataObject {
+        self::agent::plan::activity_status(after, limit)
+    }
+    #[deprecated(note = "use api::agent::plan::activity_emit instead")]
+    pub fn activity_emit(&self, run_id: String, event: DataObject) -> DataObject {
+        self::agent::plan::activity_emit(run_id, event)
+    }
+    #[deprecated(note = "use api::agent::plan::activity_history instead")]
+    pub fn activity_history(&self, run_id: String, after: i64, limit: i64) -> DataObject {
+        self::agent::plan::activity_history(run_id, after, limit)
+    }
+    #[deprecated(note = "use api::agent::plan::continuity_context instead")]
+    pub fn continuity_context(&self, entry: DataObject) -> DataObject {
+        self::agent::plan::continuity_context(entry)
+    }
+    #[deprecated(note = "use api::agent::plan::checkpoint instead")]
+    pub fn checkpoint(&self, input: DataObject) -> DataObject {
+        self::agent::plan::checkpoint(input)
+    }
+    #[deprecated(note = "use api::agent::plan::checkpoint_read instead")]
+    pub fn checkpoint_read(&self, checkpoint: DataObject, fallback_text: String) -> DataObject {
+        self::agent::plan::checkpoint_read(checkpoint, fallback_text)
+    }
+    #[deprecated(note = "use api::agent::plan::test_continuity_contract instead")]
+    pub fn test_continuity_contract(&self) -> DataObject {
+        self::agent::plan::test_continuity_contract()
+    }
+    #[deprecated(note = "use api::agent::plan::continuity_status instead")]
+    pub fn continuity_status(&self, claim: String) -> DataObject {
+        self::agent::plan::continuity_status(claim)
+    }
+    #[deprecated(note = "use api::agent::plan::run_control instead")]
+    pub fn run_control(&self, run_id: String, claim: String, action: String, note: String, base: String, nn_sessionid: String) -> DataObject {
+        self::agent::plan::run_control(run_id, claim, action, note, base, nn_sessionid)
+    }
+    #[deprecated(note = "use api::agent::plan::run_state instead")]
+    pub fn run_state(&self) -> DataObject {
+        self::agent::plan::run_state()
+    }
+    #[deprecated(note = "use api::agent::plan::test_run_control_contract instead")]
+    pub fn test_run_control_contract(&self) -> DataObject {
+        self::agent::plan::test_run_control_contract()
+    }
+    #[deprecated(note = "use api::agent::plan::add_subtask instead")]
+    pub fn add_subtask(&self, parent: String, claim: String, detail: String, lifecycle: String, nn_sessionid: String) -> DataObject {
+        self::agent::plan::add_subtask(parent, claim, detail, lifecycle, nn_sessionid)
+    }
+    #[deprecated(note = "use api::agent::plan::step_lock instead")]
+    pub fn step_lock(&self) -> DataObject {
+        self::agent::plan::step_lock()
     }
 }
 impl old_agent_browser {
@@ -5826,6 +8968,18 @@ impl old_agent_browser {
     pub fn close(&self) -> DataObject {
         self::agent::browser::close()
     }
+    #[deprecated(note = "use api::agent::browser::screenshot instead")]
+    pub fn screenshot(&self, url: String, path: String, width: i64, height: i64) -> DataObject {
+        self::agent::browser::screenshot(url, path, width, height)
+    }
+    #[deprecated(note = "use api::agent::browser::act instead")]
+    pub fn act(&self, action: String, selector: String, arg: String, timeout_ms: i64) -> DataObject {
+        self::agent::browser::act(action, selector, arg, timeout_ms)
+    }
+    #[deprecated(note = "use api::agent::browser::find_text instead")]
+    pub fn find_text(&self, query: String) -> DataObject {
+        self::agent::browser::find_text(query)
+    }
 }
 impl old_agent_browser_builder {
     #[deprecated(note = "use api::agent::browser_builder::builder_status instead")]
@@ -5859,6 +9013,28 @@ impl old_agent_browser_builder {
     #[deprecated(note = "use api::agent::browser_builder::install instead")]
     pub fn install(&self, mode: String) -> DataObject {
         self::agent::browser_builder::install(mode)
+    }
+    #[deprecated(note = "use api::agent::browser_builder::repatch instead")]
+    pub fn repatch(&self) -> DataObject {
+        self::agent::browser_builder::repatch()
+    }
+}
+impl old_agent_committer {
+    #[deprecated(note = "use api::agent::committer::set_enabled instead")]
+    pub fn set_enabled(&self, repo: String, enabled: bool) -> DataObject {
+        self::agent::committer::set_enabled(repo, enabled)
+    }
+    #[deprecated(note = "use api::agent::committer::compose_message instead")]
+    pub fn compose_message(&self, repo: String, unit: String, siblings: String) -> DataObject {
+        self::agent::committer::compose_message(repo, unit, siblings)
+    }
+    #[deprecated(note = "use api::agent::committer::sweep instead")]
+    pub fn sweep(&self) -> DataObject {
+        self::agent::committer::sweep()
+    }
+    #[deprecated(note = "use api::agent::committer::status instead")]
+    pub fn status(&self) -> DataObject {
+        self::agent::committer::status()
     }
 }
 impl old_app_app {
@@ -5975,6 +9151,72 @@ impl old_app_util {
         self::app::util::zip(srcdir, destfile)
     }
 }
+impl old_camera_camera {
+    #[deprecated(note = "use api::camera::camera::available instead")]
+    pub fn available(&self) -> DataObject {
+        self::camera::camera::available()
+    }
+    #[deprecated(note = "use api::camera::camera::events instead")]
+    pub fn events(&self) -> DataArray {
+        self::camera::camera::events()
+    }
+    #[deprecated(note = "use api::camera::camera::init instead")]
+    pub fn init(&self) -> String {
+        self::camera::camera::init()
+    }
+    #[deprecated(note = "use api::camera::camera::keyframe instead")]
+    pub fn keyframe(&self, timestamp: String) -> String {
+        self::camera::camera::keyframe(timestamp)
+    }
+    #[deprecated(note = "use api::camera::camera::keyframes instead")]
+    pub fn keyframes(&self, nn_path: String) -> String {
+        self::camera::camera::keyframes(nn_path)
+    }
+    #[deprecated(note = "use api::camera::camera::last_keyframe instead")]
+    pub fn last_keyframe(&self) -> String {
+        self::camera::camera::last_keyframe()
+    }
+    #[deprecated(note = "use api::camera::camera::on_capture instead")]
+    pub fn on_capture(&self, jpg: String, timestamp: i64, mp4: String) -> String {
+        self::camera::camera::on_capture(jpg, timestamp, mp4)
+    }
+    #[deprecated(note = "use api::camera::camera::play instead")]
+    pub fn play(&self, nn_path: String) -> String {
+        self::camera::camera::play(nn_path)
+    }
+    #[deprecated(note = "use api::camera::camera::remove_old instead")]
+    pub fn remove_old(&self) -> String {
+        self::camera::camera::remove_old()
+    }
+    #[deprecated(note = "use api::camera::camera::settings instead")]
+    pub fn settings(&self, settings: Data) -> DataObject {
+        self::camera::camera::settings(settings)
+    }
+    #[deprecated(note = "use api::camera::camera::snapshot instead")]
+    pub fn snapshot(&self, device: String, format: String, width: String, height: String, rot: String) -> String {
+        self::camera::camera::snapshot(device, format, width, height, rot)
+    }
+    #[deprecated(note = "use api::camera::camera::start_recording instead")]
+    pub fn start_recording(&self) -> String {
+        self::camera::camera::start_recording()
+    }
+    #[deprecated(note = "use api::camera::camera::status instead")]
+    pub fn status(&self) -> DataObject {
+        self::camera::camera::status()
+    }
+    #[deprecated(note = "use api::camera::camera::stop_recording instead")]
+    pub fn stop_recording(&self) -> String {
+        self::camera::camera::stop_recording()
+    }
+    #[deprecated(note = "use api::camera::camera::live instead")]
+    pub fn live(&self) -> DataBytes {
+        self::camera::camera::live()
+    }
+    #[deprecated(note = "use api::camera::camera::events_page instead")]
+    pub fn events_page(&self, since: String, limit: String) -> DataArray {
+        self::camera::camera::events_page(since, limit)
+    }
+}
 impl old_dev_dev {
     #[deprecated(note = "use api::dev::dev::check instead")]
     pub fn check(&self, lib: String, ctl: String, cmd: String) -> String {
@@ -6007,6 +9249,26 @@ impl old_dev_dev {
     #[deprecated(note = "use api::dev::dev::activate_lib instead")]
     pub fn activate_lib(&self, lib: String) -> String {
         self::dev::dev::activate_lib(lib)
+    }
+    #[deprecated(note = "use api::dev::dev::crate_versions instead")]
+    pub fn crate_versions(&self) -> DataObject {
+        self::dev::dev::crate_versions()
+    }
+    #[deprecated(note = "use api::dev::dev::update_crates instead")]
+    pub fn update_crates(&self, flowlang: String, ndata: String) -> DataObject {
+        self::dev::dev::update_crates(flowlang, ndata)
+    }
+    #[deprecated(note = "use api::dev::dev::update_crates_status instead")]
+    pub fn update_crates_status(&self) -> DataObject {
+        self::dev::dev::update_crates_status()
+    }
+    #[deprecated(note = "use api::dev::dev::restart_instance instead")]
+    pub fn restart_instance(&self) -> String {
+        self::dev::dev::restart_instance()
+    }
+    #[deprecated(note = "use api::dev::dev::hard_reset instead")]
+    pub fn hard_reset(&self, url: String) -> DataObject {
+        self::dev::dev::hard_reset(url)
     }
 }
 impl old_dev_editcommand {
@@ -6264,6 +9526,26 @@ impl old_dev_code {
     pub fn init(&self) -> DataObject {
         self::dev::code::init()
     }
+    #[deprecated(note = "use api::dev::code::create_control instead")]
+    pub fn create_control(&self, lib: String, name: String, desc: String) -> DataObject {
+        self::dev::code::create_control(lib, name, desc)
+    }
+    #[deprecated(note = "use api::dev::code::find instead")]
+    pub fn find(&self, kind: String, lib: String, ctl: String, cmd: String, name: String, id: String, source_kind: String, query: String) -> DataObject {
+        self::dev::code::find(kind, lib, ctl, cmd, name, id, source_kind, query)
+    }
+    #[deprecated(note = "use api::dev::code::trace_flow instead")]
+    pub fn trace_flow(&self, lib: String, ctl: String, cmd: String, args: DataObject, nn_sessionid: String) -> DataObject {
+        self::dev::code::trace_flow(lib, ctl, cmd, args, nn_sessionid)
+    }
+    #[deprecated(note = "use api::dev::code::check_python instead")]
+    pub fn check_python(&self, lib: String, ctl: String, cmd: String) -> DataObject {
+        self::dev::code::check_python(lib, ctl, cmd)
+    }
+    #[deprecated(note = "use api::dev::code::check_js instead")]
+    pub fn check_js(&self, lib: String, ctl: String, cmd: String) -> DataObject {
+        self::dev::code::check_js(lib, ctl, cmd)
+    }
 }
 impl old_dev_git {
     #[deprecated(note = "use api::dev::git::gitrun instead")]
@@ -6297,6 +9579,220 @@ impl old_dev_git {
     #[deprecated(note = "use api::dev::git::autocommit_sweep instead")]
     pub fn autocommit_sweep(&self) -> DataObject {
         self::dev::git::autocommit_sweep()
+    }
+    #[deprecated(note = "use api::dev::git::merge_to_master instead")]
+    pub fn merge_to_master(&self, repo: String, branch: String) -> DataObject {
+        self::dev::git::merge_to_master(repo, branch)
+    }
+    #[deprecated(note = "use api::dev::git::abandon_branch instead")]
+    pub fn abandon_branch(&self, repo: String, branch: String, discard: bool, delete_remote: bool, next_branch: String) -> DataObject {
+        self::dev::git::abandon_branch(repo, branch, discard, delete_remote, next_branch)
+    }
+    #[deprecated(note = "use api::dev::git::set_autocommit instead")]
+    pub fn set_autocommit(&self, name: String, autocommit: bool) -> DataObject {
+        self::dev::git::set_autocommit(name, autocommit)
+    }
+    #[deprecated(note = "use api::dev::git::store_status instead")]
+    pub fn store_status(&self, repo: String) -> DataObject {
+        self::dev::git::store_status(repo)
+    }
+    #[deprecated(note = "use api::dev::git::commit_unit instead")]
+    pub fn commit_unit(&self, repo: String, lib: String, ctl: String, message: String, author: String, nn_sessionid: String) -> DataObject {
+        self::dev::git::commit_unit(repo, lib, ctl, message, author, nn_sessionid)
+    }
+    #[deprecated(note = "use api::dev::git::repo_state instead")]
+    pub fn repo_state(&self, repo: String, fetch: bool) -> DataObject {
+        self::dev::git::repo_state(repo, fetch)
+    }
+    #[deprecated(note = "use api::dev::git::start_branch instead")]
+    pub fn start_branch(&self, repo: String, branch: String) -> DataObject {
+        self::dev::git::start_branch(repo, branch)
+    }
+    #[deprecated(note = "use api::dev::git::update_from_master instead")]
+    pub fn update_from_master(&self, repo: String, branch: String) -> DataObject {
+        self::dev::git::update_from_master(repo, branch)
+    }
+    #[deprecated(note = "use api::dev::git::carry_branch instead")]
+    pub fn carry_branch(&self, repo: String, branch: String) -> DataObject {
+        self::dev::git::carry_branch(repo, branch)
+    }
+    #[deprecated(note = "use api::dev::git::untrack_generated instead")]
+    pub fn untrack_generated(&self, repo: String, message: String) -> DataObject {
+        self::dev::git::untrack_generated(repo, message)
+    }
+}
+impl old_dev_flowstep {
+    #[deprecated(note = "use api::dev::flowstep::step instead")]
+    pub fn step(&self, state: DataObject, pick: DataObject) -> DataObject {
+        self::dev::flowstep::step(state, pick)
+    }
+    #[deprecated(note = "use api::dev::flowstep::run instead")]
+    pub fn run(&self, body: DataObject, args: DataObject, policy: String, budget: i64) -> DataObject {
+        self::dev::flowstep::run(body, args, policy, budget)
+    }
+    #[deprecated(note = "use api::dev::flowstep::validate instead")]
+    pub fn validate(&self, body: DataObject, args: DataObject, events: DataArray) -> DataObject {
+        self::dev::flowstep::validate(body, args, events)
+    }
+    #[deprecated(note = "use api::dev::flowstep::parity instead")]
+    pub fn parity(&self, lib: String, ctl: String, cmd: String, args: DataObject, presets: DataObject, policy: String) -> DataObject {
+        self::dev::flowstep::parity(lib, ctl, cmd, args, presets, policy)
+    }
+    #[deprecated(note = "use api::dev::flowstep::drive instead")]
+    pub fn drive(&self, state: DataObject, mode: String, pick: DataObject, target: DataObject, budget: i64) -> DataObject {
+        self::dev::flowstep::drive(state, mode, pick, target, budget)
+    }
+    #[deprecated(note = "use api::dev::flowstep::debug_reap instead")]
+    pub fn debug_reap(&self) -> DataObject {
+        self::dev::flowstep::debug_reap()
+    }
+    #[deprecated(note = "use api::dev::flowstep::debug_stop instead")]
+    pub fn debug_stop(&self, session: String) -> DataObject {
+        self::dev::flowstep::debug_stop(session)
+    }
+    #[deprecated(note = "use api::dev::flowstep::debug_set_breakpoints instead")]
+    pub fn debug_set_breakpoints(&self, session: String, list: DataArray) -> DataObject {
+        self::dev::flowstep::debug_set_breakpoints(session, list)
+    }
+    #[deprecated(note = "use api::dev::flowstep::debug_step instead")]
+    pub fn debug_step(&self, session: String, mode: String, pick: DataObject) -> DataObject {
+        self::dev::flowstep::debug_step(session, mode, pick)
+    }
+    #[deprecated(note = "use api::dev::flowstep::debug_state instead")]
+    pub fn debug_state(&self, session: String) -> DataObject {
+        self::dev::flowstep::debug_state(session)
+    }
+    #[deprecated(note = "use api::dev::flowstep::debug_start instead")]
+    pub fn debug_start(&self, lib: String, ctl: String, cmd: String, body: DataObject, args: DataObject) -> DataObject {
+        self::dev::flowstep::debug_start(lib, ctl, cmd, body, args)
+    }
+    #[deprecated(note = "use api::dev::flowstep::run_flow instead")]
+    pub fn run_flow(&self, lib: String, ctl: String, cmd: String, args: DataObject, events: i64, budget: i64, nn_sessionid: String) -> DataObject {
+        self::dev::flowstep::run_flow(lib, ctl, cmd, args, events, budget, nn_sessionid)
+    }
+}
+impl old_dudeapi_dudeapi {
+    #[deprecated(note = "use api::dudeapi::dudeapi::character instead")]
+    pub fn character(&self, id: String) -> DataObject {
+        self::dudeapi::dudeapi::character(id)
+    }
+    #[deprecated(note = "use api::dudeapi::dudeapi::characters instead")]
+    pub fn characters(&self) -> DataArray {
+        self::dudeapi::dudeapi::characters()
+    }
+    #[deprecated(note = "use api::dudeapi::dudeapi::get_all_stats instead")]
+    pub fn get_all_stats(&self, lora_ids: String) -> DataObject {
+        self::dudeapi::dudeapi::get_all_stats(lora_ids)
+    }
+    #[deprecated(note = "use api::dudeapi::dudeapi::get_media_upload_url instead")]
+    pub fn get_media_upload_url(&self, filename: String, filetype: String, filesize: i64, nn_session: DataObject) -> DataObject {
+        self::dudeapi::dudeapi::get_media_upload_url(filename, filetype, filesize, nn_session)
+    }
+    #[deprecated(note = "use api::dudeapi::dudeapi::get_r2_presigned_post instead")]
+    pub fn get_r2_presigned_post(&self, filename: String, filesize: i64) -> DataObject {
+        self::dudeapi::dudeapi::get_r2_presigned_post(filename, filesize)
+    }
+    #[deprecated(note = "use api::dudeapi::dudeapi::get_user_votes instead")]
+    pub fn get_user_votes(&self, nn_headers: Data) -> DataObject {
+        self::dudeapi::dudeapi::get_user_votes(nn_headers)
+    }
+    #[deprecated(note = "use api::dudeapi::dudeapi::is_upload_done instead")]
+    pub fn is_upload_done(&self, uid: String) -> DataObject {
+        self::dudeapi::dudeapi::is_upload_done(uid)
+    }
+    #[deprecated(note = "use api::dudeapi::dudeapi::login instead")]
+    pub fn login(&self, username: String, password: String, create: bool, nn_session: DataObject) -> DataObject {
+        self::dudeapi::dudeapi::login(username, password, create, nn_session)
+    }
+    #[deprecated(note = "use api::dudeapi::dudeapi::logout instead")]
+    pub fn logout(&self, nn_session: DataObject) -> String {
+        self::dudeapi::dudeapi::logout(nn_session)
+    }
+    #[deprecated(note = "use api::dudeapi::dudeapi::r2_complete_multipart_upload instead")]
+    pub fn r2_complete_multipart_upload(&self, key: String, uploadId: String, parts: DataArray, nn_session: DataObject) -> DataObject {
+        self::dudeapi::dudeapi::r2_complete_multipart_upload(key, uploadId, parts, nn_session)
+    }
+    #[deprecated(note = "use api::dudeapi::dudeapi::r2_get_multipart_presigned_url instead")]
+    pub fn r2_get_multipart_presigned_url(&self, key: String, uploadId: String, partNumber: i64, nn_session: DataObject) -> DataObject {
+        self::dudeapi::dudeapi::r2_get_multipart_presigned_url(key, uploadId, partNumber, nn_session)
+    }
+    #[deprecated(note = "use api::dudeapi::dudeapi::r2_start_multipart_upload instead")]
+    pub fn r2_start_multipart_upload(&self, filename: String, nn_session: DataObject) -> DataObject {
+        self::dudeapi::dudeapi::r2_start_multipart_upload(filename, nn_session)
+    }
+    #[deprecated(note = "use api::dudeapi::dudeapi::sessioninfo instead")]
+    pub fn sessioninfo(&self, nn_session: DataObject) -> DataObject {
+        self::dudeapi::dudeapi::sessioninfo(nn_session)
+    }
+    #[deprecated(note = "use api::dudeapi::dudeapi::start_upload instead")]
+    pub fn start_upload(&self, filename: String, filesize: i64, nn_session: DataObject) -> String {
+        self::dudeapi::dudeapi::start_upload(filename, filesize, nn_session)
+    }
+    #[deprecated(note = "use api::dudeapi::dudeapi::tags instead")]
+    pub fn tags(&self, id: String) -> DataObject {
+        self::dudeapi::dudeapi::tags(id)
+    }
+    #[deprecated(note = "use api::dudeapi::dudeapi::update_character_entity instead")]
+    pub fn update_character_entity(&self, character_data: DataObject, nn_session: DataObject) -> DataObject {
+        self::dudeapi::dudeapi::update_character_entity(character_data, nn_session)
+    }
+    #[deprecated(note = "use api::dudeapi::dudeapi::update_lora_post instead")]
+    pub fn update_lora_post(&self, character_id: String, lora_id: String, lora_name: String, base_model: String, trigger_words: String, description: String, media: DataArray, nn_session: DataObject) -> DataObject {
+        self::dudeapi::dudeapi::update_lora_post(character_id, lora_id, lora_name, base_model, trigger_words, description, media, nn_session)
+    }
+    #[deprecated(note = "use api::dudeapi::dudeapi::update_media_order instead")]
+    pub fn update_media_order(&self, character_id: String, lora_id: String, new_media_order: DataArray) -> DataObject {
+        self::dudeapi::dudeapi::update_media_order(character_id, lora_id, new_media_order)
+    }
+    #[deprecated(note = "use api::dudeapi::dudeapi::upload_chunk instead")]
+    pub fn upload_chunk(&self, upload_id: String, chunk_index: i64, chunk_data: String) -> String {
+        self::dudeapi::dudeapi::upload_chunk(upload_id, chunk_index, chunk_data)
+    }
+    #[deprecated(note = "use api::dudeapi::dudeapi::vote instead")]
+    pub fn vote(&self, category: String, nn_headers: Data, lora: String, value: i64) -> DataObject {
+        self::dudeapi::dudeapi::vote(category, nn_headers, lora, value)
+    }
+    #[deprecated(note = "use api::dudeapi::dudeapi::delete_lora instead")]
+    pub fn delete_lora(&self, character_id: String, lora_id: String, nn_session: DataObject) -> bool {
+        self::dudeapi::dudeapi::delete_lora(character_id, lora_id, nn_session)
+    }
+}
+impl old_files_files {
+    #[deprecated(note = "use api::files::files::list_dir instead")]
+    pub fn list_dir(&self, path: String) -> DataObject {
+        self::files::files::list_dir(path)
+    }
+    #[deprecated(note = "use api::files::files::propfind instead")]
+    pub fn propfind(&self, path: String, href_prefix: String, depth: String, request_xml: String) -> String {
+        self::files::files::propfind(path, href_prefix, depth, request_xml)
+    }
+    #[deprecated(note = "use api::files::files::get_file instead")]
+    pub fn get_file(&self, path: String) -> String {
+        self::files::files::get_file(path)
+    }
+    #[deprecated(note = "use api::files::files::make_collection instead")]
+    pub fn make_collection(&self, path: String) -> DataObject {
+        self::files::files::make_collection(path)
+    }
+    #[deprecated(note = "use api::files::files::delete_path instead")]
+    pub fn delete_path(&self, path: String) -> DataObject {
+        self::files::files::delete_path(path)
+    }
+    #[deprecated(note = "use api::files::files::put_file instead")]
+    pub fn put_file(&self, path: String, content: Data) -> DataObject {
+        self::files::files::put_file(path, content)
+    }
+    #[deprecated(note = "use api::files::files::dav instead")]
+    pub fn dav(&self, nn_method: String, nn_path: String, nn_headers: DataObject, nn_body: Data) -> DataObject {
+        self::files::files::dav(nn_method, nn_path, nn_headers, nn_body)
+    }
+    #[deprecated(note = "use api::files::files::resolve_path instead")]
+    pub fn resolve_path(&self, path: String) -> DataObject {
+        self::files::files::resolve_path(path)
+    }
+    #[deprecated(note = "use api::files::files::dav_tree instead")]
+    pub fn dav_tree(&self, operation: String, source: String, destination: String, overwrite: String) -> DataObject {
+        self::files::files::dav_tree(operation, source, destination, overwrite)
     }
 }
 impl old_fillmore_fillmore {
@@ -6403,6 +9899,10 @@ impl old_fillmore_jobs {
     #[deprecated(note = "use api::fillmore::jobs::oneshot instead")]
     pub fn oneshot(&self, job: DataObject) -> DataObject {
         self::fillmore::jobs::oneshot(job)
+    }
+    #[deprecated(note = "use api::fillmore::jobs::lora_to_mhm instead")]
+    pub fn lora_to_mhm(&self, job: DataObject) -> DataObject {
+        self::fillmore::jobs::lora_to_mhm(job)
     }
 }
 impl old_genmore_common {
@@ -6604,6 +10104,14 @@ impl old_genmore_genmore {
     pub fn install_image_edit(&self) -> DataObject {
         self::genmore::genmore::install_image_edit()
     }
+    #[deprecated(note = "use api::genmore::genmore::image_edit instead")]
+    pub fn image_edit(&self, job: DataObject) -> DataObject {
+        self::genmore::genmore::image_edit(job)
+    }
+    #[deprecated(note = "use api::genmore::genmore::dataset_edit instead")]
+    pub fn dataset_edit(&self, job: DataObject) -> DataObject {
+        self::genmore::genmore::dataset_edit(job)
+    }
 }
 impl old_genmore_hunyuan {
     #[deprecated(note = "use api::genmore::hunyuan::install instead")]
@@ -6731,6 +10239,16 @@ impl old_genmore_krea2 {
     #[deprecated(note = "use api::genmore::krea2::generate instead")]
     pub fn generate(&self, job: DataObject) -> DataObject {
         self::genmore::krea2::generate(job)
+    }
+}
+impl old_genmore_moss {
+    #[deprecated(note = "use api::genmore::moss::install instead")]
+    pub fn install(&self) -> DataObject {
+        self::genmore::moss::install()
+    }
+    #[deprecated(note = "use api::genmore::moss::generate instead")]
+    pub fn generate(&self, job: DataObject) -> DataObject {
+        self::genmore::moss::generate(job)
     }
 }
 impl old_grabmore_grabmore {
@@ -6877,6 +10395,10 @@ impl old_grabmore_tasks {
     #[deprecated(note = "use api::grabmore::tasks::tag instead")]
     pub fn tag(&self, job: DataObject) -> DataObject {
         self::grabmore::tasks::tag(job)
+    }
+    #[deprecated(note = "use api::grabmore::tasks::import_lora instead")]
+    pub fn import_lora(&self, job: DataObject) -> DataObject {
+        self::grabmore::tasks::import_lora(job)
     }
 }
 impl old_grabmore_videoproc {
@@ -7058,6 +10580,42 @@ impl old_gudrun_gudrun {
     pub fn dataset_captions(&self, jobid: String, nn_sessionid: String) -> DataObject {
         self::gudrun::gudrun::dataset_captions(jobid, nn_sessionid)
     }
+    #[deprecated(note = "use api::gudrun::gudrun::logout instead")]
+    pub fn logout(&self, nn_sessionid: String) -> String {
+        self::gudrun::gudrun::logout(nn_sessionid)
+    }
+    #[deprecated(note = "use api::gudrun::gudrun::google_signin instead")]
+    pub fn google_signin(&self, sub: String, email: String, nn_sessionid: String) -> DataObject {
+        self::gudrun::gudrun::google_signin(sub, email, nn_sessionid)
+    }
+    #[deprecated(note = "use api::gudrun::gudrun::google_unlink instead")]
+    pub fn google_unlink(&self, nn_sessionid: String) -> DataObject {
+        self::gudrun::gudrun::google_unlink(nn_sessionid)
+    }
+    #[deprecated(note = "use api::gudrun::gudrun::google_login instead")]
+    pub fn google_login(&self, nn_sessionid: String) -> String {
+        self::gudrun::gudrun::google_login(nn_sessionid)
+    }
+    #[deprecated(note = "use api::gudrun::gudrun::google_callback instead")]
+    pub fn google_callback(&self, code: Data, state: String, error: Data, nn_sessionid: String) -> String {
+        self::gudrun::gudrun::google_callback(code, state, error, nn_sessionid)
+    }
+    #[deprecated(note = "use api::gudrun::gudrun::establish instead")]
+    pub fn establish(&self, permalink: String) -> String {
+        self::gudrun::gudrun::establish(permalink)
+    }
+    #[deprecated(note = "use api::gudrun::gudrun::characters instead")]
+    pub fn characters(&self, nn_sessionid: String) -> DataObject {
+        self::gudrun::gudrun::characters(nn_sessionid)
+    }
+    #[deprecated(note = "use api::gudrun::gudrun::character_save instead")]
+    pub fn character_save(&self, nn_sessionid: String, character: DataObject) -> DataObject {
+        self::gudrun::gudrun::character_save(nn_sessionid, character)
+    }
+    #[deprecated(note = "use api::gudrun::gudrun::character_portrait instead")]
+    pub fn character_portrait(&self, nn_sessionid: String, id: String) -> String {
+        self::gudrun::gudrun::character_portrait(nn_sessionid, id)
+    }
 }
 impl old_gudrun_job {
     #[deprecated(note = "use api::gudrun::job::accept_result_file instead")]
@@ -7235,6 +10793,252 @@ impl old_gudrun_tokens {
     #[deprecated(note = "use api::gudrun::tokens::my_tipjar_id instead")]
     pub fn my_tipjar_id(&self, nn_sessionid: String) -> String {
         self::gudrun::tokens::my_tipjar_id(nn_sessionid)
+    }
+}
+impl old_gudrun_lora_to_mhm {
+    #[deprecated(note = "use api::gudrun::lora_to_mhm::submit instead")]
+    pub fn submit(&self, job: DataObject, nn_sessionid: String) -> DataObject {
+        self::gudrun::lora_to_mhm::submit(job, nn_sessionid)
+    }
+    #[deprecated(note = "use api::gudrun::lora_to_mhm::load_lora_tags instead")]
+    pub fn load_lora_tags(&self, storeid: String) -> DataObject {
+        self::gudrun::lora_to_mhm::load_lora_tags(storeid)
+    }
+}
+impl old_hagarmap_hagarmap {
+    #[deprecated(note = "use api::hagarmap::hagarmap::fetch_layers instead")]
+    pub fn fetch_layers(&self) -> DataObject {
+        self::hagarmap::hagarmap::fetch_layers()
+    }
+}
+impl old_hollis_hollis {
+    #[deprecated(note = "use api::hollis::hollis::init instead")]
+    pub fn init(&self) -> DataObject {
+        self::hollis::hollis::init()
+    }
+}
+impl old_hollis_audio {
+    #[deprecated(note = "use api::hollis::audio::cortex instead")]
+    pub fn cortex(&self) -> DataObject {
+        self::hollis::audio::cortex()
+    }
+    #[deprecated(note = "use api::hollis::audio::data instead")]
+    pub fn data(&self) -> DataObject {
+        self::hollis::audio::data()
+    }
+    #[deprecated(note = "use api::hollis::audio::perception instead")]
+    pub fn perception(&self) -> DataObject {
+        self::hollis::audio::perception()
+    }
+    #[deprecated(note = "use api::hollis::audio::sensor instead")]
+    pub fn sensor(&self) -> DataObject {
+        self::hollis::audio::sensor()
+    }
+    #[deprecated(note = "use api::hollis::audio::transcribe instead")]
+    pub fn transcribe(&self) -> DataObject {
+        self::hollis::audio::transcribe()
+    }
+    #[deprecated(note = "use api::hollis::audio::inject instead")]
+    pub fn inject(&self, text: String, entity: String) -> DataObject {
+        self::hollis::audio::inject(text, entity)
+    }
+    #[deprecated(note = "use api::hollis::audio::status instead")]
+    pub fn status(&self) -> DataObject {
+        self::hollis::audio::status()
+    }
+    #[deprecated(note = "use api::hollis::audio::transcripts instead")]
+    pub fn transcripts(&self, limit: i64) -> DataObject {
+        self::hollis::audio::transcripts(limit)
+    }
+}
+impl old_img2mhm_img2mhm {
+    #[deprecated(note = "use api::img2mhm::img2mhm::fit instead")]
+    pub fn fit(&self, photo: String, out_path: String, debug_dir: String, mirror_tta: bool) -> DataObject {
+        self::img2mhm::img2mhm::fit(photo, out_path, debug_dir, mirror_tta)
+    }
+    #[deprecated(note = "use api::img2mhm::img2mhm::eval instead")]
+    pub fn eval(&self, dir: String, out_dir: String, identity: bool) -> DataObject {
+        self::img2mhm::img2mhm::eval(dir, out_dir, identity)
+    }
+    #[deprecated(note = "use api::img2mhm::img2mhm::portrait instead")]
+    pub fn portrait(&self, filename: String, data_b64: String, mirror_tta: bool, extras: DataArray, body_filename: String, body_b64: String) -> DataObject {
+        self::img2mhm::img2mhm::portrait(filename, data_b64, mirror_tta, extras, body_filename, body_b64)
+    }
+    #[deprecated(note = "use api::img2mhm::img2mhm::download instead")]
+    pub fn download(&self, id: String, name: String) -> String {
+        self::img2mhm::img2mhm::download(id, name)
+    }
+    #[deprecated(note = "use api::img2mhm::img2mhm::tune instead")]
+    pub fn tune(&self, set_dir: String, max_evals: i64, keys: String, objective: String, dry_run: bool) -> DataObject {
+        self::img2mhm::img2mhm::tune(set_dir, max_evals, keys, objective, dry_run)
+    }
+    #[deprecated(note = "use api::img2mhm::img2mhm::tune_launch instead")]
+    pub fn tune_launch(&self, set_dir: String, max_evals: i64, keys: String, objective: String) -> DataObject {
+        self::img2mhm::img2mhm::tune_launch(set_dir, max_evals, keys, objective)
+    }
+    #[deprecated(note = "use api::img2mhm::img2mhm::tune_status instead")]
+    pub fn tune_status(&self, set_name: String, tail_lines: i64) -> DataObject {
+        self::img2mhm::img2mhm::tune_status(set_name, tail_lines)
+    }
+    #[deprecated(note = "use api::img2mhm::img2mhm::sheet instead")]
+    pub fn sheet(&self, dir: String, photos: String, out: String, cols: i64) -> DataObject {
+        self::img2mhm::img2mhm::sheet(dir, photos, out, cols)
+    }
+    #[deprecated(note = "use api::img2mhm::img2mhm::loopfit instead")]
+    pub fn loopfit(&self, photo: String, photos: String, body_photo: String, out_path: String, rounds: i64, body: bool) -> DataObject {
+        self::img2mhm::img2mhm::loopfit(photo, photos, body_photo, out_path, rounds, body)
+    }
+    #[deprecated(note = "use api::img2mhm::img2mhm::gen_views instead")]
+    pub fn gen_views(&self, trigger: String, lora_path: String, out_dir: String, seed: i64, per_view: i64, basemodel: String) -> DataObject {
+        self::img2mhm::img2mhm::gen_views(trigger, lora_path, out_dir, seed, per_view, basemodel)
+    }
+    #[deprecated(note = "use api::img2mhm::img2mhm::images_to_mhm instead")]
+    pub fn images_to_mhm(&self, dirs: String, out_path: String, max_extras: i64) -> DataObject {
+        self::img2mhm::img2mhm::images_to_mhm(dirs, out_path, max_extras)
+    }
+    #[deprecated(note = "use api::img2mhm::img2mhm::lora_test instead")]
+    pub fn lora_test(&self, trigger: String, lora_path: String, dataset_dirs: String, out_dir: String, seed: i64, per_view: i64) -> DataObject {
+        self::img2mhm::img2mhm::lora_test(trigger, lora_path, dataset_dirs, out_dir, seed, per_view)
+    }
+    #[deprecated(note = "use api::img2mhm::img2mhm::task_generate_views instead")]
+    pub fn task_generate_views(&self, job: DataObject) -> DataObject {
+        self::img2mhm::img2mhm::task_generate_views(job)
+    }
+    #[deprecated(note = "use api::img2mhm::img2mhm::task_images_to_mhm instead")]
+    pub fn task_images_to_mhm(&self, job: DataObject) -> DataObject {
+        self::img2mhm::img2mhm::task_images_to_mhm(job)
+    }
+}
+impl old_img2mhm_assets {
+    #[deprecated(note = "use api::img2mhm::assets::paths instead")]
+    pub fn paths(&self) -> DataObject {
+        self::img2mhm::assets::paths()
+    }
+    #[deprecated(note = "use api::img2mhm::assets::bootstrap instead")]
+    pub fn bootstrap(&self) -> DataObject {
+        self::img2mhm::assets::bootstrap()
+    }
+    #[deprecated(note = "use api::img2mhm::assets::status instead")]
+    pub fn status(&self) -> DataObject {
+        self::img2mhm::assets::status()
+    }
+    #[deprecated(note = "use api::img2mhm::assets::install instead")]
+    pub fn install(&self) -> DataObject {
+        self::img2mhm::assets::install()
+    }
+}
+impl old_img2mhm_mh {
+    #[deprecated(note = "use api::img2mhm::mh::core instead")]
+    pub fn core(&self) -> DataObject {
+        self::img2mhm::mh::core()
+    }
+    #[deprecated(note = "use api::img2mhm::mh::info instead")]
+    pub fn info(&self) -> DataObject {
+        self::img2mhm::mh::info()
+    }
+    #[deprecated(note = "use api::img2mhm::mh::apply instead")]
+    pub fn apply(&self, mhm_path: String, obj_path: String, body_only: bool) -> DataObject {
+        self::img2mhm::mh::apply(mhm_path, obj_path, body_only)
+    }
+    #[deprecated(note = "use api::img2mhm::mh::selftest instead")]
+    pub fn selftest(&self) -> DataObject {
+        self::img2mhm::mh::selftest()
+    }
+    #[deprecated(note = "use api::img2mhm::mh::matrices instead")]
+    pub fn matrices(&self, rebuild: bool) -> DataObject {
+        self::img2mhm::mh::matrices(rebuild)
+    }
+    #[deprecated(note = "use api::img2mhm::mh::render instead")]
+    pub fn render(&self, mhm_path: String, out_path: String, size: i64, yaw_deg: f64) -> DataObject {
+        self::img2mhm::mh::render(mhm_path, out_path, size, yaw_deg)
+    }
+    #[deprecated(note = "use api::img2mhm::mh::parity instead")]
+    pub fn parity(&self, mhm_path: String) -> DataObject {
+        self::img2mhm::mh::parity(mhm_path)
+    }
+    #[deprecated(note = "use api::img2mhm::mh::mpfb instead")]
+    pub fn mpfb(&self, mhm_path: String) -> DataObject {
+        self::img2mhm::mh::mpfb(mhm_path)
+    }
+    #[deprecated(note = "use api::img2mhm::mh::render_aug instead")]
+    pub fn render_aug(&self, mhm_path: String, out_path: String, size: i64, yaw_deg: f64, pitch_deg: f64, light: String) -> DataObject {
+        self::img2mhm::mh::render_aug(mhm_path, out_path, size, yaw_deg, pitch_deg, light)
+    }
+    #[deprecated(note = "use api::img2mhm::mh::project_skin instead")]
+    pub fn project_skin(&self, mhm_path: String, photo: String, size: i64) -> DataObject {
+        self::img2mhm::mh::project_skin(mhm_path, photo, size)
+    }
+}
+impl old_img2mhm_face {
+    #[deprecated(note = "use api::img2mhm::face::vision instead")]
+    pub fn vision(&self, photo: String, debug_dir: String, mirror_tta: bool) -> DataObject {
+        self::img2mhm::face::vision(photo, debug_dir, mirror_tta)
+    }
+    #[deprecated(note = "use api::img2mhm::face::pickle instead")]
+    pub fn pickle(&self, path: String) -> DataObject {
+        self::img2mhm::face::pickle(path)
+    }
+    #[deprecated(note = "use api::img2mhm::face::flame instead")]
+    pub fn flame(&self, obj_path: String) -> DataObject {
+        self::img2mhm::face::flame(obj_path)
+    }
+    #[deprecated(note = "use api::img2mhm::face::wrap instead")]
+    pub fn wrap(&self, rebuild: bool, dump_dir: String) -> DataObject {
+        self::img2mhm::face::wrap(rebuild, dump_dir)
+    }
+    #[deprecated(note = "use api::img2mhm::face::appearance instead")]
+    pub fn appearance(&self, photo: String, gender: f64, age: f64) -> DataObject {
+        self::img2mhm::face::appearance(photo, gender, age)
+    }
+    #[deprecated(note = "use api::img2mhm::face::twin instead")]
+    pub fn twin(&self, photo: String, out: String, crop: f64, scale: f64) -> DataObject {
+        self::img2mhm::face::twin(photo, out, crop, scale)
+    }
+    #[deprecated(note = "use api::img2mhm::face::onnx_info instead")]
+    pub fn onnx_info(&self, path: String) -> DataObject {
+        self::img2mhm::face::onnx_info(path)
+    }
+    #[deprecated(note = "use api::img2mhm::face::identity instead")]
+    pub fn identity(&self, photo: String, other: String) -> DataObject {
+        self::img2mhm::face::identity(photo, other)
+    }
+    #[deprecated(note = "use api::img2mhm::face::dataset instead")]
+    pub fn dataset(&self, subjects: i64, out_dir: String) -> DataObject {
+        self::img2mhm::face::dataset(subjects, out_dir)
+    }
+    #[deprecated(note = "use api::img2mhm::face::landmarks instead")]
+    pub fn landmarks(&self, photo: String) -> DataObject {
+        self::img2mhm::face::landmarks(photo)
+    }
+    #[deprecated(note = "use api::img2mhm::face::vl instead")]
+    pub fn vl(&self, photo: String, force: bool) -> DataObject {
+        self::img2mhm::face::vl(photo, force)
+    }
+    #[deprecated(note = "use api::img2mhm::face::pose instead")]
+    pub fn pose(&self, photo: String) -> DataObject {
+        self::img2mhm::face::pose(photo)
+    }
+    #[deprecated(note = "use api::img2mhm::face::matte instead")]
+    pub fn matte(&self, photo: String, render_bg: String) -> DataObject {
+        self::img2mhm::face::matte(photo, render_bg)
+    }
+    #[deprecated(note = "use api::img2mhm::face::headpose instead")]
+    pub fn headpose(&self, photo: String) -> DataObject {
+        self::img2mhm::face::headpose(photo)
+    }
+}
+impl old_img2mhm_solve {
+    #[deprecated(note = "use api::img2mhm::solve::fista instead")]
+    pub fn fista(&self) -> DataObject {
+        self::img2mhm::solve::fista()
+    }
+    #[deprecated(note = "use api::img2mhm::solve::synthetic instead")]
+    pub fn synthetic(&self, seed: i64, active: i64) -> DataObject {
+        self::img2mhm::solve::synthetic(seed, active)
+    }
+    #[deprecated(note = "use api::img2mhm::solve::fit instead")]
+    pub fn fit(&self, seed: i64, active: i64) -> DataObject {
+        self::img2mhm::solve::fit(seed, active)
     }
 }
 impl old_minifig_minifig {
@@ -7447,14 +11251,384 @@ impl old_peer_service {
         self::peer::service::udp_connect(ipaddr, port)
     }
 }
-impl old_scratch_scratch {
-    #[deprecated(note = "use api::scratch::scratch::eval_kvytvt1a03e072c30s6 instead")]
-    pub fn eval_kvytvt1a03e072c30s6(&self) -> DataObject {
-        self::scratch::scratch::eval_kvytvt1a03e072c30s6()
+impl old_raspberry_raspberry {
+    #[deprecated(note = "use api::raspberry::raspberry::arch instead")]
+    pub fn arch(&self) -> String {
+        self::raspberry::raspberry::arch()
     }
-    #[deprecated(note = "use api::scratch::scratch::eval_hhjkti1a03ebcc8bfo6 instead")]
-    pub fn eval_hhjkti1a03ebcc8bfo6(&self) -> DataObject {
-        self::scratch::scratch::eval_hhjkti1a03ebcc8bfo6()
+    #[deprecated(note = "use api::raspberry::raspberry::cpu instead")]
+    pub fn cpu(&self) -> DataObject {
+        self::raspberry::raspberry::cpu()
+    }
+    #[deprecated(note = "use api::raspberry::raspberry::device instead")]
+    pub fn device(&self) -> String {
+        self::raspberry::raspberry::device()
+    }
+    #[deprecated(note = "use api::raspberry::raspberry::disks instead")]
+    pub fn disks(&self) -> DataArray {
+        self::raspberry::raspberry::disks()
+    }
+    #[deprecated(note = "use api::raspberry::raspberry::info instead")]
+    pub fn info(&self) -> DataObject {
+        self::raspberry::raspberry::info()
+    }
+    #[deprecated(note = "use api::raspberry::raspberry::init instead")]
+    pub fn init(&self) -> DataObject {
+        self::raspberry::raspberry::init()
+    }
+    #[deprecated(note = "use api::raspberry::raspberry::memory instead")]
+    pub fn memory(&self) -> DataObject {
+        self::raspberry::raspberry::memory()
+    }
+    #[deprecated(note = "use api::raspberry::raspberry::os instead")]
+    pub fn os(&self) -> DataObject {
+        self::raspberry::raspberry::os()
+    }
+    #[deprecated(note = "use api::raspberry::raspberry::temp instead")]
+    pub fn temp(&self) -> DataObject {
+        self::raspberry::raspberry::temp()
+    }
+}
+impl old_raspberry_apt {
+    #[deprecated(note = "use api::raspberry::apt::list_available instead")]
+    pub fn list_available(&self) -> DataObject {
+        self::raspberry::apt::list_available()
+    }
+    #[deprecated(note = "use api::raspberry::apt::update instead")]
+    pub fn update(&self) -> DataObject {
+        self::raspberry::apt::update()
+    }
+    #[deprecated(note = "use api::raspberry::apt::upgrade instead")]
+    pub fn upgrade(&self) -> DataObject {
+        self::raspberry::apt::upgrade()
+    }
+}
+impl old_scratch_build_docker_image {
+    #[deprecated(note = "use api::scratch::build_docker_image::build_master_source instead")]
+    pub fn build_master_source(&self, build_dir: String, overlay_dir: String, src_data_dir: String, libraries: DataArray) -> DataObject {
+        self::scratch::build_docker_image::build_master_source(build_dir, overlay_dir, src_data_dir, libraries)
+    }
+}
+impl old_scratch_chat {
+    #[deprecated(note = "use api::scratch::chat::ask_llm instead")]
+    pub fn ask_llm(&self, prompt: String, system_prompt: Data) -> String {
+        self::scratch::chat::ask_llm(prompt, system_prompt)
+    }
+    #[deprecated(note = "use api::scratch::chat::chat instead")]
+    pub fn chat(&self, message: String, context: DataObject) -> String {
+        self::scratch::chat::chat(message, context)
+    }
+    #[deprecated(note = "use api::scratch::chat::describe_command instead")]
+    pub fn describe_command(&self, lib: String, ctl: String, cmd: String) -> String {
+        self::scratch::chat::describe_command(lib, ctl, cmd)
+    }
+    #[deprecated(note = "use api::scratch::chat::list_tools instead")]
+    pub fn list_tools(&self) -> DataObject {
+        self::scratch::chat::list_tools()
+    }
+}
+impl old_scratch_command_metadata {
+    #[deprecated(note = "use api::scratch::command_metadata::describe_command instead")]
+    pub fn describe_command(&self, command_name: String, lang: String, returntype: String, groups: String, params: DataArray, imports: String, code: String, current_description: String) -> String {
+        self::scratch::command_metadata::describe_command(command_name, lang, returntype, groups, params, imports, code, current_description)
+    }
+    #[deprecated(note = "use api::scratch::command_metadata::describe_parameter instead")]
+    pub fn describe_parameter(&self, command_name: String, param_name: String, param_type: String, current_param_description: String, lang: String, returntype: String, groups: String, all_command_params: DataArray, imports: String, code: String) -> String {
+        self::scratch::command_metadata::describe_parameter(command_name, param_name, param_type, current_param_description, lang, returntype, groups, all_command_params, imports, code)
+    }
+}
+impl old_scratch_detect_nix {
+    #[deprecated(note = "use api::scratch::detect_nix::detect_nix instead")]
+    pub fn detect_nix(&self) -> DataObject {
+        self::scratch::detect_nix::detect_nix()
+    }
+    #[deprecated(note = "use api::scratch::detect_nix::system_call instead")]
+    pub fn system_call(&self, args: DataArray) -> DataObject {
+        self::scratch::detect_nix::system_call(args)
+    }
+}
+impl old_scratch_map {
+    #[deprecated(note = "use api::scratch::map::gpx_aggregator instead")]
+    pub fn gpx_aggregator(&self, directory_path: String) -> DataArray {
+        self::scratch::map::gpx_aggregator(directory_path)
+    }
+    #[deprecated(note = "use api::scratch::map::trails instead")]
+    pub fn trails(&self, points_array: DataArray) -> DataArray {
+        self::scratch::map::trails(points_array)
+    }
+}
+impl old_scratch_nix_config_editor {
+    #[deprecated(note = "use api::scratch::nix_config_editor::save_nix_config instead")]
+    pub fn save_nix_config(&self, file_path: String, new_content: String) -> DataObject {
+        self::scratch::nix_config_editor::save_nix_config(file_path, new_content)
+    }
+}
+impl old_scratch_scratch {
+    #[deprecated(note = "use api::scratch::scratch::do_the_thing instead")]
+    pub fn do_the_thing(&self) -> DataObject {
+        self::scratch::scratch::do_the_thing()
+    }
+    #[deprecated(note = "use api::scratch::scratch::gen_flux instead")]
+    pub fn gen_flux(&self) -> DataObject {
+        self::scratch::scratch::gen_flux()
+    }
+    #[deprecated(note = "use api::scratch::scratch::genwen instead")]
+    pub fn genwen(&self) -> String {
+        self::scratch::scratch::genwen()
+    }
+    #[deprecated(note = "use api::scratch::scratch::load_candle_twice instead")]
+    pub fn load_candle_twice(&self) -> bool {
+        self::scratch::scratch::load_candle_twice()
+    }
+    #[deprecated(note = "use api::scratch::scratch::log_http_begin instead")]
+    pub fn log_http_begin(&self, timestamp: i64, referer: String) -> String {
+        self::scratch::scratch::log_http_begin(timestamp, referer)
+    }
+    #[deprecated(note = "use api::scratch::scratch::loradude_versions instead")]
+    pub fn loradude_versions(&self) -> DataArray {
+        self::scratch::scratch::loradude_versions()
+    }
+    #[deprecated(note = "use api::scratch::scratch::prune_filevergnugen instead")]
+    pub fn prune_filevergnugen(&self) -> DataObject {
+        self::scratch::scratch::prune_filevergnugen()
+    }
+    #[deprecated(note = "use api::scratch::scratch::find_broken_files instead")]
+    pub fn find_broken_files(&self, dir1: String, dir2: String) -> DataArray {
+        self::scratch::scratch::find_broken_files(dir1, dir2)
+    }
+    #[deprecated(note = "use api::scratch::scratch::eval_ntumlt1a0e4ce96b8l26a instead")]
+    pub fn eval_ntumlt1a0e4ce96b8l26a(&self) -> DataObject {
+        self::scratch::scratch::eval_ntumlt1a0e4ce96b8l26a()
+    }
+    #[deprecated(note = "use api::scratch::scratch::eval_oyphxt1a0e7be9b41v64d instead")]
+    pub fn eval_oyphxt1a0e7be9b41v64d(&self) -> DataObject {
+        self::scratch::scratch::eval_oyphxt1a0e7be9b41v64d()
+    }
+    #[deprecated(note = "use api::scratch::scratch::eval_xwurxz1a107debf18hd3e instead")]
+    pub fn eval_xwurxz1a107debf18hd3e(&self) -> DataObject {
+        self::scratch::scratch::eval_xwurxz1a107debf18hd3e()
+    }
+    #[deprecated(note = "use api::scratch::scratch::eval_qphkot1a10bd12503k19b instead")]
+    pub fn eval_qphkot1a10bd12503k19b(&self) -> DataObject {
+        self::scratch::scratch::eval_qphkot1a10bd12503k19b()
+    }
+    #[deprecated(note = "use api::scratch::scratch::eval_hlngtn1a10bdbfcbcs1b instead")]
+    pub fn eval_hlngtn1a10bdbfcbcs1b(&self) -> DataObject {
+        self::scratch::scratch::eval_hlngtn1a10bdbfcbcs1b()
+    }
+    #[deprecated(note = "use api::scratch::scratch::eval_pptrgy1a10bf1f238v7f instead")]
+    pub fn eval_pptrgy1a10bf1f238v7f(&self) -> DataObject {
+        self::scratch::scratch::eval_pptrgy1a10bf1f238v7f()
+    }
+    #[deprecated(note = "use api::scratch::scratch::eval_vzpwry1a10c99a195g22d instead")]
+    pub fn eval_vzpwry1a10c99a195g22d(&self) -> DataObject {
+        self::scratch::scratch::eval_vzpwry1a10c99a195g22d()
+    }
+    #[deprecated(note = "use api::scratch::scratch::eval_truvmi1a191c3027ao21 instead")]
+    pub fn eval_truvmi1a191c3027ao21(&self) -> DataObject {
+        self::scratch::scratch::eval_truvmi1a191c3027ao21()
+    }
+}
+impl old_scratch_stripe {
+    #[deprecated(note = "use api::scratch::stripe::fetch_data instead")]
+    pub fn fetch_data(&self) -> DataArray {
+        self::scratch::stripe::fetch_data()
+    }
+}
+impl old_scratch_users {
+    #[deprecated(note = "use api::scratch::users::list_users instead")]
+    pub fn list_users(&self) -> DataArray {
+        self::scratch::users::list_users()
+    }
+}
+impl old_scratch_skills {
+    #[deprecated(note = "use api::scratch::skills::plan_decomposition_progress instead")]
+    pub fn plan_decomposition_progress(&self) -> DataObject {
+        self::scratch::skills::plan_decomposition_progress()
+    }
+    #[deprecated(note = "use api::scratch::skills::chrome_eval instead")]
+    pub fn chrome_eval(&self, js: String, timeout_ms: i64) -> DataObject {
+        self::scratch::skills::chrome_eval(js, timeout_ms)
+    }
+    #[deprecated(note = "use api::scratch::skills::qwenvl_captions_selftest instead")]
+    pub fn qwenvl_captions_selftest(&self, mode: String, confirm: String) -> DataObject {
+        self::scratch::skills::qwenvl_captions_selftest(mode, confirm)
+    }
+    #[deprecated(note = "use api::scratch::skills::run_bg instead")]
+    pub fn run_bg(&self, lib: String, ctl: String, cmd: String, args: DataObject, name: String) -> DataObject {
+        self::scratch::skills::run_bg(lib, ctl, cmd, args, name)
+    }
+    #[deprecated(note = "use api::scratch::skills::wan22_e2e instead")]
+    pub fn wan22_e2e(&self, mode: String, jobid: String, trigger: String, store_captions: String, confirm: String) -> DataObject {
+        self::scratch::skills::wan22_e2e(mode, jobid, trigger, store_captions, confirm)
+    }
+    #[deprecated(note = "use api::scratch::skills::qweni_captions_selftest instead")]
+    pub fn qweni_captions_selftest(&self) -> DataObject {
+        self::scratch::skills::qweni_captions_selftest()
+    }
+    #[deprecated(note = "use api::scratch::skills::qweni_store_roundtrip instead")]
+    pub fn qweni_store_roundtrip(&self, source_store: String, trigger: String, keep: bool) -> DataObject {
+        self::scratch::skills::qweni_store_roundtrip(source_store, trigger, keep)
+    }
+    #[deprecated(note = "use api::scratch::skills::synchro_s0_check instead")]
+    pub fn synchro_s0_check(&self) -> DataObject {
+        self::scratch::skills::synchro_s0_check()
+    }
+    #[deprecated(note = "use api::scratch::skills::flowdoc_s2_check instead")]
+    pub fn flowdoc_s2_check(&self) -> DataObject {
+        self::scratch::skills::flowdoc_s2_check()
+    }
+    #[deprecated(note = "use api::scratch::skills::flowstep_p0_rust_callee instead")]
+    pub fn flowstep_p0_rust_callee(&self, a: String) -> String {
+        self::scratch::skills::flowstep_p0_rust_callee(a)
+    }
+    #[deprecated(note = "use api::scratch::skills::flowstep_p0_check instead")]
+    pub fn flowstep_p0_check(&self) -> DataObject {
+        self::scratch::skills::flowstep_p0_check()
+    }
+    #[deprecated(note = "use api::scratch::skills::flowstep_p1_check instead")]
+    pub fn flowstep_p1_check(&self, home: String) -> DataObject {
+        self::scratch::skills::flowstep_p1_check(home)
+    }
+    #[deprecated(note = "use api::scratch::skills::flowstep_p2_check instead")]
+    pub fn flowstep_p2_check(&self, home: String) -> DataObject {
+        self::scratch::skills::flowstep_p2_check(home)
+    }
+    #[deprecated(note = "use api::scratch::skills::flowstep_p3_check instead")]
+    pub fn flowstep_p3_check(&self, home: String) -> DataObject {
+        self::scratch::skills::flowstep_p3_check(home)
+    }
+    #[deprecated(note = "use api::scratch::skills::facet_view instead")]
+    pub fn facet_view(&self, lib: String, ctl: String, facet: String, query: String, from: i64, to: i64) -> String {
+        self::scratch::skills::facet_view(lib, ctl, facet, query, from, to)
+    }
+    #[deprecated(note = "use api::scratch::skills::board_watch instead")]
+    pub fn board_watch(&self, claim_contains: String, expect_lifecycle: String, parent_contains: String, timeout_ms: i64, interval_ms: i64) -> DataObject {
+        self::scratch::skills::board_watch(claim_contains, expect_lifecycle, parent_contains, timeout_ms, interval_ms)
+    }
+    #[deprecated(note = "use api::scratch::skills::grep_rust instead")]
+    pub fn grep_rust(&self, lib: String, ctl: String, cmd: String, query: String, from: i64, to: i64) -> DataObject {
+        self::scratch::skills::grep_rust(lib, ctl, cmd, query, from, to)
+    }
+    #[deprecated(note = "use api::scratch::skills::board_state instead")]
+    pub fn board_state(&self) -> DataObject {
+        self::scratch::skills::board_state()
+    }
+    #[deprecated(note = "use api::scratch::skills::flowstep_r3_mutate instead")]
+    pub fn flowstep_r3_mutate(&self, o: DataObject, k: String, v: String) -> DataObject {
+        self::scratch::skills::flowstep_r3_mutate(o, k, v)
+    }
+    #[deprecated(note = "use api::scratch::skills::flowstep_r3_alias_probe instead")]
+    pub fn flowstep_r3_alias_probe(&self) -> DataObject {
+        self::scratch::skills::flowstep_r3_alias_probe()
+    }
+    #[deprecated(note = "use api::scratch::skills::flowstep_r3_persistent_probe instead")]
+    pub fn flowstep_r3_persistent_probe(&self, home: String) -> DataObject {
+        self::scratch::skills::flowstep_r3_persistent_probe(home)
+    }
+    #[deprecated(note = "use api::scratch::skills::flowstep_r3_branch_probe instead")]
+    pub fn flowstep_r3_branch_probe(&self, home: String) -> DataObject {
+        self::scratch::skills::flowstep_r3_branch_probe(home)
+    }
+    #[deprecated(note = "use api::scratch::skills::flowstep_r3_fork_everywhere instead")]
+    pub fn flowstep_r3_fork_everywhere(&self, home: String, only: String) -> DataObject {
+        self::scratch::skills::flowstep_r3_fork_everywhere(home, only)
+    }
+    #[deprecated(note = "use api::scratch::skills::flowstep_r3_trim instead")]
+    pub fn flowstep_r3_trim(&self, home: String) -> DataObject {
+        self::scratch::skills::flowstep_r3_trim(home)
+    }
+    #[deprecated(note = "use api::scratch::skills::flowstep_r3_helpers_prep instead")]
+    pub fn flowstep_r3_helpers_prep(&self, home: String) -> DataObject {
+        self::scratch::skills::flowstep_r3_helpers_prep(home)
+    }
+    #[deprecated(note = "use api::scratch::skills::flowstep_r3_pjoin_check instead")]
+    pub fn flowstep_r3_pjoin_check(&self, home: String) -> DataObject {
+        self::scratch::skills::flowstep_r3_pjoin_check(home)
+    }
+    #[deprecated(note = "use api::scratch::skills::flowstep_r3_split_check instead")]
+    pub fn flowstep_r3_split_check(&self, home: String) -> DataObject {
+        self::scratch::skills::flowstep_r3_split_check(home)
+    }
+    #[deprecated(note = "use api::scratch::skills::flowstep_r3_d2_check instead")]
+    pub fn flowstep_r3_d2_check(&self, home: String) -> DataObject {
+        self::scratch::skills::flowstep_r3_d2_check(home)
+    }
+    #[deprecated(note = "use api::scratch::skills::flowstep_r3_seq_check instead")]
+    pub fn flowstep_r3_seq_check(&self, home: String) -> DataObject {
+        self::scratch::skills::flowstep_r3_seq_check(home)
+    }
+    #[deprecated(note = "use api::scratch::skills::flowstep_r4_gate instead")]
+    pub fn flowstep_r4_gate(&self, name: String, i: i64) -> String {
+        self::scratch::skills::flowstep_r4_gate(name, i)
+    }
+    #[deprecated(note = "use api::scratch::skills::flowstep_r4_check instead")]
+    pub fn flowstep_r4_check(&self, home: String) -> DataObject {
+        self::scratch::skills::flowstep_r4_check(home)
+    }
+    #[deprecated(note = "use api::scratch::skills::flowstep_r5_check instead")]
+    pub fn flowstep_r5_check(&self, home: String) -> DataObject {
+        self::scratch::skills::flowstep_r5_check(home)
+    }
+    #[deprecated(note = "use api::scratch::skills::flowstep_r6_timeline_check instead")]
+    pub fn flowstep_r6_timeline_check(&self, home: String, node: String) -> DataObject {
+        self::scratch::skills::flowstep_r6_timeline_check(home, node)
+    }
+    #[deprecated(note = "use api::scratch::skills::nb_tab_eval instead")]
+    pub fn nb_tab_eval(&self, js: String, timeout_ms: i64) -> DataObject {
+        self::scratch::skills::nb_tab_eval(js, timeout_ms)
+    }
+    #[deprecated(note = "use api::scratch::skills::r6_browser_drive instead")]
+    pub fn r6_browser_drive(&self, script: DataArray) -> DataObject {
+        self::scratch::skills::r6_browser_drive(script)
+    }
+    #[deprecated(note = "use api::scratch::skills::flowstep_r6_default_check instead")]
+    pub fn flowstep_r6_default_check(&self, home: String) -> DataObject {
+        self::scratch::skills::flowstep_r6_default_check(home)
+    }
+    #[deprecated(note = "use api::scratch::skills::r6_browser_setup instead")]
+    pub fn r6_browser_setup(&self, fresh: String, cmd: String, headless: bool) -> DataObject {
+        self::scratch::skills::r6_browser_setup(fresh, cmd, headless)
+    }
+    #[deprecated(note = "use api::scratch::skills::r6_gl_pixdiff instead")]
+    pub fn r6_gl_pixdiff(&self, name: String, against: String, x: i64, y: i64, w: i64, h: i64) -> DataObject {
+        self::scratch::skills::r6_gl_pixdiff(name, against, x, y, w, h)
+    }
+    #[deprecated(note = "use api::scratch::skills::flowstep_r6_nested_fatal_check instead")]
+    pub fn flowstep_r6_nested_fatal_check(&self, home: String) -> DataObject {
+        self::scratch::skills::flowstep_r6_nested_fatal_check(home)
+    }
+}
+impl old_scratch_flowstep_p0_progress {
+    #[deprecated(note = "use api::scratch::flowstep_p0_progress::progress instead")]
+    pub fn progress(&self) -> DataObject {
+        self::scratch::flowstep_p0_progress::progress()
+    }
+}
+impl old_scratch_flowstep {
+    #[deprecated(note = "use api::scratch::flowstep::debug_step instead")]
+    pub fn debug_step(&self, session: String, mode: String, pick: DataObject) -> DataObject {
+        self::scratch::flowstep::debug_step(session, mode, pick)
+    }
+    #[deprecated(note = "use api::scratch::flowstep::debug_start instead")]
+    pub fn debug_start(&self, lib: String, ctl: String, cmd: String, body: DataObject, args: DataObject) -> DataObject {
+        self::scratch::flowstep::debug_start(lib, ctl, cmd, body, args)
+    }
+    #[deprecated(note = "use api::scratch::flowstep::debug_state instead")]
+    pub fn debug_state(&self, session: String) -> DataObject {
+        self::scratch::flowstep::debug_state(session)
+    }
+    #[deprecated(note = "use api::scratch::flowstep::debug_stop instead")]
+    pub fn debug_stop(&self, session: String) -> DataObject {
+        self::scratch::flowstep::debug_stop(session)
+    }
+    #[deprecated(note = "use api::scratch::flowstep::debug_reap instead")]
+    pub fn debug_reap(&self) -> DataObject {
+        self::scratch::flowstep::debug_reap()
+    }
+    #[deprecated(note = "use api::scratch::flowstep::run_flow instead")]
+    pub fn run_flow(&self, lib: String, ctl: String, cmd: String, args: DataObject, events: i64, budget: i64, nn_sessionid: String) -> DataObject {
+        self::scratch::flowstep::run_flow(lib, ctl, cmd, args, events, budget, nn_sessionid)
     }
 }
 impl old_security_security {
@@ -7582,6 +11756,14 @@ impl old_trainmore_common {
     pub fn load_user_captions(&self, dir: String) -> DataObject {
         self::trainmore::common::load_user_captions(dir)
     }
+    #[deprecated(note = "use api::trainmore::common::qwenvl_captions instead")]
+    pub fn qwenvl_captions(&self, imgdir: String, cached: DataObject, trigger: String, musubi: String, model: String, bashcmd: String) -> DataObject {
+        self::trainmore::common::qwenvl_captions(imgdir, cached, trigger, musubi, model, bashcmd)
+    }
+    #[deprecated(note = "use api::trainmore::common::aitk_datasets instead")]
+    pub fn aitk_datasets(&self, src: String, tiers_root: String, resolutions: DataArray, max_upscale: f64, lowres_tag: String, caption_dropout: f64) -> DataObject {
+        self::trainmore::common::aitk_datasets(src, tiers_root, resolutions, max_upscale, lowres_tag, caption_dropout)
+    }
 }
 impl old_trainmore_ernie {
     #[deprecated(note = "use api::trainmore::ernie::install instead")]
@@ -7672,6 +11854,10 @@ impl old_trainmore_qweni {
     pub fn train(&self, job: DataObject) -> String {
         self::trainmore::qweni::train(job)
     }
+    #[deprecated(note = "use api::trainmore::qweni::captions instead")]
+    pub fn captions(&self, imgdir: String, cached: DataObject, trigger: String, musubi: String, model: String, bashcmd: String) -> DataObject {
+        self::trainmore::qweni::captions(imgdir, cached, trigger, musubi, model, bashcmd)
+    }
 }
 impl old_trainmore_sdxl {
     #[deprecated(note = "use api::trainmore::sdxl::install instead")]
@@ -7727,5 +11913,21 @@ impl old_trainmore_krea2 {
     #[deprecated(note = "use api::trainmore::krea2::train instead")]
     pub fn train(&self, job: DataObject) -> String {
         self::trainmore::krea2::train(job)
+    }
+}
+impl old_trainmore_moss {
+    #[deprecated(note = "use api::trainmore::moss::install instead")]
+    pub fn install(&self) -> DataObject {
+        self::trainmore::moss::install()
+    }
+    #[deprecated(note = "use api::trainmore::moss::train instead")]
+    pub fn train(&self, job: DataObject) -> String {
+        self::trainmore::moss::train(job)
+    }
+}
+impl old_workspace_workspace {
+    #[deprecated(note = "use api::workspace::workspace::stats instead")]
+    pub fn stats(&self) -> DataObject {
+        self::workspace::workspace::stats()
     }
 }

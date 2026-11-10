@@ -75,6 +75,7 @@ fn ensure_exec_state(g: &mut DataObject) -> DataObject {
         ex.put_int("drive", 4);
         ex.put_int("next_act_time", 0);
         ex.put_int("acts_total", 0);
+        ex.put_int("plan_steps", 0);
         ex.put_int("work_depth", 0);
         ex.put_int("salience_calls", 0);
         ex.put_int("escalations", 0);
