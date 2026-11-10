@@ -54,7 +54,8 @@ Contains everything that is the agent's, not the platform's:
   them automatically).
 - `agent/`, `kb/` — the generated FFI crates, **tracked** so the Rust is
   reviewable as ordinary source (see §3).
-- `data/scratch/` + `scratch/` — **skeletal only, on the `cmd` pattern**
+- `tools/scratch-seed/` — the seed a fresh instance copies its own
+  scratch library from; scratch itself is **instance-local, never in git**
   (below).
 - `docs/` — the agent/process docs (this doc, agent design material).
   The platform-feature docs (scene-facet, flow3d, flowlang-format) are
@@ -64,44 +65,14 @@ Contains everything that is the agent's, not the platform's:
   The smokes stay here **for now**; revisit whether any move upstream
   once the new workflow has proven out (decided).
 
-**The scratch pattern (decided, per the `cmd` precedent):** the skeleton is
-committed once — `data/scratch/meta.json`, an empty controls index, and the
-crate scaffold `flowb` would generate (`scratch/Cargo.toml`, `lib.rs`,
-empty `cmdinit.rs`/`api.rs`) — so a fresh clone builds and hot-reloads with
-no generation step. Then `data/scratch/`, `scratch/`, and `runtime/scratch/`
-are gitignored **wholesale**, so normal use — transient code, skills,
-experiments — never lands in a commit and can't poison upstream. One git
-mechanic completes the owner's intent that changes to the *checked-in*
-files also go untracked: ignore rules only hide untracked files, so the
-skeleton files are additionally marked
-`git update-index --skip-worktree` after the initial commit — after that,
-even scratch usage rewriting the controls index stays invisible to status
-and diff.
-
-**Overlay mechanics — symlinks** (the owner's call, 2026-08-09; his
-long-standing practice). The agent repo is checked out side by side, and
-the newbound checkout carries symlinks into it: `data/agent`, `data/kb`,
-`data/scratch` → `../newbound-agent/data/…`, plus `agent/`, `kb/`,
-`scratch/` for the crates. Safe by construction: library discovery is
-`read_dir` + `Path::is_dir()` (flowlang appserver), and `is_dir()` stats
-*through* symlinks **[verified]**. Gitignore shenanigans are needed only in
-the newbound repo, and even then only when editing from a working install
-rather than a clean one.
-
-### `alex89romanov/newbound` (the mirror) — de-forked, and shrinking further
-With agent/kb/scratch moved out, the mirror stops being a long-lived fork.
-Under the amended push rule its staging role shrinks again: sessions the
-owner drives push platform-side branches **directly to upstream** for him
-to merge. The mirror remains only for Alex-driven sessions (where the old
-never-push rule still applies) and retires when it has no remaining job.
-
-### `newbound-bench` — retired
-Its three residual jobs are all covered: the review mirror is unnecessary
-(§3), docs and smokes move to `newbound-agent`. Archive it as the
-historical record it already mostly is. `export-bench.py`,
-`install-bench.py`'s HTTP era, and `nbtransport.py` retire with it
-(`install --mcp` survives only if seeding a fresh instance from repo files
-is ever needed again; store-first makes that rare).
+**The scratch pattern (owner's rule, 2026-11-10 - supersedes the tracked
+skeleton):** scratch is instance-local. It is never linked into this repo,
+nothing of it is tracked, and it is never pushed. `tools/overlay.sh`
+copies `tools/scratch-seed` (meta.json, the controls index, the crate
+scaffold) to the checkout's own `data/scratch` and `scratch/` when they
+are absent, and replaces a legacy symlink into this repo with a real
+local copy. Later mentions of a committed scratch skeleton or of
+skip-worktree on it describe the retired arrangement.
 
 ---
 

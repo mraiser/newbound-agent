@@ -6,9 +6,10 @@ The Newbound agent, as a library set you drop into a newbound checkout:
   the notebook and chat shells, the archivist's memory formation.
 - `data/kb/` — the knowledge base: claims with provenance and source
   content hashes (staleness is detectable), doctrine, monthly rollups.
-- `data/scratch/` — the agent's hot-swappable scratchpad (skeletal in
-  git; see below).
-- `agent/`, `kb/`, `scratch/` — the generated FFI dylib crates, tracked
+- `tools/scratch-seed/` — the empty skeleton a fresh instance's own
+  scratch library is copied from (scratch itself is instance-local and
+  never in git; see below).
+- `agent/`, `kb/` — the generated FFI dylib crates, tracked
   so the Rust is reviewable as ordinary source.
 - `docs/` — the agent/process docs. **Read `docs/interim-process.md`
   first** — it is the working process this repo exists to serve.
@@ -54,9 +55,9 @@ with `http_port=0` (no HTTP listener) — never a choice anyone made, so
 setup normalizes exactly that value to `8080`; any other key, and any
 deliberately chosen port, is left alone.
 
-The overlay symlinks `data/agent`, `data/kb`, `data/scratch`, `agent/`,
-`kb/`, `scratch/` into the checkout and marks the tracked scratch
-skeleton files skip-worktree in this repo. Library discovery follows
+The overlay symlinks `data/agent`, `data/kb`, `agent/` and `kb/` into
+the checkout, and copies `tools/scratch-seed` to the checkout's own
+`data/scratch` and `scratch/` when they are absent. Library discovery follows
 symlinks (`read_dir` + `Path::is_dir()` — verified), so the platform,
 `flowb`, the hotswap loader and its poller, and `newbound mcp` see
 ordinary directories.
@@ -121,12 +122,14 @@ tools/nb-call.py dev-code-search_commands '{"lib":"","ctl":"","query":"memory"}'
 
 ## The scratch pattern
 
-`data/scratch/` and `scratch/` are committed as a skeleton (meta.json,
-empty controls index, the crate scaffold) and then gitignored wholesale.
-Changes to the *tracked* skeleton files are silenced per clone with
-`git update-index --skip-worktree` (overlay.sh does this). Scratch is
-where the agent's transient evals and self-authored skills live — no
-production code, and nothing it writes can poison a commit.
+Scratch is instance-local (owner's rule, 2026-11-10): it is never linked
+into this repo, nothing of it is tracked, and it never reaches GitHub.
+`tools/overlay.sh` copies `tools/scratch-seed` (meta.json, a controls
+index with the one empty control, the crate scaffold) to the checkout's
+own `data/scratch` and `scratch/` when they are absent, and replaces a
+legacy symlink into this repo with a real local copy. Scratch is where
+the agent's transient evals and self-authored skills live - no
+production code.
 
 ## Provenance
 

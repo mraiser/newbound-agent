@@ -6,7 +6,7 @@
 // Re-runs are idempotent: dataset_feed dedups line-wise.
 //
 // Two sources:
-//   patches - every library's _patches journals: one row per patch
+//   patches - every control's patch journal (dev.code.patch_journal): one row per patch
 //     entry {home, facet|cmd, label (the why), author, t, excerpt}.
 //   git - commit subjects+bodies (the why) paired with --stat file
 //     lists (the change), from repo_path (empty = this checkout).
@@ -36,16 +36,37 @@ fn clip(s: &str, n: usize) -> String {
     if s.chars().count() <= n { return s.to_string(); }
     s.chars().take(n).collect()
 }
-fn walk_patches(dir: &std::path::Path, out: &mut Vec<std::path::PathBuf>) {
-    if let Ok(rd) = std::fs::read_dir(dir) {
-        for e in rd.flatten() {
-            let p = e.path();
-            if p.is_dir() { walk_patches(&p, out); }
-            else if p.file_name().and_then(|n| n.to_str())
-                     .map(|n| n.ends_with("_patches")).unwrap_or(false) {
-                out.push(p);
+// Patches newer than `since`, oldest first, through dev.code.patch_journal
+// (which answers from the instance-local runtime journal, or the legacy
+// record when a control has none). read is newest-first, so the window
+// grows until it reaches back past `since`.
+fn patches_since(lib: &str, ctlid: &str, since: i64) -> Vec<DataObject> {
+    let mut limit: i64 = if since <= 0 { 0 } else { 32 };
+    loop {
+        let mut a = DataObject::new();
+        a.put_string("op", "read");
+        a.put_string("lib", lib);
+        a.put_string("ctl", ctlid);
+        a.put_string("to_lib", "");
+        a.put_object("entry", DataObject::new());
+        a.put_int("limit", limit);
+        a.put_boolean("dry_run", false);
+        a.put_string("nn_sessionid", "");
+        let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            flowlang::command::Command::lookup("dev", "code", "patch_journal").execute(a)
+        }));
+        let r = match r { Ok(Ok(r)) => if r.has("a") { r.get_object("a") } else { r }, _ => return Vec::new() };
+        let list = match r.try_get_array("patches") { Ok(l) => l, Err(_) => return Vec::new() };
+        let total = r.try_get_int("total").unwrap_or(0);
+        let mut out: Vec<DataObject> = Vec::new();
+        let mut reached = false;
+        for i in 0..list.len() {
+            if let Ok(e) = list.try_get_object(i) {
+                if e.try_get_int("time").unwrap_or(0) > since { out.push(e); } else { reached = true; }
             }
         }
+        if reached || limit <= 0 || limit >= total { out.reverse(); return out; }
+        limit *= 4;
     }
 }
 
@@ -88,26 +109,15 @@ if source_t == "patches" || source_t == "both" {
             }
         }
     }
-    let mut files: Vec<std::path::PathBuf> = Vec::new();
-    walk_patches(&store.root, &mut files);
-    files.sort();
-    'outer: for f in &files {
-        let rel = f.strip_prefix(&store.root).unwrap_or(f);
-        let lib = rel.components().next()
-            .and_then(|c| c.as_os_str().to_str()).unwrap_or("").to_string();
-        let id = f.file_name().and_then(|n| n.to_str()).unwrap_or("")
-            .trim_end_matches("_patches").to_string();
-        let home = match names.get(&format!("{}/{}", lib, id)) {
-            Some(n) => format!("{}.{}", lib, n),
-            None => format!("{}.{}", lib, clip(&id, 8)),
-        };
-        let text = std::fs::read_to_string(f).unwrap_or_default();
-        let rec = match DataObject::try_from_string(&text) { Ok(r) => r, Err(_) => continue };
-        let d = rec.get_object("data");
-        if !d.has("list") { continue; }
-        let list = d.get_array("list");
-        for i in 0..list.len() {
-            if let Ok(p) = list.try_get_object(i) {
+    // every control's patch journal, through dev.code.patch_journal (the
+    // instance-local runtime journal, or the legacy record) - no file walk
+    let mut homes: Vec<(&String, &String)> = names.iter().collect();
+    homes.sort();
+    'outer: for (key, name) in homes {
+        let (lib, id) = match key.split_once('/') { Some(x) => x, None => continue };
+        let home = format!("{}.{}", lib, name);
+        for p in patches_since(lib, id, -1) {
+            {
                 let label = if p.has("label") { p.get_string("label") } else { String::new() };
                 if label.trim().is_empty() { continue; }
                 let what = if p.has("facet") { format!("facet {}", p.get_string("facet")) }

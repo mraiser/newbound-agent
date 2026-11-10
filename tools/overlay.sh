@@ -38,15 +38,30 @@ link() { # link <checkout-relative-path> <agent-repo-relative-path>
 echo "overlaying $AGENT_DIR:"
 link data/agent   data/agent
 link data/kb      data/kb
-link data/scratch data/scratch
 link agent        agent
 link kb           kb
-link scratch      scratch
 
-# Silence runtime mutations of the tracked scratch skeleton (per-clone).
-(cd "$AGENT_DIR" && git ls-files -z data/scratch scratch \
-  | xargs -0 -r git update-index --skip-worktree \
-  && echo "  skip-worktree set on the scratch skeleton")
+# Scratch is instance-local: it is never linked into this repo and nothing
+# of it is tracked, so it can never be pushed. An absent library is seeded
+# from tools/scratch-seed (the empty skeleton + crate scaffold); a legacy
+# symlink into the agent repo is replaced by a real copy of what it pointed
+# at, topped up from the seed. An existing real directory is left alone.
+seed() { # seed <checkout-relative-path> <seed-relative-path>
+  dst="$1"
+  src="$AGENT_DIR/tools/scratch-seed/$2"
+  if [ -L "$dst" ]; then
+    old=$(readlink -f "$dst" 2>/dev/null || true)
+    rm "$dst"
+    if [ -n "$old" ] && [ -d "$old" ]; then cp -a "$old" "$dst"; else mkdir -p "$dst"; fi
+    cp -rn "$src/." "$dst/"
+    echo "  $dst: symlink replaced by a local copy (instance-only)"
+  elif [ ! -e "$dst" ]; then
+    cp -r "$src" "$dst"
+    echo "  $dst: seeded from tools/scratch-seed (instance-only)"
+  fi
+}
+seed data/scratch data
+seed scratch      crate
 
 # The brain is instance-owned (docs/one-memory-cycle.md A4): nothing under
 # data/kb is tracked (bdc31ba ended the A4 freeze) and .gitignore hides it
@@ -56,8 +71,7 @@ link scratch      scratch
 # The platform checkout's generated files absorb overlay knowledge on
 # every rebuild (api.rs grows agent/kb/... modules; the initializer
 # learns the FFI crates). They are tracked upstream but their overlay
-# state must never ride a commit - hide the churn per-clone, the same
-# way the scratch skeleton is handled.
+# state must never ride a commit - hide the churn per-clone.
 git update-index --skip-worktree newbound_core/src/api.rs src/generated_initializer.rs 2>/dev/null \
   && echo "  skip-worktree set on newbound_core/src/api.rs and src/generated_initializer.rs"
 
