@@ -1,8 +1,8 @@
 // start (docs/perception-contract.md section 5): the journal tailer, the
 // contract's reference implementation - purely procedural end to end.
 // Explicit and killable like the executive. Every sweep stats each
-// control's _patches journal (mtime gate - journals parse only when they
-// actually moved), turns each new entry into one store_change envelope,
+// control's patch journal (mtime gate - journals are read only when they
+// actually moved; storage is dev.code.patch_journal's, instance-local), turns each new entry into one store_change envelope,
 // binds the claims whose source pointers name the changed facet (stale by
 // hash compare), and hands it to agent-executive-perceive. Because acts
 // go through platform commands, the executive's own writes return here:
@@ -27,11 +27,38 @@ fn ensure_sensor_state(g: &mut DataObject) -> DataObject {
     g.get_object("AGENT_SENSOR_STORE")
 }
 
-fn seg(id: &str, i: usize) -> String {
-    // The store's path law: 4-char segments of the id, '_'-padded short.
-    let mut s: String = id.chars().skip(i).take(4).collect();
-    while s.len() < 4 { s.push('_'); }
-    s
+// Patches newer than `since`, oldest first, through dev.code.patch_journal
+// (which answers from the instance-local runtime journal, or the legacy
+// record when a control has none). read is newest-first, so the window
+// grows until it reaches back past `since`.
+fn patches_since(lib: &str, ctlid: &str, since: i64) -> Vec<DataObject> {
+    let mut limit: i64 = if since <= 0 { 0 } else { 32 };
+    loop {
+        let mut a = DataObject::new();
+        a.put_string("op", "read");
+        a.put_string("lib", lib);
+        a.put_string("ctl", ctlid);
+        a.put_string("to_lib", "");
+        a.put_object("entry", DataObject::new());
+        a.put_int("limit", limit);
+        a.put_boolean("dry_run", false);
+        a.put_string("nn_sessionid", "");
+        let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            flowlang::command::Command::lookup("dev", "code", "patch_journal").execute(a)
+        }));
+        let r = match r { Ok(Ok(r)) => if r.has("a") { r.get_object("a") } else { r }, _ => return Vec::new() };
+        let list = match r.try_get_array("patches") { Ok(l) => l, Err(_) => return Vec::new() };
+        let total = r.try_get_int("total").unwrap_or(0);
+        let mut out: Vec<DataObject> = Vec::new();
+        let mut reached = false;
+        for i in 0..list.len() {
+            if let Ok(e) = list.try_get_object(i) {
+                if e.try_get_int("time").unwrap_or(0) > since { out.push(e); } else { reached = true; }
+            }
+        }
+        if reached || limit <= 0 || limit >= total { out.reverse(); return out; }
+        limit *= 4;
+    }
 }
 fn content_hash(s: &str) -> String {
     // FNV-1a over the \r-normalized source - MUST stay in sync with
@@ -193,28 +220,21 @@ std::thread::spawn(move || {
                 if !item.has("name") || !item.has("id") { continue; }
                 let name = item.get_string("name");
                 let id = item.get_string("id");
-                let jid = format!("{}_patches", id);
-                // mtime gate: parse a journal only when its file moved
-                let jpath = store.root.join(&lib)
-                    .join(seg(&jid, 0)).join(seg(&jid, 4)).join(seg(&jid, 8)).join(seg(&jid, 12))
-                    .join(&jid);
-                let mt = match std::fs::metadata(&jpath) {
-                    Ok(m) => match m.modified() {
-                        Ok(t) => match t.duration_since(std::time::UNIX_EPOCH) {
-                            Ok(d) => d.as_millis() as i64,
-                            Err(_) => continue,
-                        },
-                        Err(_) => continue,
-                    },
-                    Err(_) => continue,
-                };
+                // mtime gate: read a journal only when it moved. Patch
+                // history is instance-local (dev.code.patch_journal): the
+                // runtime index record is rewritten on every append; a
+                // control not yet journaled there still has its legacy
+                // <id>_patches record.
+                let mut mt: i64 = 0;
+                for (jl, jid) in [("runtime".to_string(), format!("dev_journal_{}_{}", lib, id)), (lib.clone(), format!("{}_patches", id))] {
+                    if let Ok(m) = std::fs::metadata(store.get_data_file(&jl, &jid)) {
+                        if let Ok(t) = m.modified() {
+                            if let Ok(d) = t.duration_since(std::time::UNIX_EPOCH) { mt = mt.max(d.as_millis() as i64); }
+                        }
+                    }
+                }
                 if mt <= cursor { continue; }
-                if !store.exists(&lib, &jid) { continue; }
-                let jd = store.get_data(&lib, &jid).get_object("data");
-                if !jd.has("list") { continue; }
-                let jlist = jd.get_array("list");
-                for j in 0..jlist.len() {
-                    let e = match jlist.try_get_object(j) { Ok(e) => e, Err(_) => continue };
+                for e in patches_since(&lib, &id, cursor) {
                     let et = if e.has("time") { e.get_int("time") } else { 0 };
                     if et <= cursor || et > t0 { continue; }
                     let facet = if e.has("facet") { e.get_string("facet") } else { String::new() };
