@@ -38,7 +38,7 @@ if lc != "accepted" && lc != "in-progress" && lc != "proposed" {
     return fail("lifecycle must be accepted (runnable now), in-progress, or proposed (queued until the parent promotes it)");
 }
 let api = crate::api::new();
-let r = api.dev.code.read_control_facet("kb".to_string(), "plan".to_string(), "memory".to_string());
+let r = crate::agent::plan::compat::facet_read();
 if !r.try_get_boolean("exists").unwrap_or(false) {
     return fail("kb.plan has no memory facet");
 }

@@ -9,7 +9,7 @@ if !lifecycles.contains(&lifecycle.as_str()) {
     return out;
 }
 let api = crate::api::new();
-let r = api.dev.code.read_control_facet("kb".to_string(), "plan".to_string(), "memory".to_string());
+let r = crate::agent::plan::compat::facet_read();
 if !r.try_get_boolean("exists").unwrap_or(false) {
     out.put_string("status", "err");
     out.put_string("msg", "kb.plan has no memory facet");
@@ -84,6 +84,6 @@ if !found {
 }
 let short: String = claim.chars().take(60).collect();
 let label = format!("plan board: '{}' -> {}", short, lifecycle);
-api.dev.code.patch_control_facet(
+crate::agent::plan::compat::facet_write(
     "kb".to_string(), "plan".to_string(), "memory".to_string(),
     "".to_string(), arr.to_string(), hash, label, "".to_string(), nn_sessionid)
