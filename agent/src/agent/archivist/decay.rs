@@ -316,42 +316,39 @@ fn ensure_key(data_obj: &mut DataObject, name: &str) {
     data_obj.put_array("attachmentkeynames", keys);
 }
 fn journal(store: &DataStore, lib: &str, ctlid: &str, facet: &str, old: &str, new: &str, author: &str, label: &str) -> String {
-    let jid = format!("{}_patches", ctlid);
-    let mut jrec;
-    let mut jdata;
-    let mut jlist;
-    if store.exists(lib, &jid) {
-        jrec = store.get_data(lib, &jid);
-        jdata = jrec.get_object("data");
-        jlist = if jdata.has("list") { jdata.get_array("list") } else { DataArray::new() };
-    } else {
-        jrec = DataObject::new();
-        jrec.put_string("id", &jid);
-        jrec.put_string("username", "system");
-        jrec.put_array("readers", DataArray::new());
-        jrec.put_array("writers", DataArray::new());
-        jdata = DataObject::new();
-        jlist = DataArray::new();
+    // Patch history is instance-local and dev.code.patch_journal owns its
+    // storage: hand it the entry, never touch a journal record directly.
+    let _ = store;
+    let mut label = label.to_string();
+    if label.chars().count() > 72 {
+        label = label.chars().take(69).collect::<String>() + "...";
     }
-    let patch_id = format!("p{}", jlist.len() + 1);
     let mut jentry = DataObject::new();
-    jentry.put_string("patch_id", &patch_id);
     jentry.put_string("author", author);
     jentry.put_string("facet", facet);
     jentry.put_string("cmd", "");
     jentry.put_string("old", old);
     jentry.put_string("new", new);
-    jentry.put_int("time", time());
-    let mut label = label.to_string();
-    if label.chars().count() > 72 {
-        label = label.chars().take(69).collect::<String>() + "...";
-    }
     jentry.put_string("label", &label);
-    jlist.push_object(jentry);
-    jdata.put_array("list", jlist);
-    jrec.put_object("data", jdata);
-    jrec.put_int("time", time());
-    store.set_data(lib, &jid, jrec);
+    let mut jargs = DataObject::new();
+    jargs.put_string("op", "append");
+    jargs.put_string("lib", lib);
+    jargs.put_string("ctl", ctlid);
+    jargs.put_string("to_lib", "");
+    jargs.put_object("entry", jentry);
+    jargs.put_int("limit", 0);
+    jargs.put_boolean("dry_run", false);
+    jargs.put_string("nn_sessionid", "");
+    let jres = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        flowlang::command::Command::lookup("dev", "code", "patch_journal").execute(jargs)
+    }));
+    let patch_id = match jres {
+        Ok(Ok(r)) => {
+            let r = if r.has("a") { r.get_object("a") } else { r };
+            r.try_get_string("patch_id").unwrap_or_default()
+        },
+        _ => String::new(),
+    };
     patch_id
 }
 

@@ -157,23 +157,46 @@ for lib in &libs {
         }
         // authorship lives in the journals, not the entries: count
         // memory-facet patches by author within the window
-        let jid = format!("{}_patches", id);
-        if store.exists(lib, &jid) {
-            let jd = store.get_data(lib, &jid).get_object("data");
-            if jd.has("list") {
-                let jl = jd.get_array("list");
-                for j in 0..jl.len() {
-                    if let Ok(pe) = jl.try_get_object(j) {
-                        let f = if pe.has("facet") { pe.get_string("facet") } else { String::new() };
-                        let tt = if pe.has("time") { pe.get_int("time") } else { 0 };
-                        if f == "memory" && tt >= cutoff {
-                            let author = if pe.has("author") && !pe.get_string("author").is_empty() {
-                                pe.get_string("author") } else { "unknown".to_string() };
-                            let c = if by_author.has(&author) { by_author.get_int(&author) } else { 0 };
-                            by_author.put_int(&author, c + 1);
-                        }
+        // Patches newer than `since`, oldest first, through dev.code.patch_journal
+        // (which answers from the instance-local runtime journal, or the legacy
+        // record when a control has none). read is newest-first, so the window
+        // grows until it reaches back past `since`.
+        fn patches_since(lib: &str, ctlid: &str, since: i64) -> Vec<DataObject> {
+            let mut limit: i64 = if since <= 0 { 0 } else { 32 };
+            loop {
+                let mut a = DataObject::new();
+                a.put_string("op", "read");
+                a.put_string("lib", lib);
+                a.put_string("ctl", ctlid);
+                a.put_string("to_lib", "");
+                a.put_object("entry", DataObject::new());
+                a.put_int("limit", limit);
+                a.put_boolean("dry_run", false);
+                a.put_string("nn_sessionid", "");
+                let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    flowlang::command::Command::lookup("dev", "code", "patch_journal").execute(a)
+                }));
+                let r = match r { Ok(Ok(r)) => if r.has("a") { r.get_object("a") } else { r }, _ => return Vec::new() };
+                let list = match r.try_get_array("patches") { Ok(l) => l, Err(_) => return Vec::new() };
+                let total = r.try_get_int("total").unwrap_or(0);
+                let mut out: Vec<DataObject> = Vec::new();
+                let mut reached = false;
+                for i in 0..list.len() {
+                    if let Ok(e) = list.try_get_object(i) {
+                        if e.try_get_int("time").unwrap_or(0) > since { out.push(e); } else { reached = true; }
                     }
                 }
+                if reached || limit <= 0 || limit >= total { out.reverse(); return out; }
+                limit *= 4;
+            }
+        }
+        for pe in patches_since(lib, &id, cutoff - 1) {
+            let f = if pe.has("facet") { pe.get_string("facet") } else { String::new() };
+            if f == "memory" {
+                let author = if pe.has("author") && !pe.get_string("author").is_empty() {
+                    pe.get_string("author") } else { "unknown".to_string() };
+                let c = if by_author.has(&author) { by_author.get_int(&author) } else { 0 };
+                by_author.put_int(&author, c + 1);
             }
         }
         if dd.has("traces") {
