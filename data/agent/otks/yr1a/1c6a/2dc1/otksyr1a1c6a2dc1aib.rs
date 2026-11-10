@@ -22,12 +22,17 @@ check("duplicate claim refused", st(&r) == "err", msg(&r));
 let h1 = api.agent.plan.board_hash().get_string("hash");
 let r = api.agent.plan.add_note(c1.clone(), "first note".to_string(), "".to_string());
 check("add_note appends", st(&r) == "ok" && r.try_get_int("notes").unwrap_or(0) == 1, r.to_string());
-let r = api.agent.plan.move_item(c1.clone(), "accepted".to_string(), h1.clone(), "".to_string());
-check("move_item refuses an old board hash", msg(&r) == "stale_base", r.to_string());
 let snap = compat::facet_read();
 let h2 = snap.get_string("hash");
-let r = api.agent.plan.move_item(c1.clone(), "accepted".to_string(), h2.clone(), "".to_string());
-check("move_item with the current hash", st(&r) == "ok", r.to_string());
+// Per-item move: h1 is older than the board hash (a note landed since), but
+// the item's record has not changed since h1, so the move goes through.
+let r = api.agent.plan.move_item(c1.clone(), "accepted".to_string(), h1.clone(), "".to_string());
+check("move_item accepts an older board hash when the item is unchanged", st(&r) == "ok" && r.try_get_int("changed").unwrap_or(0) == 1, r.to_string());
+// The item itself has now changed after h1: the same base is stale.
+let r = api.agent.plan.move_item(c1.clone(), "done".to_string(), h1.clone(), "".to_string());
+check("move_item refuses a base older than the item's last change", msg(&r) == "stale_base" && r.try_get_string("scope").unwrap_or_default() == "item", r.to_string());
+let r = api.agent.plan.move_item(c1.clone(), "done".to_string(), "r999999999".to_string(), "".to_string());
+check("move_item refuses a base ahead of the board", msg(&r) == "stale_base", r.to_string());
 let r = api.agent.plan.add_subtask(c1.clone(), c2.clone(), "".to_string(), "proposed".to_string(), "".to_string());
 check("add_subtask under the accepted item", st(&r) == "ok", r.to_string());
 let r = api.agent.plan.add_note(c1.clone(), "second note".to_string(), "".to_string());
