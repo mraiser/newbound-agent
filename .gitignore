@@ -2,13 +2,11 @@
 target/
 agent/Cargo.lock
 kb/Cargo.lock
-scratch/Cargo.lock
 
-# Scratch is skeletal-only in git (owner's rule, the cmd pattern):
-# the skeleton was committed once, then these dirs are ignored wholesale
-# so normal use — transient code, skills, experiments — never lands in a
-# commit. tools/overlay.sh additionally marks the tracked skeleton files
-# skip-worktree so even their runtime mutations go untracked.
+# Scratch is instance-local (owner's rule): nothing of it is tracked or
+# linked here. tools/overlay.sh seeds a fresh instance's own data/scratch
+# and scratch/ from tools/scratch-seed. These two lines only guard against
+# a stray copy landing at the old paths.
 /data/scratch/
 /scratch/
 

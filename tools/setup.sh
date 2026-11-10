@@ -64,7 +64,7 @@ echo "== setup: agent repo $AGENT_DIR onto checkout $NB"
 CHURN_FILES="agent/src/api.rs kb/src/api.rs"
 DIRTY_BEFORE=$(cd "$AGENT_DIR" && git status --porcelain -- $CHURN_FILES)
 
-# 1. Overlay (idempotent; also sets skip-worktree on the scratch skeleton).
+# 1. Overlay (idempotent; also seeds the instance-local scratch library).
 "$AGENT_DIR/tools/overlay.sh" "$AGENT_DIR"
 
 # 2. cmd crate scaffold, if this checkout ships without one.
