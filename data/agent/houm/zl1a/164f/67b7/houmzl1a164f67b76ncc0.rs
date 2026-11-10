@@ -138,7 +138,7 @@ fn parse_board(src: &str) -> Vec<DataObject> {
 }
 fn read_facet() -> (String, String) {
     let api = crate::api::new();
-    let f = api.dev.code.read_control_facet("kb".to_string(), "plan".to_string(), "memory".to_string());
+    let f = crate::agent::plan::compat::facet_read();
     (f.try_get_string("hash").unwrap_or_default(), f.try_get_string("source").unwrap_or_default())
 }
 fn fp_now(claim: &str) -> String {
