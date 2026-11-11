@@ -1,5 +1,10 @@
 // This file is auto-generated and managed by the flowlang build script.
 use flowlang::rustcmd::Transform;
+pub mod remove_item;
+pub mod test_cutover_contract;
+pub mod compat;
+pub mod test_store_contract;
+pub mod store;
 pub mod step_lock;
 pub mod add_subtask;
 pub mod test_run_control_contract;
@@ -47,4 +52,9 @@ pub fn cmdinit(cmds: &mut Vec<(String, Transform, String)>) {
     cmds.push(("wpiwht1a17287e0f5n647".to_string(), test_run_control_contract::execute, "".to_string()));
     cmds.push(("qizorr1a1acc07097r3fb".to_string(), add_subtask::execute, "".to_string()));
     cmds.push(("trzxxv1a1ad30b084u58c".to_string(), step_lock::execute, "".to_string()));
+    cmds.push(("ivqkkl1a1c6960811q5".to_string(), store::execute, "".to_string()));
+    cmds.push(("jyvhjx1a1c696ef2an7".to_string(), test_store_contract::execute, "".to_string()));
+    cmds.push(("yznqrh1a1c69f128ds1".to_string(), compat::execute, "".to_string()));
+    cmds.push(("otksyr1a1c6a2dc1aib".to_string(), test_cutover_contract::execute, "".to_string()));
+    cmds.push(("plztpw1a1c6a92b21hb".to_string(), remove_item::execute, "".to_string()));
 }

@@ -975,6 +975,37 @@ pub mod agent {
             ::flowlang::rustcmd::RustCmd::new("trzxxv1a1ad30b084u58c").execute(d).expect("Rust command execution failed").get_object("a")
         }
 
+        pub fn store(op: String, lib: String, ns: String, dry_run: bool) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("op", &op);
+            d.put_string("lib", &lib);
+            d.put_string("ns", &ns);
+            d.put_boolean("dry_run", dry_run);
+            ::flowlang::rustcmd::RustCmd::new("ivqkkl1a1c6960811q5").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn test_store_contract() -> DataObject {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("jyvhjx1a1c696ef2an7").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn compat() -> DataObject {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("yznqrh1a1c69f128ds1").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn test_cutover_contract() -> DataObject {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("otksyr1a1c6a2dc1aib").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn remove_item(claim: String, nn_sessionid: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("claim", &claim);
+            d.put_string("nn_sessionid", &nn_sessionid);
+            ::flowlang::rustcmd::RustCmd::new("plztpw1a1c6a92b21hb").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
     }
     pub mod browser {
         use ::ndata::dataobject::DataObject;
@@ -1127,11 +1158,12 @@ pub mod agent {
             ::flowlang::rustcmd::RustCmd::new("mvpptg1a1018f7572k1a79").execute(d).expect("Rust command execution failed").get_object("a")
         }
 
-        pub fn compose_message(repo: String, unit: String, siblings: String) -> DataObject {
+        pub fn compose_message(repo: String, unit: String, siblings: String, changes: DataArray) -> DataObject {
             let mut d = DataObject::new();
             d.put_string("repo", &repo);
             d.put_string("unit", &unit);
             d.put_string("siblings", &siblings);
+            d.put_array("changes", changes);
             ::flowlang::rustcmd::RustCmd::new("stxkgw1a101903675m1a7c").execute(d).expect("Rust command execution failed").get_object("a")
         }
 
@@ -1143,6 +1175,12 @@ pub mod agent {
         pub fn status() -> DataObject {
             let d = DataObject::new();
             ::flowlang::rustcmd::RustCmd::new("zwullg1a10191fcd8p1a84").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn sweep_repo(repo: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("repo", &repo);
+            ::flowlang::rustcmd::RustCmd::new("jhktss1a1c65be826v3").execute(d).expect("Rust command execution failed").get_object("a")
         }
 
     }
@@ -2450,6 +2488,29 @@ pub mod dev {
             ::flowlang::rustcmd::RustCmd::new("uuowqh1a1a0efa6baj1").execute(d).expect("Rust command execution failed").get_object("a")
         }
 
+        pub fn patch_journal(op: String, lib: String, ctl: String, to_lib: String, entry: DataObject, limit: i64, dry_run: bool, nn_sessionid: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("op", &op);
+            d.put_string("lib", &lib);
+            d.put_string("ctl", &ctl);
+            d.put_string("to_lib", &to_lib);
+            d.put_object("entry", entry);
+            d.put_int("limit", limit);
+            d.put_boolean("dry_run", dry_run);
+            d.put_string("nn_sessionid", &nn_sessionid);
+            ::flowlang::rustcmd::RustCmd::new("klvnjy1a1c17d9880h47").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn convert_patch_journals(lib: String, ctl: String, limit: i64, dry_run: bool, nn_sessionid: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("lib", &lib);
+            d.put_string("ctl", &ctl);
+            d.put_int("limit", limit);
+            d.put_boolean("dry_run", dry_run);
+            d.put_string("nn_sessionid", &nn_sessionid);
+            ::flowlang::rustcmd::RustCmd::new("wtturu1a1c1872c7av89").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
     }
     pub mod viewctx {
         use ::ndata::dataobject::DataObject;
@@ -2601,6 +2662,16 @@ pub mod dev {
             d.put_string("repo", &repo);
             d.put_string("message", &message);
             ::flowlang::rustcmd::RustCmd::new("slhoyo1a0740a96d8s3").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn commit_paths(repo: String, paths: DataArray, message: String, author: String, nn_sessionid: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("repo", &repo);
+            d.put_array("paths", paths);
+            d.put_string("message", &message);
+            d.put_string("author", &author);
+            d.put_string("nn_sessionid", &nn_sessionid);
+            ::flowlang::rustcmd::RustCmd::new("syixmu1a1c65a566fh1").execute(d).expect("Rust command execution failed").get_object("a")
         }
 
     }
@@ -2991,6 +3062,37 @@ pub mod files {
             d.put_string("destination", &destination);
             d.put_string("overwrite", &overwrite);
             ::flowlang::rustcmd::RustCmd::new("uzhykj1a1b0eade9fg63f").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn start_upload(path: String, size: i64, nn_sessionid: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("path", &path);
+            d.put_int("size", size);
+            d.put_string("nn_sessionid", &nn_sessionid);
+            ::flowlang::rustcmd::RustCmd::new("uwyhth1a1b356053di5e8").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn write_upload_chunk(upload_id: String, offset: i64, nn_sessionid: String, nn_body: Data) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("upload_id", &upload_id);
+            d.put_int("offset", offset);
+            d.put_string("nn_sessionid", &nn_sessionid);
+            d.set_property("nn_body", nn_body);
+            ::flowlang::rustcmd::RustCmd::new("rgzlkk1a1b3561000n5ea").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn finish_upload(upload_id: String, nn_sessionid: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("upload_id", &upload_id);
+            d.put_string("nn_sessionid", &nn_sessionid);
+            ::flowlang::rustcmd::RustCmd::new("timmwu1a1b35702bbq5ee").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn abort_upload(upload_id: String, nn_sessionid: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("upload_id", &upload_id);
+            d.put_string("nn_sessionid", &nn_sessionid);
+            ::flowlang::rustcmd::RustCmd::new("povzlx1a1b3570d1ex5f0").execute(d).expect("Rust command execution failed").get_object("a")
         }
 
     }
@@ -5468,44 +5570,6 @@ pub mod img2mhm {
     }
 }
 
-pub mod kb {
-    pub mod platform_api {
-        use ::ndata::dataobject::DataObject;
-        use ::ndata::dataarray::DataArray;
-        use ::ndata::databytes::DataBytes;
-        use ::ndata::data::Data;
-
-    }
-    pub mod workflow {
-        use ::ndata::dataobject::DataObject;
-        use ::ndata::dataarray::DataArray;
-        use ::ndata::databytes::DataBytes;
-        use ::ndata::data::Data;
-
-    }
-    pub mod frontend {
-        use ::ndata::dataobject::DataObject;
-        use ::ndata::dataarray::DataArray;
-        use ::ndata::databytes::DataBytes;
-        use ::ndata::data::Data;
-
-    }
-    pub mod doctrine {
-        use ::ndata::dataobject::DataObject;
-        use ::ndata::dataarray::DataArray;
-        use ::ndata::databytes::DataBytes;
-        use ::ndata::data::Data;
-
-    }
-    pub mod plan {
-        use ::ndata::dataobject::DataObject;
-        use ::ndata::dataarray::DataArray;
-        use ::ndata::databytes::DataBytes;
-        use ::ndata::data::Data;
-
-    }
-}
-
 pub mod minifig {
     pub mod minifig {
         use ::ndata::dataobject::DataObject;
@@ -6070,6 +6134,49 @@ pub mod peer {
     }
 }
 
+pub mod peerchat {
+    pub mod peerchat {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+        pub fn flush(id: String) -> String {
+            let mut d = DataObject::new();
+            d.put_string("id", &id);
+            ::flowlang::rustcmd::RustCmd::new("gqwrkg1a1c7084cb7p2").execute(d).expect("Rust command execution failed").get_string("a")
+        }
+
+        pub fn receive(id: String, text: String, time: i64, nn_session: DataObject) -> String {
+            let mut d = DataObject::new();
+            d.put_string("id", &id);
+            d.put_string("text", &text);
+            d.put_int("time", time);
+            d.put_object("nn_session", nn_session);
+            ::flowlang::rustcmd::RustCmd::new("plnkpl1a1c708dbf1h4").execute(d).expect("Rust command execution failed").get_string("a")
+        }
+
+        pub fn send(peer: String, text: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("peer", &peer);
+            d.put_string("text", &text);
+            ::flowlang::rustcmd::RustCmd::new("syywuz1a1c7090a2ei6").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn history(peer: String) -> DataArray {
+            let mut d = DataObject::new();
+            d.put_string("peer", &peer);
+            ::flowlang::rustcmd::RustCmd::new("uwunjk1a1c70914dei8").execute(d).expect("Rust command execution failed").get_array("a")
+        }
+
+        pub fn chats() -> DataArray {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("wtmxyk1a1c70922c1xa").execute(d).expect("Rust command execution failed").get_array("a")
+        }
+
+    }
+}
+
 pub mod raspberry {
     pub mod cpu {
         use ::ndata::dataobject::DataObject;
@@ -6426,6 +6533,16 @@ pub mod scratch {
             ::flowlang::rustcmd::RustCmd::new("qlpgzo1a191c3027ag23").execute(d).expect("Rust command execution failed").get_object("a")
         }
 
+        pub fn eval_vqyuqj1a1c0fb0c54z19f() -> DataObject {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("lximrs1a1c0fb0c56g1a1").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn eval_sxgnot1a1c164218bz15() -> DataObject {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("igjouk1a1c164218cx17").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
     }
     pub mod stripe {
         use ::ndata::dataobject::DataObject;
@@ -6721,6 +6838,13 @@ pub mod scratch {
             let mut d = DataObject::new();
             d.put_string("home", &home);
             ::flowlang::rustcmd::RustCmd::new("zrxxhs1a192ec9e6fg362").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn committer_test_llm(messages: DataArray, tools: DataArray) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_array("messages", messages);
+            d.put_array("tools", tools);
+            ::flowlang::rustcmd::RustCmd::new("lqhwky1a1c629e050ldd").execute(d).expect("Rust command execution failed").get_object("a")
         }
 
     }
@@ -7645,11 +7769,6 @@ pub struct old_img2mhm_assets {}
 pub struct old_img2mhm_mh {}
 pub struct old_img2mhm_face {}
 pub struct old_img2mhm_solve {}
-pub struct old_kb_platform_api {}
-pub struct old_kb_workflow {}
-pub struct old_kb_frontend {}
-pub struct old_kb_doctrine {}
-pub struct old_kb_plan {}
 pub struct old_minifig_minifig {}
 pub struct old_nebula_lighthouse {}
 pub struct old_nebula_nebula {}
@@ -7682,6 +7801,7 @@ pub struct old_peer_peer_model {}
 pub struct old_peer_reboot {}
 pub struct old_peer_service {}
 pub struct old_peer_peer_select {}
+pub struct old_peerchat_peerchat {}
 pub struct old_raspberry_cpu {}
 pub struct old_raspberry_disk {}
 pub struct old_raspberry_memory {}
@@ -7937,13 +8057,6 @@ pub struct old_img2mhm {
     pub face: old_img2mhm_face,
     pub solve: old_img2mhm_solve,
 }
-pub struct old_kb {
-    pub platform_api: old_kb_platform_api,
-    pub workflow: old_kb_workflow,
-    pub frontend: old_kb_frontend,
-    pub doctrine: old_kb_doctrine,
-    pub plan: old_kb_plan,
-}
 pub struct old_minifig {
     pub minifig: old_minifig_minifig,
 }
@@ -7983,6 +8096,9 @@ pub struct old_peer {
     pub reboot: old_peer_reboot,
     pub service: old_peer_service,
     pub peer_select: old_peer_peer_select,
+}
+pub struct old_peerchat {
+    pub peerchat: old_peerchat_peerchat,
 }
 pub struct old_raspberry {
     pub cpu: old_raspberry_cpu,
@@ -8072,11 +8188,11 @@ pub struct api {
     pub hagarmap: old_hagarmap,
     pub hollis: old_hollis,
     pub img2mhm: old_img2mhm,
-    pub kb: old_kb,
     pub minifig: old_minifig,
     pub nebula: old_nebula,
     pub nio: old_nio,
     pub peer: old_peer,
+    pub peerchat: old_peerchat,
     pub raspberry: old_raspberry,
     pub runtime: old_runtime,
     pub scratch: old_scratch,
@@ -8284,13 +8400,6 @@ pub const fn new() -> api {
             face: old_img2mhm_face {},
             solve: old_img2mhm_solve {},
         },
-        kb: old_kb {
-            platform_api: old_kb_platform_api {},
-            workflow: old_kb_workflow {},
-            frontend: old_kb_frontend {},
-            doctrine: old_kb_doctrine {},
-            plan: old_kb_plan {},
-        },
         minifig: old_minifig {
             minifig: old_minifig_minifig {},
         },
@@ -8330,6 +8439,9 @@ pub const fn new() -> api {
             reboot: old_peer_reboot {},
             service: old_peer_service {},
             peer_select: old_peer_peer_select {},
+        },
+        peerchat: old_peerchat {
+            peerchat: old_peerchat_peerchat {},
         },
         raspberry: old_raspberry {
             cpu: old_raspberry_cpu {},
@@ -8934,6 +9046,26 @@ impl old_agent_plan {
     pub fn step_lock(&self) -> DataObject {
         self::agent::plan::step_lock()
     }
+    #[deprecated(note = "use api::agent::plan::store instead")]
+    pub fn store(&self, op: String, lib: String, ns: String, dry_run: bool) -> DataObject {
+        self::agent::plan::store(op, lib, ns, dry_run)
+    }
+    #[deprecated(note = "use api::agent::plan::test_store_contract instead")]
+    pub fn test_store_contract(&self) -> DataObject {
+        self::agent::plan::test_store_contract()
+    }
+    #[deprecated(note = "use api::agent::plan::compat instead")]
+    pub fn compat(&self) -> DataObject {
+        self::agent::plan::compat()
+    }
+    #[deprecated(note = "use api::agent::plan::test_cutover_contract instead")]
+    pub fn test_cutover_contract(&self) -> DataObject {
+        self::agent::plan::test_cutover_contract()
+    }
+    #[deprecated(note = "use api::agent::plan::remove_item instead")]
+    pub fn remove_item(&self, claim: String, nn_sessionid: String) -> DataObject {
+        self::agent::plan::remove_item(claim, nn_sessionid)
+    }
 }
 impl old_agent_browser {
     #[deprecated(note = "use api::agent::browser::eval instead")]
@@ -9025,8 +9157,8 @@ impl old_agent_committer {
         self::agent::committer::set_enabled(repo, enabled)
     }
     #[deprecated(note = "use api::agent::committer::compose_message instead")]
-    pub fn compose_message(&self, repo: String, unit: String, siblings: String) -> DataObject {
-        self::agent::committer::compose_message(repo, unit, siblings)
+    pub fn compose_message(&self, repo: String, unit: String, siblings: String, changes: DataArray) -> DataObject {
+        self::agent::committer::compose_message(repo, unit, siblings, changes)
     }
     #[deprecated(note = "use api::agent::committer::sweep instead")]
     pub fn sweep(&self) -> DataObject {
@@ -9035,6 +9167,10 @@ impl old_agent_committer {
     #[deprecated(note = "use api::agent::committer::status instead")]
     pub fn status(&self) -> DataObject {
         self::agent::committer::status()
+    }
+    #[deprecated(note = "use api::agent::committer::sweep_repo instead")]
+    pub fn sweep_repo(&self, repo: String) -> DataObject {
+        self::agent::committer::sweep_repo(repo)
     }
 }
 impl old_app_app {
@@ -9546,6 +9682,14 @@ impl old_dev_code {
     pub fn check_js(&self, lib: String, ctl: String, cmd: String) -> DataObject {
         self::dev::code::check_js(lib, ctl, cmd)
     }
+    #[deprecated(note = "use api::dev::code::patch_journal instead")]
+    pub fn patch_journal(&self, op: String, lib: String, ctl: String, to_lib: String, entry: DataObject, limit: i64, dry_run: bool, nn_sessionid: String) -> DataObject {
+        self::dev::code::patch_journal(op, lib, ctl, to_lib, entry, limit, dry_run, nn_sessionid)
+    }
+    #[deprecated(note = "use api::dev::code::convert_patch_journals instead")]
+    pub fn convert_patch_journals(&self, lib: String, ctl: String, limit: i64, dry_run: bool, nn_sessionid: String) -> DataObject {
+        self::dev::code::convert_patch_journals(lib, ctl, limit, dry_run, nn_sessionid)
+    }
 }
 impl old_dev_git {
     #[deprecated(note = "use api::dev::git::gitrun instead")]
@@ -9619,6 +9763,10 @@ impl old_dev_git {
     #[deprecated(note = "use api::dev::git::untrack_generated instead")]
     pub fn untrack_generated(&self, repo: String, message: String) -> DataObject {
         self::dev::git::untrack_generated(repo, message)
+    }
+    #[deprecated(note = "use api::dev::git::commit_paths instead")]
+    pub fn commit_paths(&self, repo: String, paths: DataArray, message: String, author: String, nn_sessionid: String) -> DataObject {
+        self::dev::git::commit_paths(repo, paths, message, author, nn_sessionid)
     }
 }
 impl old_dev_flowstep {
@@ -9793,6 +9941,22 @@ impl old_files_files {
     #[deprecated(note = "use api::files::files::dav_tree instead")]
     pub fn dav_tree(&self, operation: String, source: String, destination: String, overwrite: String) -> DataObject {
         self::files::files::dav_tree(operation, source, destination, overwrite)
+    }
+    #[deprecated(note = "use api::files::files::start_upload instead")]
+    pub fn start_upload(&self, path: String, size: i64, nn_sessionid: String) -> DataObject {
+        self::files::files::start_upload(path, size, nn_sessionid)
+    }
+    #[deprecated(note = "use api::files::files::write_upload_chunk instead")]
+    pub fn write_upload_chunk(&self, upload_id: String, offset: i64, nn_sessionid: String, nn_body: Data) -> DataObject {
+        self::files::files::write_upload_chunk(upload_id, offset, nn_sessionid, nn_body)
+    }
+    #[deprecated(note = "use api::files::files::finish_upload instead")]
+    pub fn finish_upload(&self, upload_id: String, nn_sessionid: String) -> DataObject {
+        self::files::files::finish_upload(upload_id, nn_sessionid)
+    }
+    #[deprecated(note = "use api::files::files::abort_upload instead")]
+    pub fn abort_upload(&self, upload_id: String, nn_sessionid: String) -> DataObject {
+        self::files::files::abort_upload(upload_id, nn_sessionid)
     }
 }
 impl old_fillmore_fillmore {
@@ -11251,6 +11415,28 @@ impl old_peer_service {
         self::peer::service::udp_connect(ipaddr, port)
     }
 }
+impl old_peerchat_peerchat {
+    #[deprecated(note = "use api::peerchat::peerchat::flush instead")]
+    pub fn flush(&self, id: String) -> String {
+        self::peerchat::peerchat::flush(id)
+    }
+    #[deprecated(note = "use api::peerchat::peerchat::receive instead")]
+    pub fn receive(&self, id: String, text: String, time: i64, nn_session: DataObject) -> String {
+        self::peerchat::peerchat::receive(id, text, time, nn_session)
+    }
+    #[deprecated(note = "use api::peerchat::peerchat::send instead")]
+    pub fn send(&self, peer: String, text: String) -> DataObject {
+        self::peerchat::peerchat::send(peer, text)
+    }
+    #[deprecated(note = "use api::peerchat::peerchat::history instead")]
+    pub fn history(&self, peer: String) -> DataArray {
+        self::peerchat::peerchat::history(peer)
+    }
+    #[deprecated(note = "use api::peerchat::peerchat::chats instead")]
+    pub fn chats(&self) -> DataArray {
+        self::peerchat::peerchat::chats()
+    }
+}
 impl old_raspberry_raspberry {
     #[deprecated(note = "use api::raspberry::raspberry::arch instead")]
     pub fn arch(&self) -> String {
@@ -11428,6 +11614,14 @@ impl old_scratch_scratch {
     pub fn eval_truvmi1a191c3027ao21(&self) -> DataObject {
         self::scratch::scratch::eval_truvmi1a191c3027ao21()
     }
+    #[deprecated(note = "use api::scratch::scratch::eval_vqyuqj1a1c0fb0c54z19f instead")]
+    pub fn eval_vqyuqj1a1c0fb0c54z19f(&self) -> DataObject {
+        self::scratch::scratch::eval_vqyuqj1a1c0fb0c54z19f()
+    }
+    #[deprecated(note = "use api::scratch::scratch::eval_sxgnot1a1c164218bz15 instead")]
+    pub fn eval_sxgnot1a1c164218bz15(&self) -> DataObject {
+        self::scratch::scratch::eval_sxgnot1a1c164218bz15()
+    }
 }
 impl old_scratch_stripe {
     #[deprecated(note = "use api::scratch::stripe::fetch_data instead")]
@@ -11597,6 +11791,10 @@ impl old_scratch_skills {
     #[deprecated(note = "use api::scratch::skills::flowstep_r6_nested_fatal_check instead")]
     pub fn flowstep_r6_nested_fatal_check(&self, home: String) -> DataObject {
         self::scratch::skills::flowstep_r6_nested_fatal_check(home)
+    }
+    #[deprecated(note = "use api::scratch::skills::committer_test_llm instead")]
+    pub fn committer_test_llm(&self, messages: DataArray, tools: DataArray) -> DataObject {
+        self::scratch::skills::committer_test_llm(messages, tools)
     }
 }
 impl old_scratch_flowstep_p0_progress {

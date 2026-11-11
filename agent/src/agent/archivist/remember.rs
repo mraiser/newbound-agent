@@ -498,6 +498,9 @@ if is_plan && !is_genuine_todo {
     return err("kb.plan is a work board, not a memory domain - file facts into a reference domain (platform-api/workflow/frontend) or the month bucket. New plan items are created by a human or agent.plan.add_item (which marks them work:true), not by memory deposit.".to_string());
 }
 if is_plan {
+    // kb.plan is per-item records now (agent.plan.store), not this
+    // control's memory facet: file the todo there.
+    return crate::agent::plan::compat::file_new(&entry);
     // Genuine todo admitted. The `work:true` marker is accurate board metadata
     // (this IS a work item) and self-describing, so it rides the entry.
 }

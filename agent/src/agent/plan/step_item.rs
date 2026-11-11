@@ -140,7 +140,7 @@ let _step_guard = match crate::agent::plan::step_lock::acquire(
         return out;
     }
 };
-let r = api.dev.code.read_control_facet("kb".to_string(), "plan".to_string(), "memory".to_string());
+let r = crate::agent::plan::compat::facet_read();
 if !r.try_get_boolean("exists").unwrap_or(false) {
     out.put_string("status", "err");
     out.put_string("msg", "kb.plan has no memory facet");
@@ -531,7 +531,7 @@ if was_accepted || e.has("active_run") {
     let nt = with_lifecycle(&e.try_get_string("tags").unwrap_or_default(), "in-progress");
     e.put_string("tags", &nt);
     let short0: String = claim.chars().take(50).collect();
-    let sw = api.dev.code.patch_control_facet(
+    let sw = crate::agent::plan::compat::facet_write(
         "kb".to_string(), "plan".to_string(), "memory".to_string(),
         "".to_string(), arr.to_string(), hash.clone(),
         format!("plan started/resumed (in-progress): '{}'", short0),
@@ -558,7 +558,7 @@ _step_guard.set_run(&run_id);
 // the item still identifies the saved run and the checkpoint it inherited.
 let mut active_pointer_saved = false;
 {
-    let r0 = api.dev.code.read_control_facet("kb".to_string(), "plan".to_string(), "memory".to_string());
+    let r0 = crate::agent::plan::compat::facet_read();
     let h0 = r0.get_string("hash");
     if let Ok(p0) = DataObject::try_from_string(&format!("{{\"a\":{}}}", r0.get_string("source"))) {
         let a0 = p0.get_array("a");
@@ -573,7 +573,7 @@ let mut active_pointer_saved = false;
             if prefer_structured { active.put_object("inherited", inherited_structured.clone()); }
             else if !handoff_received.is_empty() { active.put_string("inherited_text", &handoff_received); }
             item.put_object("active_run", active);
-            let aw = api.dev.code.patch_control_facet("kb".to_string(), "plan".to_string(), "memory".to_string(),
+            let aw = crate::agent::plan::compat::facet_write("kb".to_string(), "plan".to_string(), "memory".to_string(),
                 "".to_string(), a0.to_string(), h0, "plan run started; durable active pointer".to_string(), "executive".to_string(), nn_sessionid.clone());
             active_pointer_saved = aw.try_get_boolean("ok").unwrap_or(false)
                 || aw.try_get_string("status").map(|s| s == "ok").unwrap_or(false);
@@ -742,7 +742,7 @@ let structured_checkpoint = if structured_checkpoint.has("summary") { structured
 // re-locate this entry by claim, and journal the step onto the CURRENT state
 // under the CURRENT hash. The final write is still base-hashed, so a write
 // racing THIS read still aborts - we never force.
-let r2 = api.dev.code.read_control_facet("kb".to_string(), "plan".to_string(), "memory".to_string());
+let r2 = crate::agent::plan::compat::facet_read();
 let hash = r2.get_string("hash");
 let parsed2 = match DataObject::try_from_string(&format!("{{\"a\": {} }}", r2.get_string("source"))) {
     Ok(o) => o,
@@ -973,7 +973,7 @@ if premature_done {
 // eligible after its last child completes, verifies the whole, and closes
 // itself with a VERIFIED DONE (the premature-DONE rejection above guards the
 // path). Child completion here only journals the child itself.
-let pw = api.dev.code.patch_control_facet(
+let pw = crate::agent::plan::compat::facet_write(
     "kb".to_string(), "plan".to_string(), "memory".to_string(),
     "".to_string(), arr.to_string(), hash.clone(), label, "executive".to_string(), nn_sessionid.clone());
 let write_ok = pw.try_get_boolean("ok").unwrap_or(false)
