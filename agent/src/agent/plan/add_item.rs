@@ -98,7 +98,7 @@ if !parent_n.is_empty() {
         out.put_string("msg", "an item cannot be its own parent");
         return out;
     }
-    let rf = crate::api::new().dev.code.read_control_facet("kb".to_string(), "plan".to_string(), "memory".to_string());
+    let rf = crate::agent::plan::compat::facet_read();
     let fsrc = rf.try_get_string("source").unwrap_or_default();
     let fsrc = if fsrc.trim().is_empty() { "[]".to_string() } else { fsrc };
     let found = match DataObject::try_from_string(&format!("{{\"a\": {} }}", fsrc)) {
