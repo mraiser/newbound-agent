@@ -729,12 +729,13 @@ if declared_done {
              not merely that one phase, increment, or sub-part of it is done. \
              A report that completes P3 of a P0-P4 plan, or builds a parallel artifact without changing the \
              thing the goal names, or verifies a spike/gate rather than the end state, is NOT satisfied.\n\
-             Answer with exactly one word on the first line: SATISFIED or PARTIAL.",
-            goal, final_answer.chars().take(2500).collect::<String>());
+             Answer with exactly one word on the first line: SATISFIED or PARTIAL. \
+             If PARTIAL, add up to five short lines after it naming what the GOAL requires that the evidence does not show.",
+            goal, final_answer.chars().take(24000).collect::<String>());
         // ask_llm returns FLAT: the text lands under "a" ({a:"SATISFIED"}), so
         // pull it back out - matching on the raw JSON would never see the word.
         let raw = crate::agent::llm::ask_llm::ask_llm(gprompt, ndata::data::Data::DString(
-            "You are a strict completion gate. Answer with exactly one word: SATISFIED or PARTIAL.".to_string()));
+            "You are a strict completion gate. First line: exactly one word, SATISFIED or PARTIAL. If PARTIAL, then up to five short lines naming what is missing.".to_string()));
         raw
     };
     // Normalize: strip the FLAT {"a":"..."} wrapper if present, then read the word.
@@ -747,13 +748,33 @@ if declared_done {
                 Err(_) => t.to_string(),
             }
         } else { t.to_string() };
-        inner.trim().trim_matches('"').to_uppercase()
+        inner.trim().trim_matches('"').to_string()
     };
-    if v.starts_with("SATISFIED") {
+    let vu = v.to_uppercase();
+    if vu.starts_with("SATISFIED") {
         status = "DONE".to_string();
     } else {
         // PARTIAL, ERROR:, or anything else -> keep the loop going.
         status = "IN_PROGRESS".to_string();
+        if vu.starts_with("PARTIAL") {
+            gate_refused = true;
+            let rest: String = v.chars().skip(7).collect();
+            let rest = rest.trim().trim_start_matches(|c: char| c == ':' || c == '.' || c == '-').trim().to_string();
+            gate_reason = if rest.is_empty() { "The gate gave no reasons.".to_string() } else { rest.chars().take(1500).collect() };
+            // Second refusal in a row with nothing but reads in between: the
+            // worker has nothing new to show, so stop and hand it to a human.
+            let prev_refused = dispatch.try_get_object("inherited_checkpoint").ok()
+                .and_then(|c| c.try_get_string("next").ok())
+                .map(|n| n.contains("COMPLETION GATE REFUSED DONE")).unwrap_or(false);
+            let mut new_work = executed_calls as usize > observed_work.len();
+            for w in observed_work.objects() {
+                let t = w.object().try_get_string("tool").unwrap_or_default().to_lowercase();
+                let mutating = ["patch", "upsert", "write", "delete", "move", "set_", "add_", "remove", "put"].iter().any(|x| t.contains(x));
+                let reading = ["read", "list", "get_", "find", "search", "status", "recall", "board", "history", "info", "inspect"].iter().any(|x| t.contains(x));
+                if mutating || !reading { new_work = true; }
+            }
+            if prev_refused && !new_work { gate_blocked = true; status = "BLOCKED".to_string(); }
+        }
     }
 }
 
@@ -785,7 +806,21 @@ if !run_id.is_empty() {
             if let Ok(next) = old.try_get_string("next") { ci.put_string("next", &next); }
         }
     }
-    let cp = crate::agent::plan::checkpoint::checkpoint(ci);
+    let mut cp = crate::agent::plan::checkpoint::checkpoint(ci);
+    if gate_refused {
+        // The gate's reasons replace NEXT: a refused DONE report rarely has a
+        // usable NEXT of its own, and the generic one told the worker nothing.
+        let old_next = cp.get_string("next");
+        let new_next = if gate_blocked {
+            format!("BLOCKED BY THE COMPLETION GATE: DONE was refused twice in a row and the last turn did no new work. A human decides: accept the result as it is (move the item to completed), or change the goal or add a note saying what to do. The gate's reasons:\n{}", gate_reason)
+        } else {
+            format!("COMPLETION GATE REFUSED DONE. Do not re-verify and re-declare DONE on the same evidence. The gate's reasons:\n{}\nDo new work that closes these, then declare DONE with evidence that answers each one. If they cannot be closed without a human, end with STATUS: BLOCKED and say why.", gate_reason)
+        };
+        let new_next: String = new_next.chars().take(2000).collect();
+        let text = cp.get_string("text").replacen(&format!("\nNEXT: {}", old_next), &format!("\nNEXT: {}", new_next), 1);
+        cp.put_string("next", &new_next); cp.put_string("text", &text);
+        if gate_blocked { cp.put_string("blockers", &gate_reason); }
+    }
     // Preserve the legacy budget prefix for downstream compatibility while
     // attaching structured continuity for both old and new readers.
     let checkpoint = if final_answer.starts_with("[budget checkpoint") { checkpoint } else { cp.get_string("text") };
@@ -827,7 +862,11 @@ if (control_status == "pause" || control_status == "stop") && !checkpoint_reason
 let mut response = DataObject::new();
 if !run_id.is_empty() { response.put_string("run_id", &run_id); }
 response.put_string("control", &control_status);
-response.put_string("msg", &final_answer);
+let out_msg = if gate_blocked {
+    format!("BLOCKED by the completion gate: DONE was refused twice in a row with no new work in between. The gate's reasons:\n{}\n\n--- worker's report ---\n{}", gate_reason, final_answer)
+} else { final_answer.clone() };
+response.put_string("msg", &out_msg);
+if gate_refused { response.put_string("gate_reason", &gate_reason); }
 response.put_string("status", &status);
 response.put_array("messages", messages);
 response
