@@ -699,6 +699,14 @@ for line in final_answer.lines() {
 // never DONE - an ambiguous completion can always be re-stepped, a false DONE
 // silently ends the loop. Skipped entirely unless a DONE is even claimed, so
 // IN_PROGRESS/BLOCKED turns never pay for it.
+// GATE FEEDBACK (2026-11-12): a refused DONE used to vanish - only the first
+// word of the verdict was read, so the next turn re-verified and re-declared
+// DONE until MAX_PLAN_STEPS. The gate's reasons now ride the checkpoint's
+// NEXT, and a second refusal in a row on a read-only turn moves the item to
+// BLOCKED with those reasons instead of spending the remaining turns.
+let mut gate_refused = false;
+let mut gate_reason = String::new();
+let mut gate_blocked = false;
 if declared_done {
     let goal = {
         // the item's claim rides the user prompt as "GOAL: <claim>"; recover it
