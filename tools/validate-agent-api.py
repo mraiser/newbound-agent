@@ -220,7 +220,7 @@ def main():
           "data keys: " + str(sorted(implrec.get("data", {}).keys())))
 
     marker = "Validation marker desc written by tools/validate-agent-api.py."
-    r = call("set_command_meta", lib="agent", ctl="code", cmd="read_control_facet",
+    r = call("set_command_meta", lib="agent", ctl="code", cmd="read_control_facet", label="validate-agent-api", author="",
              desc=marker, groups="")
     check("set_command_meta writes a marker desc",
           r.get("status") == "ok" and r.get("changed") is True, str(r))
@@ -235,7 +235,7 @@ def main():
           "status={} msg={} keys={}".format(
               cur.get("status"), cur.get("msg", ""), sorted(cur.keys())[:14]))
     if orig_desc:
-        r = call("set_command_meta", lib="agent", ctl="code", cmd="read_control_facet",
+        r = call("set_command_meta", lib="agent", ctl="code", cmd="read_control_facet", label="validate-agent-api", author="",
                  desc=orig_desc, groups="")
         check("original desc restored",
               r.get("status") == "ok" and r.get("changed") is True, str(r))
