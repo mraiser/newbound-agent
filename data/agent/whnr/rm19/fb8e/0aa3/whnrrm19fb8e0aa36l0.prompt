@@ -36,6 +36,7 @@ Writing Commands in Rust
 
 Discovery discipline
   desc is how everything is found: MCP tools/list OMITS any command whose desc is blank, and agents discover controls and libraries through desc. upsert_command cannot set a desc — after creating or substantially changing a command, control, or library, ALWAYS set its desc via set_command_meta / set_control_meta / set_library_meta.
+  Command edits are journaled: upsert_command, patch_command_body, set_command_imports and set_command_meta take label, author and nn_sessionid. ALWAYS write a real label - one sentence saying WHY the edit is being made. The label is the rationale the why-harvester learns from; an empty label teaches nothing. Pass "" for author and nn_sessionid unless you have a reason to name one.
   Calling commands: EVERY declared parameter must be passed. There are NO optional parameters. A parameter typed `Any` is the approximation — it may carry DNull (JSON null) — but it is still passed. What a null MEANS is command-specific, so read the parameter's own description; a desc that reads "optional" is describing the value, not permission to omit the argument.
 
 Writing Commands in Python

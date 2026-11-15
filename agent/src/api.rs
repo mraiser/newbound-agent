@@ -1751,6 +1751,12 @@ pub mod dev {
             ::flowlang::rustcmd::RustCmd::new("lwnwig1a052f17ecdt4").execute(d).expect("Rust command execution failed").get_object("a")
         }
 
+        pub fn materialize_apps(lib: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("lib", &lib);
+            ::flowlang::rustcmd::RustCmd::new("xoxqhg1a1d58553dcz1").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
     }
     pub mod editcommand {
         use ::ndata::dataobject::DataObject;
@@ -2092,7 +2098,7 @@ pub mod dev {
             ::flowlang::rustcmd::RustCmd::new("lmywwj19ec8a9e2ccm100b").execute(d).expect("Rust command execution failed").get_string("a")
         }
 
-        pub fn upsert_command(lib: String, ctl: String, cmd: String, lang: String, return_type: String, params: DataArray, imports: String, code_body: String) -> DataObject {
+        pub fn upsert_command(lib: String, ctl: String, cmd: String, lang: String, return_type: String, params: DataArray, imports: String, code_body: String, label: String, author: String, nn_sessionid: String) -> DataObject {
             let mut d = DataObject::new();
             d.put_string("lib", &lib);
             d.put_string("ctl", &ctl);
@@ -2102,16 +2108,22 @@ pub mod dev {
             d.put_array("params", params);
             d.put_string("imports", &imports);
             d.put_string("code_body", &code_body);
+            d.put_string("label", &label);
+            d.put_string("author", &author);
+            d.put_string("nn_sessionid", &nn_sessionid);
             ::flowlang::rustcmd::RustCmd::new("ovwolr19ec8c38800z1047").execute(d).expect("Rust command execution failed").get_object("a")
         }
 
-        pub fn patch_command_body(lib: String, ctl: String, cmd: String, old_snippet: String, new_snippet: String) -> DataObject {
+        pub fn patch_command_body(lib: String, ctl: String, cmd: String, old_snippet: String, new_snippet: String, label: String, author: String, nn_sessionid: String) -> DataObject {
             let mut d = DataObject::new();
             d.put_string("lib", &lib);
             d.put_string("ctl", &ctl);
             d.put_string("cmd", &cmd);
             d.put_string("old_snippet", &old_snippet);
             d.put_string("new_snippet", &new_snippet);
+            d.put_string("label", &label);
+            d.put_string("author", &author);
+            d.put_string("nn_sessionid", &nn_sessionid);
             ::flowlang::rustcmd::RustCmd::new("slvzur19ed5ad5cc7k2c99").execute(d).expect("Rust command execution failed").get_object("a")
         }
 
@@ -2204,13 +2216,16 @@ pub mod dev {
             ::flowlang::rustcmd::RustCmd::new("trogig19f95a61d30w394b").execute(d).expect("Rust command execution failed").get_object("a")
         }
 
-        pub fn set_command_meta(lib: String, ctl: String, cmd: String, desc: String, groups: String) -> DataObject {
+        pub fn set_command_meta(lib: String, ctl: String, cmd: String, desc: String, groups: String, label: String, author: String, nn_sessionid: String) -> DataObject {
             let mut d = DataObject::new();
             d.put_string("lib", &lib);
             d.put_string("ctl", &ctl);
             d.put_string("cmd", &cmd);
             d.put_string("desc", &desc);
             d.put_string("groups", &groups);
+            d.put_string("label", &label);
+            d.put_string("author", &author);
+            d.put_string("nn_sessionid", &nn_sessionid);
             ::flowlang::rustcmd::RustCmd::new("hlsjpo19f95a61d32q394d").execute(d).expect("Rust command execution failed").get_object("a")
         }
 
@@ -2427,12 +2442,15 @@ pub mod dev {
             ::flowlang::rustcmd::RustCmd::new("ywwgiq19fb84a4e57h3").execute(d).expect("Rust command execution failed").get_object("a")
         }
 
-        pub fn set_command_imports(lib: String, ctl: String, cmd: String, imports: String) -> DataObject {
+        pub fn set_command_imports(lib: String, ctl: String, cmd: String, imports: String, label: String, author: String, nn_sessionid: String) -> DataObject {
             let mut d = DataObject::new();
             d.put_string("lib", &lib);
             d.put_string("ctl", &ctl);
             d.put_string("cmd", &cmd);
             d.put_string("imports", &imports);
+            d.put_string("label", &label);
+            d.put_string("author", &author);
+            d.put_string("nn_sessionid", &nn_sessionid);
             ::flowlang::rustcmd::RustCmd::new("opoush19fbdfbfefbn1").execute(d).expect("Rust command execution failed").get_object("a")
         }
 
@@ -2821,6 +2839,35 @@ pub mod dev {
         use ::ndata::dataarray::DataArray;
         use ::ndata::databytes::DataBytes;
         use ::ndata::data::Data;
+
+    }
+    pub mod search {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+        pub fn index(lib: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("lib", &lib);
+            ::flowlang::rustcmd::RustCmd::new("liktqq1a1d0627555v2").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn query(lib: String, ctl: String, kinds: String, query: String, limit: i64, nn_sessionid: String) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("lib", &lib);
+            d.put_string("ctl", &ctl);
+            d.put_string("kinds", &kinds);
+            d.put_string("query", &query);
+            d.put_int("limit", limit);
+            d.put_string("nn_sessionid", &nn_sessionid);
+            ::flowlang::rustcmd::RustCmd::new("rmyhtz1a1d062caa1m4").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+        pub fn status() -> DataObject {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("xxnqrs1a1d063005aq6").execute(d).expect("Rust command execution failed").get_object("a")
+        }
 
     }
 }
@@ -5123,6 +5170,20 @@ pub mod gudrun {
         use ::ndata::data::Data;
 
     }
+    pub mod traffic {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+        pub fn report(root: String, days: i64) -> DataObject {
+            let mut d = DataObject::new();
+            d.put_string("root", &root);
+            d.put_int("days", days);
+            ::flowlang::rustcmd::RustCmd::new("qngwks1a1cb99ee95v2").execute(d).expect("Rust command execution failed").get_object("a")
+        }
+
+    }
 }
 
 pub mod hagarmap {
@@ -6172,6 +6233,21 @@ pub mod peerchat {
         pub fn chats() -> DataArray {
             let d = DataObject::new();
             ::flowlang::rustcmd::RustCmd::new("wtmxyk1a1c70922c1xa").execute(d).expect("Rust command execution failed").get_array("a")
+        }
+
+    }
+}
+
+pub mod powerwall {
+    pub mod powerwall {
+        use ::ndata::dataobject::DataObject;
+        use ::ndata::dataarray::DataArray;
+        use ::ndata::databytes::DataBytes;
+        use ::ndata::data::Data;
+
+        pub fn status() -> DataObject {
+            let d = DataObject::new();
+            ::flowlang::rustcmd::RustCmd::new("srhtlx1a1d4ec93fdr2").execute(d).expect("Rust command execution failed").get_object("a")
         }
 
     }
@@ -7683,6 +7759,7 @@ pub struct old_dev_flowedit3d {}
 pub struct old_dev_flowtoken {}
 pub struct old_dev_flowstep {}
 pub struct old_dev_flowdebug {}
+pub struct old_dev_search {}
 pub struct old_dudeapi_dudeapi {}
 pub struct old_files_files {}
 pub struct old_fillmore_fillmore {}
@@ -7761,6 +7838,7 @@ pub struct old_gudrun_image_edit {}
 pub struct old_gudrun_profile {}
 pub struct old_gudrun_workspace_page {}
 pub struct old_gudrun_characters {}
+pub struct old_gudrun_traffic {}
 pub struct old_hagarmap_hagarmap {}
 pub struct old_hollis_hollis {}
 pub struct old_hollis_audio {}
@@ -7802,6 +7880,7 @@ pub struct old_peer_reboot {}
 pub struct old_peer_service {}
 pub struct old_peer_peer_select {}
 pub struct old_peerchat_peerchat {}
+pub struct old_powerwall_powerwall {}
 pub struct old_raspberry_cpu {}
 pub struct old_raspberry_disk {}
 pub struct old_raspberry_memory {}
@@ -7950,6 +8029,7 @@ pub struct old_dev {
     pub flowtoken: old_dev_flowtoken,
     pub flowstep: old_dev_flowstep,
     pub flowdebug: old_dev_flowdebug,
+    pub search: old_dev_search,
 }
 pub struct old_dudeapi {
     pub dudeapi: old_dudeapi_dudeapi,
@@ -8042,6 +8122,7 @@ pub struct old_gudrun {
     pub profile: old_gudrun_profile,
     pub workspace_page: old_gudrun_workspace_page,
     pub characters: old_gudrun_characters,
+    pub traffic: old_gudrun_traffic,
 }
 pub struct old_hagarmap {
     pub hagarmap: old_hagarmap_hagarmap,
@@ -8099,6 +8180,9 @@ pub struct old_peer {
 }
 pub struct old_peerchat {
     pub peerchat: old_peerchat_peerchat,
+}
+pub struct old_powerwall {
+    pub powerwall: old_powerwall_powerwall,
 }
 pub struct old_raspberry {
     pub cpu: old_raspberry_cpu,
@@ -8193,6 +8277,7 @@ pub struct api {
     pub nio: old_nio,
     pub peer: old_peer,
     pub peerchat: old_peerchat,
+    pub powerwall: old_powerwall,
     pub raspberry: old_raspberry,
     pub runtime: old_runtime,
     pub scratch: old_scratch,
@@ -8293,6 +8378,7 @@ pub const fn new() -> api {
             flowtoken: old_dev_flowtoken {},
             flowstep: old_dev_flowstep {},
             flowdebug: old_dev_flowdebug {},
+            search: old_dev_search {},
         },
         dudeapi: old_dudeapi {
             dudeapi: old_dudeapi_dudeapi {},
@@ -8385,6 +8471,7 @@ pub const fn new() -> api {
             profile: old_gudrun_profile {},
             workspace_page: old_gudrun_workspace_page {},
             characters: old_gudrun_characters {},
+            traffic: old_gudrun_traffic {},
         },
         hagarmap: old_hagarmap {
             hagarmap: old_hagarmap_hagarmap {},
@@ -8442,6 +8529,9 @@ pub const fn new() -> api {
         },
         peerchat: old_peerchat {
             peerchat: old_peerchat_peerchat {},
+        },
+        powerwall: old_powerwall {
+            powerwall: old_powerwall_powerwall {},
         },
         raspberry: old_raspberry {
             cpu: old_raspberry_cpu {},
@@ -9406,6 +9496,10 @@ impl old_dev_dev {
     pub fn hard_reset(&self, url: String) -> DataObject {
         self::dev::dev::hard_reset(url)
     }
+    #[deprecated(note = "use api::dev::dev::materialize_apps instead")]
+    pub fn materialize_apps(&self, lib: String) -> DataObject {
+        self::dev::dev::materialize_apps(lib)
+    }
 }
 impl old_dev_editcommand {
     #[deprecated(note = "use api::dev::editcommand::compile_command instead")]
@@ -9515,12 +9609,12 @@ impl old_dev_code {
         self::dev::code::add_control(lib, ctl)
     }
     #[deprecated(note = "use api::dev::code::upsert_command instead")]
-    pub fn upsert_command(&self, lib: String, ctl: String, cmd: String, lang: String, return_type: String, params: DataArray, imports: String, code_body: String) -> DataObject {
-        self::dev::code::upsert_command(lib, ctl, cmd, lang, return_type, params, imports, code_body)
+    pub fn upsert_command(&self, lib: String, ctl: String, cmd: String, lang: String, return_type: String, params: DataArray, imports: String, code_body: String, label: String, author: String, nn_sessionid: String) -> DataObject {
+        self::dev::code::upsert_command(lib, ctl, cmd, lang, return_type, params, imports, code_body, label, author, nn_sessionid)
     }
     #[deprecated(note = "use api::dev::code::patch_command_body instead")]
-    pub fn patch_command_body(&self, lib: String, ctl: String, cmd: String, old_snippet: String, new_snippet: String) -> DataObject {
-        self::dev::code::patch_command_body(lib, ctl, cmd, old_snippet, new_snippet)
+    pub fn patch_command_body(&self, lib: String, ctl: String, cmd: String, old_snippet: String, new_snippet: String, label: String, author: String, nn_sessionid: String) -> DataObject {
+        self::dev::code::patch_command_body(lib, ctl, cmd, old_snippet, new_snippet, label, author, nn_sessionid)
     }
     #[deprecated(note = "use api::dev::code::read_command instead")]
     pub fn read_command(&self, lib: String, ctl: String, cmd: String) -> DataObject {
@@ -9563,8 +9657,8 @@ impl old_dev_code {
         self::dev::code::set_control_meta(lib, ctl, desc, groups)
     }
     #[deprecated(note = "use api::dev::code::set_command_meta instead")]
-    pub fn set_command_meta(&self, lib: String, ctl: String, cmd: String, desc: String, groups: String) -> DataObject {
-        self::dev::code::set_command_meta(lib, ctl, cmd, desc, groups)
+    pub fn set_command_meta(&self, lib: String, ctl: String, cmd: String, desc: String, groups: String, label: String, author: String, nn_sessionid: String) -> DataObject {
+        self::dev::code::set_command_meta(lib, ctl, cmd, desc, groups, label, author, nn_sessionid)
     }
     #[deprecated(note = "use api::dev::code::list_assets instead")]
     pub fn list_assets(&self, lib: String) -> DataObject {
@@ -9655,8 +9749,8 @@ impl old_dev_code {
         self::dev::code::set_groups(lib, ctl, cmd, groups, author, nn_sessionid)
     }
     #[deprecated(note = "use api::dev::code::set_command_imports instead")]
-    pub fn set_command_imports(&self, lib: String, ctl: String, cmd: String, imports: String) -> DataObject {
-        self::dev::code::set_command_imports(lib, ctl, cmd, imports)
+    pub fn set_command_imports(&self, lib: String, ctl: String, cmd: String, imports: String, label: String, author: String, nn_sessionid: String) -> DataObject {
+        self::dev::code::set_command_imports(lib, ctl, cmd, imports, label, author, nn_sessionid)
     }
     #[deprecated(note = "use api::dev::code::init instead")]
     pub fn init(&self) -> DataObject {
@@ -9817,6 +9911,20 @@ impl old_dev_flowstep {
     #[deprecated(note = "use api::dev::flowstep::run_flow instead")]
     pub fn run_flow(&self, lib: String, ctl: String, cmd: String, args: DataObject, events: i64, budget: i64, nn_sessionid: String) -> DataObject {
         self::dev::flowstep::run_flow(lib, ctl, cmd, args, events, budget, nn_sessionid)
+    }
+}
+impl old_dev_search {
+    #[deprecated(note = "use api::dev::search::index instead")]
+    pub fn index(&self, lib: String) -> DataObject {
+        self::dev::search::index(lib)
+    }
+    #[deprecated(note = "use api::dev::search::query instead")]
+    pub fn query(&self, lib: String, ctl: String, kinds: String, query: String, limit: i64, nn_sessionid: String) -> DataObject {
+        self::dev::search::query(lib, ctl, kinds, query, limit, nn_sessionid)
+    }
+    #[deprecated(note = "use api::dev::search::status instead")]
+    pub fn status(&self) -> DataObject {
+        self::dev::search::status()
     }
 }
 impl old_dudeapi_dudeapi {
@@ -10969,6 +11077,12 @@ impl old_gudrun_lora_to_mhm {
         self::gudrun::lora_to_mhm::load_lora_tags(storeid)
     }
 }
+impl old_gudrun_traffic {
+    #[deprecated(note = "use api::gudrun::traffic::report instead")]
+    pub fn report(&self, root: String, days: i64) -> DataObject {
+        self::gudrun::traffic::report(root, days)
+    }
+}
 impl old_hagarmap_hagarmap {
     #[deprecated(note = "use api::hagarmap::hagarmap::fetch_layers instead")]
     pub fn fetch_layers(&self) -> DataObject {
@@ -11435,6 +11549,12 @@ impl old_peerchat_peerchat {
     #[deprecated(note = "use api::peerchat::peerchat::chats instead")]
     pub fn chats(&self) -> DataArray {
         self::peerchat::peerchat::chats()
+    }
+}
+impl old_powerwall_powerwall {
+    #[deprecated(note = "use api::powerwall::powerwall::status instead")]
+    pub fn status(&self) -> DataObject {
+        self::powerwall::powerwall::status()
     }
 }
 impl old_raspberry_raspberry {
