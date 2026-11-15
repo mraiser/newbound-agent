@@ -1,0 +1,7 @@
+{
+  "name": "agent-memorypane",
+  "target_lib": "dev",
+  "target_ctl": "workbench",
+  "selector": ".wb-tab-plugins",
+  "desc": "Adds a memory tab to the control editor: the control's claims with the instance overlay applied."
+}
