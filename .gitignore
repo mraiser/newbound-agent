@@ -22,3 +22,8 @@ kb/Cargo.lock
 # Local runtime values never ride the repo
 /runtime/
 __pycache__/
+# builder-generated per instance, never tracked (dev.git.untrack_generated)
+/agent/src/api.rs
+/kb/src/api.rs
+/tools/scratch-seed/crate/Cargo.lock
+/tools/scratch-seed/crate/src/api.rs
