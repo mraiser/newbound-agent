@@ -32,7 +32,9 @@ for (rel, dest, exec) in files.iter() {
     if let Err(e) = std::fs::copy(&src, &dst) {
         return err(format!("copy {} -> {}: {}", src.display(), dst.display(), e));
     }
+    // the executable bit is a unix notion; Windows runs these via a shell
     if *exec {
+        #[cfg(unix)]
         if let Ok(md) = std::fs::metadata(&dst) {
             let mut p = md.permissions(); p.set_mode(0o755); let _ = std::fs::set_permissions(&dst, p);
         }

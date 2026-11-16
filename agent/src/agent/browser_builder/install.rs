@@ -2,7 +2,11 @@ use ndata::dataobject::DataObject;
 use flowlang::datastore::DataStore;
 use std::process::Command;
 use std::path::Path;
+#[cfg(unix)]
 use std::os::unix::fs::symlink;
+// Windows: a file symlink (needs Developer Mode or elevation; mode=copy needs neither)
+#[cfg(windows)]
+use std::os::windows::fs::symlink_file as symlink;
 pub fn execute(o: DataObject) -> DataObject {
     use std::panic;
     for p in ["mode"] {
