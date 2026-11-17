@@ -264,8 +264,10 @@ if let Some(why) = killed {
     // bare `-1234` as options, silently leaving the tree running.
     #[cfg(unix)]
     let _ = Command::new("kill").arg("-9").arg("--").arg(format!("-{}", pid)).status();
+    // Windows has no kill: taskkill /T takes the launcher's whole tree
     #[cfg(not(unix))]
-    let _ = Command::new("kill").arg("-9").arg(pid.to_string()).status();
+    let _ = Command::new("taskkill").arg("/F").arg("/T").arg("/PID").arg(pid.to_string())
+        .stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null()).status();
     let _ = child.wait();
     return err_out(&format!("claude_code: {}, killed pid {}", why, pid));
 }

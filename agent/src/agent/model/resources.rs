@@ -2,6 +2,36 @@ use ndata::dataobject::DataObject;
 use ndata::dataarray::DataArray;
 use flowlang::datastore::DataStore;
 use flowlang::flowlang::system::system_call::system_call;
+/// Windows: physical memory total and available, in MB (GlobalMemoryStatusEx).
+#[cfg(windows)]
+pub fn win_memory_mb() -> Option<(i64, i64)> {
+  #[repr(C)]
+  struct MemoryStatusEx { length: u32, memory_load: u32, total_phys: u64, avail_phys: u64,
+    total_page: u64, avail_page: u64, total_virtual: u64, avail_virtual: u64, avail_extended: u64 }
+  #[link(name = "kernel32")]
+  extern "system" { fn GlobalMemoryStatusEx(b: *mut MemoryStatusEx) -> i32; }
+  let mut m: MemoryStatusEx = unsafe { std::mem::zeroed() };
+  m.length = std::mem::size_of::<MemoryStatusEx>() as u32;
+  if unsafe { GlobalMemoryStatusEx(&mut m) } == 0 { return None; }
+  Some(((m.total_phys / 1048576) as i64, (m.avail_phys / 1048576) as i64))
+}
+#[cfg(not(windows))]
+pub fn win_memory_mb() -> Option<(i64, i64)> { None }
+
+/// Windows: bytes free to this user on the volume holding `p` (GetDiskFreeSpaceExW).
+#[cfg(windows)]
+pub fn win_disk_free_bytes(p: &std::path::Path) -> Option<u64> {
+  use std::os::windows::ffi::OsStrExt;
+  #[link(name = "kernel32")]
+  extern "system" { fn GetDiskFreeSpaceExW(dir: *const u16, avail: *mut u64, total: *mut u64, free: *mut u64) -> i32; }
+  let w: Vec<u16> = p.as_os_str().encode_wide().chain(Some(0)).collect();
+  let (mut a, mut t, mut f) = (0u64, 0u64, 0u64);
+  if unsafe { GetDiskFreeSpaceExW(w.as_ptr(), &mut a, &mut t, &mut f) } == 0 { return None; }
+  Some(a)
+}
+#[cfg(not(windows))]
+pub fn win_disk_free_bytes(_: &std::path::Path) -> Option<u64> { None }
+
 pub fn execute(_: DataObject) -> DataObject {
     use std::panic;
     let ax = panic::catch_unwind(panic::AssertUnwindSafe(|| {
@@ -82,6 +112,14 @@ o.put_string("status", "ok");
             host.put_float("load1", l1);
         }
     }
+    // Windows has no /proc: the same two numbers from GlobalMemoryStatusEx
+    // (and no load average there, as on macOS)
+    if cfg!(windows) {
+        if let Some((total, avail)) = win_memory_mb() {
+            host.put_int("mem_total_mb", total);
+            host.put_int("mem_avail_mb", avail);
+        }
+    }
     host.put_int("cpus", std::thread::available_parallelism()
         .map(|n| n.get() as i64).unwrap_or(0));
     // service liveness is an observation the sensor coalesces into
@@ -113,9 +151,16 @@ if let Ok(r) = ureq::AgentBuilder::new()
 // fallback: nvidia-smi directly
 let mut gpus = DataArray::new();
 let mut x = DataArray::new();
-x.push_string("bash");
-x.push_string("-c");
-x.push_string("nvidia-smi --query-gpu=index,name,memory.total,memory.free --format=csv,noheader,nounits 2>/dev/null");
+if cfg!(windows) {
+    // no bash on Windows; the NVIDIA driver installs nvidia-smi in System32
+    for a in ["nvidia-smi", "--query-gpu=index,name,memory.total,memory.free", "--format=csv,noheader,nounits"] {
+        x.push_string(a);
+    }
+} else {
+    x.push_string("bash");
+    x.push_string("-c");
+    x.push_string("nvidia-smi --query-gpu=index,name,memory.total,memory.free --format=csv,noheader,nounits 2>/dev/null");
+}
 let r = system_call(x);
 if r.has("out") {
     for ln in r.get_string("out").lines() {
@@ -155,16 +200,23 @@ if let Some(root) = root {
             None => break,
         }
     }
-    let mut x2 = DataArray::new();
-    x2.push_string("bash");
-    x2.push_string("-c");
-    x2.push_string(&format!("df -k --output=avail '{}' 2>/dev/null | tail -1",
-                            probe.display()));
-    let r2 = system_call(x2);
-    if r2.has("out") {
-        if let Ok(kb) = r2.get_string("out").trim().parse::<i64>() {
-            res.put_float("disk_free_gb",
-                          (kb as f64 / 1048576.0 * 10.0).round() / 10.0);
+    // Windows: no bash or df; GetDiskFreeSpaceExW answers the same question
+    if cfg!(windows) {
+        if let Some(b) = win_disk_free_bytes(&probe) {
+            res.put_float("disk_free_gb", (b as f64 / 1073741824.0 * 10.0).round() / 10.0);
+        }
+    } else {
+        let mut x2 = DataArray::new();
+        x2.push_string("bash");
+        x2.push_string("-c");
+        x2.push_string(&format!("df -k --output=avail '{}' 2>/dev/null | tail -1",
+                                probe.display()));
+        let r2 = system_call(x2);
+        if r2.has("out") {
+            if let Ok(kb) = r2.get_string("out").trim().parse::<i64>() {
+                res.put_float("disk_free_gb",
+                              (kb as f64 / 1048576.0 * 10.0).round() / 10.0);
+            }
         }
     }
 }

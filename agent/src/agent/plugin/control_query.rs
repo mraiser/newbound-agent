@@ -233,7 +233,9 @@ const MAX_ITERATIONS: usize = 5;
 //println!("FULL PROMPT TO LLM:\n{}", thewholeenchilada);
 //std::fs::write("/tmp/nb_last_call.txt", &thewholeenchilada).ok();
 println!("FULL PROMPT TO LLM:\n{}", conversation_prompt);
-std::fs::write("/tmp/nb_last_call.txt", &conversation_prompt).ok();
+// debug dumps of the last exchange: /tmp, or the temp folder on Windows
+let dbg_dir = if cfg!(windows) { std::env::temp_dir() } else { std::path::PathBuf::from("/tmp") };
+std::fs::write(dbg_dir.join("nb_last_call.txt"), &conversation_prompt).ok();
 
 // 4. Main conversation loop
 for i in 0..MAX_ITERATIONS {
@@ -286,7 +288,7 @@ for i in 0..MAX_ITERATIONS {
     if tool_call_found {
         continue;
     } else {
-        std::fs::write("/tmp/nb_last_response.txt", &llm_response).ok();
+        std::fs::write(dbg_dir.join("nb_last_response.txt"), &llm_response).ok();
         return llm_response;
     }
 }
