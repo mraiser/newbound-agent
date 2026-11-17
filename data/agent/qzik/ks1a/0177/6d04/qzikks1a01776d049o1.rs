@@ -42,6 +42,14 @@ o.put_string("status", "ok");
             host.put_float("load1", l1);
         }
     }
+    // Windows has no /proc: the same two numbers from GlobalMemoryStatusEx
+    // (and no load average there, as on macOS)
+    if cfg!(windows) {
+        if let Some((total, avail)) = win_memory_mb() {
+            host.put_int("mem_total_mb", total);
+            host.put_int("mem_avail_mb", avail);
+        }
+    }
     host.put_int("cpus", std::thread::available_parallelism()
         .map(|n| n.get() as i64).unwrap_or(0));
     // service liveness is an observation the sensor coalesces into
@@ -73,9 +81,16 @@ if let Ok(r) = ureq::AgentBuilder::new()
 // fallback: nvidia-smi directly
 let mut gpus = DataArray::new();
 let mut x = DataArray::new();
-x.push_string("bash");
-x.push_string("-c");
-x.push_string("nvidia-smi --query-gpu=index,name,memory.total,memory.free --format=csv,noheader,nounits 2>/dev/null");
+if cfg!(windows) {
+    // no bash on Windows; the NVIDIA driver installs nvidia-smi in System32
+    for a in ["nvidia-smi", "--query-gpu=index,name,memory.total,memory.free", "--format=csv,noheader,nounits"] {
+        x.push_string(a);
+    }
+} else {
+    x.push_string("bash");
+    x.push_string("-c");
+    x.push_string("nvidia-smi --query-gpu=index,name,memory.total,memory.free --format=csv,noheader,nounits 2>/dev/null");
+}
 let r = system_call(x);
 if r.has("out") {
     for ln in r.get_string("out").lines() {
@@ -115,16 +130,23 @@ if let Some(root) = root {
             None => break,
         }
     }
-    let mut x2 = DataArray::new();
-    x2.push_string("bash");
-    x2.push_string("-c");
-    x2.push_string(&format!("df -k --output=avail '{}' 2>/dev/null | tail -1",
-                            probe.display()));
-    let r2 = system_call(x2);
-    if r2.has("out") {
-        if let Ok(kb) = r2.get_string("out").trim().parse::<i64>() {
-            res.put_float("disk_free_gb",
-                          (kb as f64 / 1048576.0 * 10.0).round() / 10.0);
+    // Windows: no bash or df; GetDiskFreeSpaceExW answers the same question
+    if cfg!(windows) {
+        if let Some(b) = win_disk_free_bytes(&probe) {
+            res.put_float("disk_free_gb", (b as f64 / 1073741824.0 * 10.0).round() / 10.0);
+        }
+    } else {
+        let mut x2 = DataArray::new();
+        x2.push_string("bash");
+        x2.push_string("-c");
+        x2.push_string(&format!("df -k --output=avail '{}' 2>/dev/null | tail -1",
+                                probe.display()));
+        let r2 = system_call(x2);
+        if r2.has("out") {
+            if let Ok(kb) = r2.get_string("out").trim().parse::<i64>() {
+                res.put_float("disk_free_gb",
+                              (kb as f64 / 1048576.0 * 10.0).round() / 10.0);
+            }
         }
     }
 }
