@@ -47,11 +47,17 @@ for di in 0..doms.len() {
         }
     }
     if !exists {
-        let ac = Command::lookup("dev", "code", "add_control");
+        let ac = Command::lookup("dev", "code", "create_control");
         let mut args = DataObject::new();
         args.put_string("lib", "kb");
-        args.put_string("ctl", &name);
-        if ac.execute(args).is_err() { failed += 1; continue; }
+        args.put_string("name", &name);
+        args.put_string("desc", &(if d.has("desc") { d.get_string("desc") } else { String::new() }));
+        args.put_string("author", "bootstrap");
+        args.put_string("nn_sessionid", "");
+        let made = match ac.execute(args) { Ok(r) => r, Err(_) => { failed += 1; continue; } };
+        // create_control answers FLAT {status,...}; execute may wrap it under "a"
+        let made = if made.has("a") { made.get_object("a") } else { made };
+        if made.has("status") && made.get_string("status") != "ok" { failed += 1; continue; }
         created += 1;
         let sm = Command::lookup("dev", "code", "set_control_meta");
         let mut args = DataObject::new();

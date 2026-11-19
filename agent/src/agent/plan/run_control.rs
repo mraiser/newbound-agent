@@ -175,7 +175,7 @@ if action=="resume" {
             let mut receipt = DataObject::new(); receipt.put_string("run_id", &resume_rid); receipt.put_string("note", &resume_note);
             receipt.put_int("time", flowlang::flowlang::system::time::time()); receipt.put_string("state", "queued");
             e.put_object("resume", receipt);
-            let w = api.dev.code.patch_control_facet("kb".to_string(), "plan".to_string(), "memory".to_string(), "".to_string(),
+            let w = crate::agent::plan::compat::facet_write("kb".to_string(), "plan".to_string(), "memory".to_string(), "".to_string(),
                 arr.to_string(), b2.get_string("hash"), "plan resume queued for the plan worker".to_string(), "plan-board".to_string(), nn_sessionid.clone());
             let wok = w.try_get_boolean("ok").unwrap_or(false) || w.try_get_string("status").map(|s| s == "ok").unwrap_or(false);
             let mut o = DataObject::new();
@@ -200,7 +200,7 @@ if action=="resume" {
     for i in 0..arr.len(){let mut e=arr.get_object(i);if e.try_get_string("claim").unwrap_or_default()!=resume_claim{continue;}
         let mut receipt=DataObject::new();receipt.put_string("run_id",&resume_rid);receipt.put_string("note",&resume_note);
         receipt.put_int("time",flowlang::flowlang::system::time::time());receipt.put_string("state",if resume_ok{"resumed"}else{"resume_failed"});e.put_object("resume",receipt);
-        let _=api.dev.code.patch_control_facet("kb".to_string(),"plan".to_string(),"memory".to_string(),"".to_string(),arr.to_string(),b2.get_string("hash"),"plan resumed with guidance".to_string(),"plan-board".to_string(),sid);
+        let _=crate::agent::plan::compat::facet_write("kb".to_string(),"plan".to_string(),"memory".to_string(),"".to_string(),arr.to_string(),b2.get_string("hash"),"plan resumed with guidance".to_string(),"plan-board".to_string(),sid);
         break;
     }
     return r;

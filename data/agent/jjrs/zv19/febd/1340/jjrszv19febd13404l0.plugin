@@ -1,0 +1,7 @@
+{
+  "name": "agent-describebtn",
+  "target_lib": "dev",
+  "target_ctl": "workbench",
+  "selector": ".wb-plugins",
+  "desc": "Adds a button to the command editor that drafts a command's description with the agent."
+}

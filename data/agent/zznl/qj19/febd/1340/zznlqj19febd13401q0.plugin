@@ -1,0 +1,7 @@
+{
+  "name": "agent-askrow",
+  "target_lib": "dev",
+  "target_ctl": "session",
+  "selector": ".ss-plugins",
+  "desc": "Adds an ask-the-agent row to the Development app's session drawer."
+}

@@ -79,10 +79,7 @@ for i in 0..runs.len() {
     let mut page = DataArray::new();
     for j in n.saturating_sub(cap)..n { page.push_object(events.get_object(j)); }
     out.put_string("status", "ok"); out.put_string("run_id", &run_id);
-    let process_start = std::fs::read_to_string("/proc/self/stat").ok().and_then(|s| {
-        let tail = s.rsplit_once(") ")?.1;
-        tail.split_whitespace().nth(19)?.parse::<i64>().ok()
-    }).unwrap_or(0);
+    let process_start = crate::agent::plan::activity_emit::process_start_id();
     let same_process = r.try_get_int("process_start").unwrap_or(0) == 0 ||
         (process_start > 0 && r.try_get_int("process_start").unwrap_or(0) == process_start);
     let stale = r.try_get_boolean("active").unwrap_or(false) &&

@@ -190,7 +190,8 @@ for lib in libs {
         if !store.exists(&lib, &id) { continue; }
         let dd = store.get_data(&lib, &id).get_object("data");
         let msrc = if dd.has("memory") { dd.get_string("memory") } else { String::new() };
-        let a = apply_overlay(parse_entries(&msrc), &lib, &name);
+        // kb.plan's board is per-item records (agent.plan.store), not the facet.
+        let a = if lib == "kb" && name == "plan" { crate::agent::plan::compat::entries() } else { apply_overlay(parse_entries(&msrc), &lib, &name) };
         if a.len() == 0 { continue; }
         for j in 0..a.len() {
             let e = match a.try_get_object(j) { Ok(e) => e, Err(_) => continue };

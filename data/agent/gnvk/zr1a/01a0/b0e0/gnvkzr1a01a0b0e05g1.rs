@@ -120,12 +120,33 @@ if source_t == "patches" || source_t == "both" {
             {
                 let label = if p.has("label") { p.get_string("label") } else { String::new() };
                 if label.trim().is_empty() { continue; }
-                let what = if p.has("facet") { format!("facet {}", p.get_string("facet")) }
+                // A command edit (facet "command" with an op: create | upsert |
+                // patch | imports | meta) names the command and the op. Entries
+                // without an op - delete_command's included - keep the older
+                // wording, so rows already harvested dedup instead of doubling.
+                let op = p.try_get_string("op").unwrap_or_default();
+                let is_cmd_edit = !op.is_empty() && p.has("cmd")
+                    && p.try_get_string("facet").unwrap_or_default() == "command";
+                let what = if is_cmd_edit { format!("command {} ({})", p.get_string("cmd"), op) }
+                    else if p.has("facet") { format!("facet {}", p.get_string("facet")) }
                     else if p.has("cmd") { format!("command {}", p.get_string("cmd")) }
                     else { "record".to_string() };
                 let author = if p.has("author") { p.get_string("author") } else { String::new() };
                 let t = if p.has("time") { p.get_int("time") } else { 0 };
-                let excerpt = if p.has("new") { clip(&p.get_string("new"), 240) } else { String::new() };
+                let mut excerpt = if p.has("new") { clip(&p.get_string("new"), 240) } else { String::new() };
+                // create/upsert journal the whole {command, impl} record as
+                // JSON: excerpt the code body, not the start of the record.
+                if is_cmd_edit && (op == "create" || op == "upsert") {
+                    if let Ok(n) = DataObject::try_from_string(&format!("{{\"a\": {}}}", p.try_get_string("new").unwrap_or_default())) {
+                        if let Ok(rec) = n.try_get_object("a") {
+                            if let (Ok(c), Ok(im)) = (rec.try_get_object("command"), rec.try_get_object("impl")) {
+                                let t2 = c.try_get_string("type").unwrap_or_else(|_| "rust".to_string());
+                                let ext = if t2 == "rust" { "rs".to_string() } else { t2 };
+                                if let Ok(body) = im.try_get_string(&ext) { excerpt = clip(&body, 240); }
+                            }
+                        }
+                    }
+                }
                 lines.push(format!(
                     "{{\"kind\": \"code_why\", \"source\": \"patch\", \"home\": \"{}\", \"what\": \"{}\", \"why\": \"{}\", \"author\": \"{}\", \"t\": {}, \"excerpt\": \"{}\"}}",
                     esc(&home), esc(&what), esc(&label), esc(&author), t, esc(&excerpt)));

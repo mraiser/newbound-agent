@@ -2,10 +2,7 @@
 // execution loop emits facts at real model/tool boundaries. The runtime store
 // is instance-local and bounded; kb.plan remains the durable intent/journal.
 fn process_start() -> i64 {
-    std::fs::read_to_string("/proc/self/stat").ok().and_then(|s| {
-        let tail = s.rsplit_once(") ")?.1;
-        tail.split_whitespace().nth(19)?.parse::<i64>().ok()
-    }).unwrap_or(0)
+    process_start_id()
 }
 if run_id.trim().is_empty() || run_id.len() > 160 {
     let mut o = DataObject::new(); o.put_string("status", "err");
