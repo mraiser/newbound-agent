@@ -1639,7 +1639,7 @@ async function init(host) {
     ev.preventDefault();
     const name = host.querySelector(".ag-newdomain-name").value.trim();
     if (!/^[a-z][a-z0-9-]*$/.test(name)) { note(memCap, "lowercase + dashes", true); return; }
-    const r = await code("add_control", { lib: "kb", ctl: name });
+    const r = await code("create_control", { lib: "kb", name: name, desc: "", author: "" });
     if (r.status !== "ok") { note(memCap, `add failed: ${r.msg}`, true); return; }
     host.querySelector(".ag-newdomain-name").value = "";
     await loadDomains();
