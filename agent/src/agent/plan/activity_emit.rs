@@ -2,6 +2,35 @@ use ndata::dataobject::DataObject;
 use ndata::dataarray::DataArray;
 use flowlang::datastore::DataStore;
 use flowlang::flowlang::system::time::time;
+/// This process's start, as a value that differs between two runs of the
+/// server - plan's runs use it to tell a live run from one a crashed process
+/// left "active". Linux: starttime, /proc/self/stat field 22. Windows: the
+/// creation time (GetProcessTimes). 0 where neither answers (macOS); callers
+/// then fall back to the pid and boot checks.
+#[cfg(windows)]
+pub fn process_start_id() -> i64 {
+  use std::ffi::c_void;
+  #[repr(C)]
+  #[derive(Default)]
+  struct FileTime { lo: u32, hi: u32 }
+  #[link(name = "kernel32")]
+  extern "system" {
+    fn GetCurrentProcess() -> *mut c_void;
+    fn GetProcessTimes(h: *mut c_void, creation: *mut FileTime, exit: *mut FileTime,
+      kernel: *mut FileTime, user: *mut FileTime) -> i32;
+  }
+  let (mut c, mut e, mut k, mut u) = (FileTime::default(), FileTime::default(), FileTime::default(), FileTime::default());
+  if unsafe { GetProcessTimes(GetCurrentProcess(), &mut c, &mut e, &mut k, &mut u) } == 0 { return 0; }
+  (((c.hi as u64) << 32) | c.lo as u64) as i64
+}
+#[cfg(not(windows))]
+pub fn process_start_id() -> i64 {
+  std::fs::read_to_string("/proc/self/stat").ok().and_then(|s| {
+    let tail = s.rsplit_once(") ")?.1;
+    tail.split_whitespace().nth(19)?.parse::<i64>().ok()
+  }).unwrap_or(0)
+}
+
 pub fn execute(o: DataObject) -> DataObject {
     use std::panic;
     for p in ["run_id", "event"] {
@@ -54,10 +83,7 @@ pub fn activity_emit(run_id: String, event: DataObject) -> DataObject {
 // execution loop emits facts at real model/tool boundaries. The runtime store
 // is instance-local and bounded; kb.plan remains the durable intent/journal.
 fn process_start() -> i64 {
-    std::fs::read_to_string("/proc/self/stat").ok().and_then(|s| {
-        let tail = s.rsplit_once(") ")?.1;
-        tail.split_whitespace().nth(19)?.parse::<i64>().ok()
-    }).unwrap_or(0)
+    process_start_id()
 }
 if run_id.trim().is_empty() || run_id.len() > 160 {
     let mut o = DataObject::new(); o.put_string("status", "err");

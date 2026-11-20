@@ -530,7 +530,44 @@ async function init(host) {
         inp.focus();
         inp.select();
       });
-      row.append(open, ren, del);
+      // transcript download: the open session's live cells, else the stored
+      // record (owner-checked session_open), as one markdown file. Shares the
+      // pencil's look (ag-sess-ren) so it appears and hides with it.
+      const dl = document.createElement("button");
+      dl.className = "ag-sess-ren ag-sess-dl";
+      dl.textContent = "⤓";
+      dl.title = "download this session's transcript (markdown)";
+      dl.addEventListener("click", async () => {
+        let cells = null;
+        if (s.id === sessId) cells = transcript;
+        else {
+          const r = await invokeP("agent", "chat", "session_open", { id: s.id });
+          const rec = (r && r.status === "ok" && r.data && r.data.data) ? r.data.data : null;
+          if (rec && Array.isArray(rec.transcript)) cells = rec.transcript;
+        }
+        if (!cells) { dl.textContent = "!"; setTimeout(() => { dl.textContent = "⤓"; }, 2000); return; }
+        const names = { user: "User", agent: "Agent", tool: "Tool", note: "Note", stage: "Pad", snap: "Snapshot" };
+        const parts = ["# " + s.title, "_" + new Date(s.time).toLocaleString() + "_"];
+        for (const c of cells) {
+          if (!c || c.kind === "busy") continue;
+          let head = "## " + (names[c.kind] || c.kind) + (c.error ? " (error)" : "");
+          if (c.time) head += " — " + new Date(c.time).toLocaleString();
+          const body = String(c.text ?? "");
+          const prose = c.kind === "user" || c.kind === "agent" || c.kind === "note";
+          const fence = body.includes("```") ? "~~~~" : "```";
+          parts.push(head + (c.title ? "\n\n`" + String(c.title).replace(/`/g, "'") + "`" : "") +
+            "\n\n" + (prose ? body : fence + "\n" + body + "\n" + fence));
+        }
+        const blob = new Blob([parts.join("\n\n") + "\n"], { type: "text/markdown" });
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = (s.title.replace(/[^\w.-]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 60) || "session") + ".md";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+      });
+      row.append(open, ren, dl, del);
       sessListEl.appendChild(row);
     }
   }
@@ -1639,7 +1676,7 @@ async function init(host) {
     ev.preventDefault();
     const name = host.querySelector(".ag-newdomain-name").value.trim();
     if (!/^[a-z][a-z0-9-]*$/.test(name)) { note(memCap, "lowercase + dashes", true); return; }
-    const r = await code("add_control", { lib: "kb", ctl: name });
+    const r = await code("create_control", { lib: "kb", name: name, desc: "", author: "" });
     if (r.status !== "ok") { note(memCap, `add failed: ${r.msg}`, true); return; }
     host.querySelector(".ag-newdomain-name").value = "";
     await loadDomains();

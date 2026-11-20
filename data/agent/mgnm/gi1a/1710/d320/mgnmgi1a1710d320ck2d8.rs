@@ -29,10 +29,7 @@ for x in b.get_array("entries").objects() {
             out.put_object("run", r.deep_copy());
             let boot = DataStore::globals().try_get_object("AGENT_PLAN_ACTIVITY").ok()
                 .and_then(|g| g.try_get_int("boot").ok()).unwrap_or(0);
-            let ps = std::fs::read_to_string("/proc/self/stat").ok().and_then(|s| {
-                let tail = s.rsplit_once(") ")?.1;
-                tail.split_whitespace().nth(19)?.parse::<i64>().ok()
-            }).unwrap_or(0);
+            let ps = crate::agent::plan::activity_emit::process_start_id();
             let same_process = r.try_get_int("process_start").unwrap_or(0) == 0 ||
                 (ps > 0 && r.try_get_int("process_start").unwrap_or(0) == ps);
             let stale = r.try_get_boolean("active").unwrap_or(false) &&
