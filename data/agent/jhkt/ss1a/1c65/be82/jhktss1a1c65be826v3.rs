@@ -39,6 +39,33 @@ if matches!(devreg.get_object(&repo).try_get_boolean("autocommit"),Ok(true)){
     return r;
 }
 
+// a push from a peer is standing in this checkout (dev.git.overlay's marker,
+// runtime/dev/peer_overlays.json, read as a file so this does not depend on
+// the running core's age): tentative content being tested, never committed.
+{
+    let want = std::path::Path::new(&devreg.get_object(&repo).try_get_string("path").unwrap_or_default()).canonicalize().ok();
+    let mpath = devregpath.with_file_name("peer_overlays.json");
+    let mut libs = DataArray::new();
+    if let (Some(want), Ok(s)) = (want, std::fs::read_to_string(&mpath)) {
+        if let Ok(w) = DataObject::try_from_string(&format!("{{\"a\":{}}}", s)) {
+            if let Ok(all) = w.try_get_object("a") {
+                for (k,v) in all.objects(){
+                    if let Data::DObject(_)=v {
+                        let p = v.object().try_get_string("repo_path").unwrap_or_default();
+                        if std::path::Path::new(&p).canonicalize().map(|c| c==want).unwrap_or(false){ libs.push_string(&k); }
+                    }
+                }
+            }
+        }
+    }
+    if libs.len()>0 {
+        r.put_string("result","peer_overlay");
+        r.put_array("overlay_libs",libs);
+        r.put_string("hint","a library pushed from a peer is being tested in this checkout - dev.github.update or dev.git.update_from_master restores it");
+        return r;
+    }
+}
+
 // branches-always: never commit on the default branch
 let (branch,upstream,ahead) = match branch_state(&repo){ Some(x)=>x, None=>{ r.put_string("result","status_failed"); return r; } };
 r.put_string("branch",&branch);
