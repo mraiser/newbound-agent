@@ -214,7 +214,47 @@ let mcp = opt(&meta, "CLAUDE_CODE_MCP", "");
 if !mcp.is_empty() {
     // Accepts a path OR a literal JSON string. --strict-mcp-config keeps the
     // delegate off whatever servers the invoking user happens to have.
-    args.push("--mcp-config".to_string()); args.push(mcp);
+    args.push("--mcp-config".to_string()); args.push(mcp.clone());
+    // PRE-APPROVE THE CONFIGURED SERVERS. `claude -p` has no screen, so in
+    // every permission mode except bypassPermissions nobody can answer the
+    // "may I?" prompt and EVERY MCP tool call is refused - reads included.
+    // The owner already granted these servers by naming them in
+    // CLAUDE_CODE_MCP, so say so to the CLI: --allowedTools mcp__<server>
+    // allows all of that server's tools. This also covers a server running
+    // as root, where the CLI refuses bypassPermissions outright. Skipped
+    // when the mode is bypass (nothing to allow), when CLAUDE_CODE_ARGS
+    // already carries its own allow list, or with CLAUDE_CODE_AUTO_ALLOW=off.
+    // ONE comma-joined value, placed directly before a flag: --allowedTools
+    // is variadic and would swallow a non-flag argument that followed it.
+    let extra = opt(&meta, "CLAUDE_CODE_ARGS", "");
+    if opt(&meta, "CLAUDE_CODE_PERMISSION_MODE", "") != "bypassPermissions"
+        && opt(&meta, "CLAUDE_CODE_AUTO_ALLOW", "on") != "off"
+        && !extra.contains("--allowedTools") && !extra.contains("--allowed-tools") {
+        // The value is a literal JSON string or a path (relative to the
+        // child's working directory).
+        let text = if mcp.trim_start().starts_with('{') { mcp.clone() } else {
+            let dir = opt(&meta, "CLAUDE_CODE_CWD", "");
+            let p = std::path::Path::new(&mcp);
+            let p = if p.is_relative() && !dir.is_empty() { std::path::Path::new(&dir).join(p) } else { p.to_path_buf() };
+            std::fs::read_to_string(&p).unwrap_or_default()
+        };
+        let mut allow: Vec<String> = Vec::new();
+        if let Some(cfg) = obj_from_str(&text) {
+            if let Ok(servers) = cfg.try_get_object("mcpServers") {
+                for name in servers.clone().keys() {
+                    // Claude Code's own tool-name normalization.
+                    let n: String = name.chars()
+                        .map(|c| if c.is_ascii_alphanumeric() || c == '_' || c == '-' { c } else { '_' })
+                        .collect();
+                    if !n.is_empty() { allow.push(format!("mcp__{}", n)); }
+                }
+            }
+        }
+        if !allow.is_empty() {
+            allow.sort();
+            args.push("--allowedTools".to_string()); args.push(allow.join(","));
+        }
+    }
     args.push("--strict-mcp-config".to_string());
 }
 let perm = opt(&meta, "CLAUDE_CODE_PERMISSION_MODE", "");
