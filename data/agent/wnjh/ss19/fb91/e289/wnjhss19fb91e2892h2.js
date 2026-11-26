@@ -434,8 +434,72 @@ async function init(host) {
     clearDropMarks();
     await applySessOrder(ids);
   });
+  // ── session search ── the sidebar's search button opens a box; while it
+  // holds a query the list shows agent.chat.session_search's matches (title +
+  // excerpt) instead of the full index. Esc, the button, or an empty box
+  // restores the list.
+  const sessSearchBtn = host.querySelector(".ag-sess-search");
+  const sessQEl = host.querySelector(".ag-sess-q");
+  let sessQuery = "";
+  let sessQTimer = null;
+  let sessQSeq = 0;
+  async function renderSessSearch() {
+    const q = sessQuery, seq = ++sessQSeq;
+    const r = await invokeP("agent", "chat", "session_search", { query: q });
+    if (seq !== sessQSeq || q !== sessQuery) return; // a newer query (or a cleared box) superseded this one
+    sessListEl.replaceChildren();
+    const note = (t) => {
+      const p = document.createElement("p");
+      p.className = "lbl ag-sess-note";
+      p.textContent = t;
+      sessListEl.appendChild(p);
+    };
+    const d = (r && r.status === "ok" && r.data) ? r.data : null;
+    if (!d || d.status === "err") { note((d && d.msg) || (r && r.msg) || "search failed"); return; }
+    const hits = Array.isArray(d.matches) ? d.matches : [];
+    if (!hits.length) { note("no sessions match"); return; }
+    for (const s of hits) {
+      const row = document.createElement("div");
+      row.className = "ag-sess" + (s.id === sessId ? " on" : "");
+      row.dataset.sid = s.id;
+      const open = document.createElement("button");
+      open.className = "ag-sess-open ag-sess-hit";
+      const t = document.createElement("span");
+      t.className = "ag-sess-hit-title";
+      t.textContent = s.title;
+      open.appendChild(t);
+      if (s.snippet) {
+        const sn = document.createElement("span");
+        sn.className = "ag-sess-hit-snip";
+        sn.textContent = s.snippet;
+        open.appendChild(sn);
+      }
+      open.title = new Date(s.time).toLocaleString() + " — " + s.hits + (s.hits === 1 ? " match" : " matches");
+      open.addEventListener("click", () => { if (s.id !== sessId) openSession(s.id); });
+      row.appendChild(open);
+      sessListEl.appendChild(row);
+    }
+  }
+  function setSessQuery(v) {
+    sessQuery = String(v || "").trim();
+    clearTimeout(sessQTimer);
+    sessQTimer = setTimeout(renderSessions, sessQuery ? 250 : 0);
+  }
+  sessSearchBtn.addEventListener("click", () => {
+    const show = sessQEl.hidden;
+    sessQEl.hidden = !show;
+    sessSearchBtn.classList.toggle("on", show);
+    if (show) sessQEl.focus(); else { sessQEl.value = ""; setSessQuery(""); }
+  });
+  sessQEl.addEventListener("input", () => setSessQuery(sessQEl.value));
+  sessQEl.addEventListener("keydown", (ev) => {
+    if (ev.key === "Escape") { ev.preventDefault(); sessSearchBtn.click(); }
+    if (ev.key === "Enter") { ev.preventDefault(); clearTimeout(sessQTimer); renderSessions(); }
+  });
   async function renderSessions() {
+    if (sessQuery) return renderSessSearch();
     const r = await invokeP("agent", "chat", "session_index", { op: "list", id: "", arg: "" });
+    if (sessQuery) return; // a search began while the list was loading — its results own the list
     if (!r || r.status !== "ok") return; // refused (signed out) — keep the rows we have
     const ix = (r.data && r.data.list) ? r.data.list : [];
     sessListEl.replaceChildren();

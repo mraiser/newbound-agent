@@ -21,7 +21,11 @@
     <section class="ag-pane" data-pane="chat">
       <aside class="ag-sessions">
         <button class="ag-sess-new" title="start a fresh session — this one stays in the list">+ new session</button>
-        <p class="lbl">previous sessions</p>
+        <div class="ag-sess-head">
+          <p class="lbl">previous sessions</p>
+          <button type="button" class="ag-sess-search" title="search your previous sessions — titles and message text">search</button>
+        </div>
+        <input type="search" class="ag-sess-q" hidden placeholder="search sessions…" aria-label="Search previous sessions">
         <div class="ag-sess-list"></div>
       </aside>
       <div class="ag-sdiv" title="drag to resize the sessions sidebar — double-click to reset"></div>
